@@ -55,7 +55,7 @@ task Slice {
     Int? mem_gb
     String docker
   }
-  Float disk_size = ( 2 * size([bam_or_cram, ref_fa], "GB") ) + 20.0
+  Int disk_size = ceil( ( 2 * size([bam_or_cram, ref_fa], "GB") ) + 20.0 )
 
   command <<<
     set -eu -o pipefail
@@ -64,12 +64,12 @@ task Slice {
     slice_cmd="samtools view -L ~{regions_bed} -o ~{outfile}"
     index_cmd="samtools index"
     if [ "~{is_cram}" == "true" ]; then
-      samtools_options="$samtools_options -T ~{ref_fa}"
+      slice_cmd="$slice_cmd -T ~{ref_fa}"
     fi
     if [ "~{cram_out}" == "true" ]; then
-      samtools_options="$samtools_options -C"
+      slice_cmd="$slice_cmd -C"
     else
-      samtools_options="$samtools_options -b"
+      slice_cmd="$slice_cmd -b"
       index_cmd="$index_cmd -b"
     fi
     slice_cmd="$slice_cmd ~{bam_or_cram}"
