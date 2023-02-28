@@ -83,7 +83,7 @@ task make_examples {
 
     binsize_arg=""
     if [ -n "~{gq_binsize}" ]; then
-        binsize_arg="--gvcf_gq-binsize ~{gq_binsize}"
+        binsize_arg="--gvcf_gq_binsize ~{gq_binsize}"
     fi
 
     mkdir examples/ gvcf/ logs/
@@ -91,7 +91,15 @@ task make_examples {
     gvcf_fn="gvcf/~{sample_name}.gvcf.tfrecord@$(nproc).gz"
 
     seq 0 $(( `nproc` - 1 )) | NO_GCE_CHECK=True parallel --halt 2 -t --results logs/ \
-      "/opt/deepvariant/bin/make_examples --mode calling --ref ~{ref_fa} --reads ~{bam} --examples '$output_fn' --gvcf '$gvcf_fn' --task {} $binsize_arg 2>&1" > /dev/null
+      "/opt/deepvariant/bin/make_examples \
+         --mode calling \
+         --ref ~{ref_fa} \
+         --reads ~{bam} \
+         --examples '$output_fn' \
+         --gvcf '$gvcf_fn' \
+         --add_hp_channel=true \
+         --task {} \
+         $binsize_arg 2>&1"
 
     mkdir tar/
     tar -cvzf "tar/~{sample_name}.logs.tar.gz" -C logs/ .
@@ -136,7 +144,7 @@ task call_variants {
     tar xvf "~{examples_tar}" -C examples/
     wait -n
 
-    n_examples=$(find examples/ -type f -name "*.gz" | wc -l)
+    n_examples=$( find examples/ -type f -name "*.gz" | wc -l )
 
     NO_GCE_CHECK=True /opt/deepvariant/bin/call_variants \
       --outfile "output/~{sample_name}.call_variants.tfrecord.gz" \
