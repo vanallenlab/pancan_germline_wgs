@@ -1,5 +1,9 @@
+# The Genomic Architecture of Human Cancers
+# Copyright (c) 2023-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
 # WDL to run DeepVariant on a single CRAM to generate single-sample gVCF
-# Contact: Ryan_Collins@dfci.harvard.edu
 
 # Based on Google's WGS case study:
 # https://github.com/google/deepvariant/blob/r1.5/docs/deepvariant-case-study.md

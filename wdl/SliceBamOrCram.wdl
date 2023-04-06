@@ -1,5 +1,9 @@
+# The Genomic Architecture of Human Cancers
+# Copyright (c) 2023-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
 # WDL to slice a BAM or CRAM to a prespecified set of intervals
-# Contact: Ryan_Collins@dfci.harvard.edu
 
 
 version 1.0
