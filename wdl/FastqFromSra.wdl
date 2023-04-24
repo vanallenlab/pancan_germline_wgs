@@ -44,14 +44,21 @@ task DumpFastqs {
 
     set -eu -o pipefail
 
+    # Prefetch
+    prefetch \
+      --ngc ~{ngc} \
+      --type sra \
+      --max-size ~{ceil(2 * diskGb / 3)}g \
+      --progress \
+      ~{accession}
+
     # Dump fastqs
     fasterq-dump \
       --ngc ~{ngc} \
       --split-3 \
       --progress \
-      --disk-limit ~{ceil(diskGb / 2)}g \
-      --disk-limit-tmp ~{ceil(diskGb / 2)}g \
-      --verbose \
+      --disk-limit ~{ceil(2 * diskGb / 3)}g \
+      --disk-limit-tmp ~{ceil(2 * diskGb / 3)}g \
       ~{accession}
 
     # Compress
@@ -62,17 +69,17 @@ task DumpFastqs {
 
   output {
     File R1 = "~{accession}.R1.fq.gz"
-    File R2 = "~{accession}.R1.fq.gz"
+    File R2 = "~{accession}.R2.fq.gz"
   }
 
   runtime {
     cpu: 4
-    memory: "16 GiB"
+    memory: "7.75 GiB"
     disks: "local-disk " + diskGb + " HDD"
     bootDiskSizeGb: 10
     docker: docker
-    preemptible: 1
-    maxRetries: 1
+    preemptible: 3
+    maxRetries: 2
   }
 }
 
