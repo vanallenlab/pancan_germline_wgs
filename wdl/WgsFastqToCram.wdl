@@ -11,7 +11,7 @@
 version 1.0
 
 
-# import the GATK pre-processing workflow
+# import GATK pre-processing workflow
 import "https://raw.githubusercontent.com/gatk-workflows/gatk4-data-processing/master/processing-for-variant-discovery-gatk4.wdl" as GATK
 
 
@@ -38,14 +38,22 @@ workflow WgsFastqToCram {
     File known_indels_sites_VCF
     File known_indels_sites_index
 
+    String fastq_pair_docker = "vanallenlab/fastq-pair:latest"
+    String gotc_docker = "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.4.7-1603303710"
     String gatk_docker = "broadinstitute/gatk:latest"
     String gatk_path = "/gatk/gatk"
-    String fastq_pair_docker = "vanallenlab/fastq-pair:latest"
+    String python_docker = "python:2.7"
 
     String fastq_suffix = ".fq.gz"
     Int clean_fastq_reads_per_hash_cell = 8
     Int clean_fastq_disk_scaling_factor = 6
+
     Float clean_fastq_mem_gb = 64
+    Float? sort_and_fix_tags_mem_gb
+    Int? sort_and_fix_tags_disk_size
+    Float? bwa_mem_gb
+    Int? bwa_num_cpu
+    Int? bwa_disk_size
   }
 
   # Clean up FASTQs with fastq-pair
@@ -63,70 +71,182 @@ workflow WgsFastqToCram {
   }
   File fq1 = select_first([CleanFastqs.fq_paired_1, fastq_1])
   File fq2 = select_first([CleanFastqs.fq_paired_2, fastq_2])
-  File fq_singles = select_first([CleanFastqs.fq_singles, []])
+  Array[File] fq_singles = select_first([CleanFastqs.fq_singles, []])
 
-  # Align with BWA-MEM
-  call Bwa as AlignPairs {}
-  scatter ( fastq in fq_singles ) {
-    call Bwa as AlignSingles {}
+  # Align with BWA
+  call Bwa as AlignPairs {
+    input:
+      input_fastqs = [fq1, fq2],
+      output_basename = sample_name,
+      ref_fasta = reference_fasta,
+      ref_fasta_index = reference_fasta_index,
+      ref_dict = reference_dict,
+      ref_alt = reference_alt,
+      ref_amb = reference_amb,
+      ref_ann = reference_ann,
+      ref_bwt = reference_bwt,
+      ref_pac = reference_pac,
+      ref_sa = reference_sa,
+      mem_gb = bwa_mem_gb,
+      num_cpu = bwa_num_cpu,
+      disk_size = bwa_disk_size,
+      docker = gotc_docker
   }
 
-  # # Convert the uBAM to bam using the GATK pre-processing workflow
-  # call GATK.PreProcessingForVariantDiscovery_GATK4 {
-  #   input:
-  #     sample_name = sample_name,
-  #     ref_name = reference_name,
 
-  #     flowcell_unmapped_bams_list = WriteUBAMPath.ubam_path_file,
-  #     unmapped_bam_suffix = ".unmapped.bam",
-    
-  #     ref_fasta = reference_fasta,
-  #     ref_fasta_index = reference_fasta_index,
-  #     ref_dict = reference_dict,
-  #     ref_alt = reference_alt,
-  #     ref_sa  = reference_sa,
-  #     ref_ann = reference_ann,
-  #     ref_bwt = reference_bwt,
-  #     ref_pac = reference_pac,
-  #     ref_amb = reference_amb,
-  #     dbSNP_vcf = dbSNP_vcf,
-  #     dbSNP_vcf_index = dbSNP_vcf_index,
-  #     known_indels_sites_VCFs = [known_indels_sites_VCF],
-  #     known_indels_sites_indices = [known_indels_sites_index],
+  scatter ( fastq in fq_singles ) {
+    call Bwa as AlignSingles {
+      input:
+        input_fastqs = [fastq],
+        output_basename = sample_name,
+        ref_fasta = reference_fasta,
+        ref_fasta_index = reference_fasta_index,
+        ref_dict = reference_dict,
+        ref_alt = reference_alt,
+        ref_amb = reference_amb,
+        ref_ann = reference_ann,
+        ref_bwt = reference_bwt,
+        ref_pac = reference_pac,
+        ref_sa = reference_sa,
+        mem_gb = bwa_mem_gb,
+        num_cpu = bwa_num_cpu,
+        disk_size = bwa_disk_size,
+        docker = gotc_docker
+    }
+  }
 
-  #     bwa_commandline = "bwa mem -K 100000000 -p -v 3 -t 16 -Y $bash_ref_fasta",
-  #     compression_level = 5,
-    
-  #     gatk_docker = "us.gcr.io/broad-gatk/gatk:4.2.0.0",
-  #     gatk_path = "/gatk/gatk",
-  #     gotc_docker = "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.4.7-1603303710",
-  #     gotc_path = "/usr/gitc/",
-  #     python_docker = "python:2.7",
+  # Merge BAMs, mark duplicates
+  Array[File] bams_for_gatk = flatten([[AlignPairs.output_bam], AlignSingles.output_bam])
+  call GATK.MarkDuplicates {
+    input:
+      input_bams = bams_for_gatk,
+      output_bam_basename = sample_name + ".aligned.unsorted.duplicates_marked",
+      metrics_filename = sample_name + ".duplicate_metrics",
+      docker_image = gatk_docker,
+      gatk_path = gatk_path,
+      disk_size = ceil(3 * size(bams_for_gatk, "GB")) + 10,
+      compression_level = 5,
+      preemptible_tries = 3
+  }
 
-  #     flowcell_small_disk = 500,
-  #     flowcell_medium_disk = 1000,
-  #     agg_small_disk = 500,
-  #     agg_medium_disk = 1000,
-  #     agg_large_disk = 1500,
+  # Sort deduped BAM file and fix tags
+  call GATK.SortAndFixTags {
+    input:
+      input_bam = MarkDuplicates.output_bam,
+      output_bam_basename = sample_name + ".aligned.duplicate_marked.sorted",
+      ref_dict = reference_dict,
+      ref_fasta = reference_fasta,
+      ref_fasta_index = reference_fasta_index,
+      docker_image = gatk_docker,
+      gatk_path = gatk_path,
+      disk_size = select_first([sort_and_fix_tags_disk_size, ceil(4 * size(MarkDuplicates.output_bam, "GB")) + 10]),
+      mem_size_gb = select_first([sort_and_fix_tags_mem_gb, 32]),
+      preemptible_tries = 0,
+      compression_level = 5
+  }
 
-  #     preemptible_tries = 3
-  # }
+  # Add RG tag (required for BaseRecalibrator)
+  call AddRg {
+    input:
+      bam = SortAndFixTags.output_bam,
+      bam_index = SortAndFixTags.output_bam_index,
+      sample_name = sample_name,
+      gatk_path = gatk_path,
+      docker = gatk_docker
+  }
 
-  # if ( cram_out ) {
-  #   call Bam2Cram {
-  #     input:
-  #       bam = PreProcessingForVariantDiscovery_GATK4.analysis_ready_bam,
-  #       bai = PreProcessingForVariantDiscovery_GATK4.analysis_ready_bam_index,
-  #       ref_fa = reference_fasta,
-  #       ref_fai = reference_fasta_index,
-  #       docker = gatk_docker
-  #   }
-  # }
+  # Create list of sequences for scatter-gather parallelization 
+  call GATK.CreateSequenceGroupingTSV {
+    input:
+      ref_dict = reference_dict,
+      docker_image = python_docker,
+      preemptible_tries = 3
+  }
+  
+  # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
+  scatter ( subgroup in CreateSequenceGroupingTSV.sequence_grouping ) {
+    # Generate the recalibration model by interval
+    call GATK.BaseRecalibrator {
+      input:
+        input_bam = AddRg.bam_wRG,
+        input_bam_index = AddRg.bam_wRG_idx,
+        recalibration_report_filename = sample_name + ".recal_data.csv",
+        sequence_group_interval = subgroup,
+        dbSNP_vcf = dbSNP_vcf,
+        dbSNP_vcf_index = dbSNP_vcf_index,
+        known_indels_sites_VCFs = [known_indels_sites_VCF],
+        known_indels_sites_indices = [known_indels_sites_index],
+        ref_dict = reference_dict,
+        ref_fasta = reference_fasta,
+        ref_fasta_index = reference_fasta_index,
+        docker_image = gatk_docker,
+        gatk_path = gatk_path,
+        disk_size = ceil(2 * size(AddRg.bam_wRG, "GB")) + 10,
+        preemptible_tries = 3
+    }  
+  }  
+  
+  # Merge the recalibration reports resulting from by-interval recalibration
+  call GATK.GatherBqsrReports {
+    input:
+      input_bqsr_reports = BaseRecalibrator.recalibration_report,
+      output_report_filename = sample_name + ".recal_data.csv",
+      docker_image = gatk_docker,
+      gatk_path = gatk_path,
+      disk_size = 100,
+      preemptible_tries = 3
+  }
 
-  # output {
-  #   File cram_or_bam = select_first([Bam2Cram.cram, PreProcessingForVariantDiscovery_GATK4.analysis_ready_bam])
-  #   File cram_or_bam_index = select_first([Bam2Cram.crai, PreProcessingForVariantDiscovery_GATK4.analysis_ready_bam_index])
-  # }
+  scatter ( subgroup in CreateSequenceGroupingTSV.sequence_grouping_with_unmapped ) {
+
+    # Apply the recalibration model by interval
+    call GATK.ApplyBQSR {
+      input:
+        input_bam = AddRg.bam_wRG,
+        input_bam_index = AddRg.bam_wRG_idx,
+        output_bam_basename = sample_name + ".aligned.duplicates_marked.recalibrated",
+        recalibration_report = GatherBqsrReports.output_bqsr_report,
+        sequence_group_interval = subgroup,
+        ref_dict = reference_dict,
+        ref_fasta = reference_fasta,
+        ref_fasta_index = reference_fasta_index,
+        docker_image = gatk_docker,
+        gatk_path = gatk_path,
+        disk_size = ceil(2.5 * size(AddRg.bam_wRG, "GB")) + 10,
+        preemptible_tries = 3
+    }
+  } 
+
+  # Merge the recalibrated BAM files resulting from by-interval recalibration
+  call GATK.GatherBamFiles {
+    input:
+      input_bams = ApplyBQSR.recalibrated_bam,
+      output_bam_basename = sample_name,
+      docker_image = gatk_docker,
+      gatk_path = gatk_path,
+      disk_size = ceil(4 * size(AddRg.bam_wRG, "GB")) + 10,
+      preemptible_tries = 3,
+      compression_level = 5
+  }
+
+  if ( cram_out ) {
+    call Bam2Cram {
+      input:
+        bam = GatherBamFiles.output_bam,
+        bai = GatherBamFiles.output_bam_index,
+        ref_fa = reference_fasta,
+        ref_fai = reference_fasta_index,
+        docker = gatk_docker
+    }
+  }
+
+  # Outputs that will be retained when execution is complete  
+  output {
+    File duplication_metrics = MarkDuplicates.duplicate_metrics
+    File bqsr_report = GatherBqsrReports.output_bqsr_report
+    File cram_or_bam = select_first([Bam2Cram.cram, GatherBamFiles.output_bam])
+    File cram_or_bam_index = select_first([Bam2Cram.crai, GatherBamFiles.output_bam_index])
+  } 
 }
 
 # Clean up FASTQs with fastq-pair
@@ -149,19 +269,6 @@ task CleanFastqs {
 
   command <<<
     set -eu -o pipefail
-
-    # log resource usage for debugging purposes
-    function runtimeInfo() {
-      echo [$(date)]
-      echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
-      echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
-      echo \* Disk usage: $(df | grep cromwell_root | awk '{ print $5 }')
-    }
-    while true; do
-      runtimeInfo
-      ls -lh
-      sleep 60
-    done &
 
     # Check whether fastqs are gzipped and uncompress if necessary
     if [ $( file ~{fastq_1} | fgrep gzip | wc -l ) -gt 0 ]; then
@@ -206,84 +313,95 @@ task CleanFastqs {
   }
 }
 
-# Write paired fastqs to uBAM
-task PairedFastqsToUnmappedBAM {
+# Align single or paired fastqs with BWA MEM
+task Bwa {
   input {
-    String sample_name
-    File fastq_1
-    File fastq_2
-    String readgroup_name
+    Array[File] input_fastqs
+    String output_basename
+    File ref_fasta
+    File ref_fasta_index
+    File ref_dict
+    File? ref_alt
+    File ref_amb
+    File ref_ann
+    File ref_bwt
+    File ref_pac
+    File ref_sa
 
-    String gatk_docker
-    String gatk_path
+    Float mem_gb = 32
+    String num_cpu = 8
 
-    # Runtime parameters
-    Int addtional_disk_space_gb = 20
-    Int preemptible_attempts = 3
-    Int machine_mem_gb = 4
+    Int preemptible_tries = 3
+    Int? disk_size
+
+    String docker
   }
 
-  Int command_mem_gb = machine_mem_gb - 1
-  Int disk_space_gb = ceil(6 * size([fastq_1, fastq_2], "GB")) + addtional_disk_space_gb
+  Int default_disk_size = ceil(3 * size(input_fastqs, "GB")) + 10
 
   command <<<
-    set -euo pipefail
+    set -eu -o pipefail
 
-    # log resource usage for debugging purposes
-    function runtimeInfo() {
-      echo [$(date)]
-      echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
-      echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
-      echo \* Disk usage: $(df | grep cromwell_root | awk '{ print $5 }')
-    }
-    while true; do
-      runtimeInfo
-      sleep 60s
-    done &
-
-    ~{gatk_path} \
-    --java-options "-Xmx~{command_mem_gb}g" \
-    FastqToSam \
-    --FASTQ ~{fastq_1} \
-    --FASTQ2 ~{fastq_2} \
-    --OUTPUT ~{sample_name}.unmapped.bam \
-    --COMPRESSION_LEVEL 5 \
-    --READ_GROUP_NAME ~{readgroup_name} \
-    --SAMPLE_NAME ~{sample_name}
+    # Align fastq(s) with bwa
+    /usr/gitc/bwa mem -v 3 -t ~{num_cpu} -Y \
+      ~{ref_fasta} \
+      ~{sep=" " input_fastqs} \
+    | samtools view -1 - > ~{output_basename}.bam
   >>>
-
+  
   output {
-    File ubam = "~{sample_name}.unmapped.bam"
+    File output_bam = "~{output_basename}.bam"
   }
 
   runtime {
-    docker: gatk_docker
-    memory: machine_mem_gb + " GB"
-    cpu: 2
-    disks: "local-disk " + disk_space_gb + " HDD"
-    preemptible: preemptible_attempts
+    preemptible: preemptible_tries
+    docker: docker
+    memory: "~{mem_gb} GiB"
+    cpu: num_cpu
+    disks: "local-disk " + select_first([disk_size, default_disk_size]) + " HDD"
   }
 }
 
-# Write uBAM gs:// path to file (required by GATK preprocessing)
-task WriteUBAMPath {
+# Add a read group tag to an aligned BAM
+task AddRg {
   input {
-    String ubam
-    String outfile
+    File bam
+    File bam_index
+    String sample_name
+    String gatk_path
+    String docker
   }
 
-  command <<<
-    echo ~{ubam} > "~{outfile}"
-  >>>
+  String out_filename = basename(bam, ".bam") + ".wRG.bam"
+  Int disk_gb = ceil(3 * size(bam, "GB")) + 10
+
+  command {
+    set -eu -o pipefail
+
+    ~{gatk_path} \
+      AddOrReplaceReadGroups \
+      I=~{bam} \
+      O=~{out_filename} \
+      RGID=1 \
+      RGLB=lib1 \
+      RGPL=ILLUMINA \
+      RGPU=unit1 \
+      RGSM=~{sample_name}
+
+    samtools index ~{out_filename}
+  }
 
   output {
-    File ubam_path_file = "~{outfile}"
+    File bam_wRG = "~{out_filename}"
+    File bam_wRG_idx = "~{out_filename}.bai"
   }
+
   runtime {
-    cpu: 1
-    memory: "2 GB"
-    docker: "ubuntu:latest"
     preemptible: 3
+    docker: docker
+    memory: "7.5 GiB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
   }
 }
 
