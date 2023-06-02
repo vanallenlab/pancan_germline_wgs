@@ -21,6 +21,7 @@ workflow WgsFastqToCram {
     File fastq_1
     File fastq_2
     Boolean clean_fastqs = false
+    Int n_fastq_shards = 1
     Boolean cram_out = true
 
     String reference_name
@@ -39,6 +40,7 @@ workflow WgsFastqToCram {
     File known_indels_sites_index
 
     String fastq_pair_docker = "vanallenlab/fastq-pair:latest"
+    String fastqsplitter_docker = "vanallenlab/fastqsplitter:latest"
     String gotc_docker = "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.4.7-1603303710"
     String gatk_docker = "broadinstitute/gatk:latest"
     String gatk_path = "/gatk/gatk"
@@ -73,26 +75,46 @@ workflow WgsFastqToCram {
   File fq2 = select_first([CleanFastqs.fq_paired_2, fastq_2])
   Array[File] fq_singles = select_first([CleanFastqs.fq_singles, []])
 
-  # Align with BWA
-  call Bwa as AlignPairs {
-    input:
-      input_fastqs = [fq1, fq2],
-      output_basename = sample_name,
-      ref_fasta = reference_fasta,
-      ref_fasta_index = reference_fasta_index,
-      ref_dict = reference_dict,
-      ref_alt = reference_alt,
-      ref_amb = reference_amb,
-      ref_ann = reference_ann,
-      ref_bwt = reference_bwt,
-      ref_pac = reference_pac,
-      ref_sa = reference_sa,
-      mem_gb = bwa_mem_gb,
-      num_cpu = bwa_num_cpu,
-      disk_size = bwa_disk_size,
-      docker = gotc_docker
+  # Split paired fastqs to parallelize alignment
+  if ( n_fastq_shards > 1 ) {
+    call SplitFastq as SplitFq1 {
+      input:
+        fastq = fq1,
+        n_shards = n_fastq_shards,
+        docker = fastqsplitter_docker
+    }
+    call SplitFastq as SplitFq2 {
+      input:
+        fastq = fq2,
+        n_shards = n_fastq_shards,
+        docker = fastqsplitter_docker
+    }
   }
+  Array[File] sharded_fq1 = select_first([SplitFq1.fq_shards, [fq1]])
+  Array[File] sharded_fq2 = select_first([SplitFq2.fq_shards, [fq2]])
+  Array[Pair[File, File]] sharded_fq_pairs = zip(sharded_fq1, sharded_fq2)
 
+  # Align paired fastqs with BWA
+  scatter ( fq_pair in sharded_fq_pairs ) {
+    call Bwa as AlignPairs {
+      input:
+        input_fastqs = [fq_pair.left, fq_pair.right],
+        output_basename = sample_name + "." + basename(fq_pair.left, "fq.gz"),
+        ref_fasta = reference_fasta,
+        ref_fasta_index = reference_fasta_index,
+        ref_dict = reference_dict,
+        ref_alt = reference_alt,
+        ref_amb = reference_amb,
+        ref_ann = reference_ann,
+        ref_bwt = reference_bwt,
+        ref_pac = reference_pac,
+        ref_sa = reference_sa,
+        mem_gb = bwa_mem_gb,
+        num_cpu = bwa_num_cpu,
+        disk_size = bwa_disk_size,
+        docker = gotc_docker
+    }
+  }
 
   scatter ( fastq in fq_singles ) {
     call Bwa as AlignSingles {
@@ -116,7 +138,7 @@ workflow WgsFastqToCram {
   }
 
   # Merge BAMs, mark duplicates
-  Array[File] bams_for_gatk = flatten([[AlignPairs.output_bam], AlignSingles.output_bam])
+  Array[File] bams_for_gatk = flatten([AlignPairs.output_bam, AlignSingles.output_bam])
   call GATK.MarkDuplicates {
     input:
       input_bams = bams_for_gatk,
@@ -125,8 +147,8 @@ workflow WgsFastqToCram {
       docker_image = gatk_docker,
       gatk_path = gatk_path,
       disk_size = ceil(3 * size(bams_for_gatk, "GB")) + 10,
-      compression_level = 5,
-      preemptible_tries = 3
+      compression_level = 2,
+      preemptible_tries = 5
   }
 
   # Sort deduped BAM file and fix tags
@@ -139,10 +161,10 @@ workflow WgsFastqToCram {
       ref_fasta_index = reference_fasta_index,
       docker_image = gatk_docker,
       gatk_path = gatk_path,
-      disk_size = select_first([sort_and_fix_tags_disk_size, ceil(4 * size(MarkDuplicates.output_bam, "GB")) + 10]),
-      mem_size_gb = select_first([sort_and_fix_tags_mem_gb, 32]),
-      preemptible_tries = 0,
-      compression_level = 5
+      disk_size = select_first([sort_and_fix_tags_disk_size, ceil(3 * size(MarkDuplicates.output_bam, "GB")) + 10]),
+      mem_size_gb = select_first([sort_and_fix_tags_mem_gb, 8]),
+      preemptible_tries = 5,
+      compression_level = 2
   }
 
   # Add RG tag (required for BaseRecalibrator)
@@ -160,7 +182,7 @@ workflow WgsFastqToCram {
     input:
       ref_dict = reference_dict,
       docker_image = python_docker,
-      preemptible_tries = 3
+      preemptible_tries = 5
   }
   
   # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
@@ -182,7 +204,7 @@ workflow WgsFastqToCram {
         docker_image = gatk_docker,
         gatk_path = gatk_path,
         disk_size = ceil(2 * size(AddRg.bam_wRG, "GB")) + 10,
-        preemptible_tries = 3
+        preemptible_tries = 5
     }  
   }  
   
@@ -194,7 +216,7 @@ workflow WgsFastqToCram {
       docker_image = gatk_docker,
       gatk_path = gatk_path,
       disk_size = 100,
-      preemptible_tries = 3
+      preemptible_tries = 5
   }
 
   scatter ( subgroup in CreateSequenceGroupingTSV.sequence_grouping_with_unmapped ) {
@@ -213,7 +235,7 @@ workflow WgsFastqToCram {
         docker_image = gatk_docker,
         gatk_path = gatk_path,
         disk_size = ceil(2.5 * size(AddRg.bam_wRG, "GB")) + 10,
-        preemptible_tries = 3
+        preemptible_tries = 5
     }
   } 
 
@@ -224,9 +246,9 @@ workflow WgsFastqToCram {
       output_bam_basename = sample_name,
       docker_image = gatk_docker,
       gatk_path = gatk_path,
-      disk_size = ceil(4 * size(AddRg.bam_wRG, "GB")) + 10,
-      preemptible_tries = 3,
-      compression_level = 5
+      disk_size = ceil(3 * size(AddRg.bam_wRG, "GB")) + 10,
+      preemptible_tries = 5,
+      compression_level = 2
   }
 
   if ( cram_out ) {
@@ -313,6 +335,44 @@ task CleanFastqs {
   }
 }
 
+# Evenly divide paired fastqs to parallelize alignment
+task SplitFastq {
+  input {
+    File fastq
+    Int n_shards
+    String docker
+  }
+
+  Int disk_gb = ceil(size(fastq, "GB") * 3) + 10
+  String out_prefix = basename(fastq, "fq.gz")
+
+  command <<<
+    set -eu -o pipefail
+
+    # Build fastqsplitter command
+    cmd="fastqsplitter -i ~{fastq}"
+    for [ i in $( seq 1 ~{n_shards} ); do
+      cmd="$cmd -o ~{out_prefix}.$i.fq.gz"
+    done
+
+    # Split fastqs
+    echo -e "Now splitting fastqs with the following command:\n$cmd\n"
+    eval $cmd
+  >>>
+
+  output {
+    Array[File] fq_shards = glob("~{out_prefix}.*.fq.gz")
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.5GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
 # Align single or paired fastqs with BWA MEM
 task Bwa {
   input {
@@ -346,7 +406,7 @@ task Bwa {
     /usr/gitc/bwa mem -v 3 -t ~{num_cpu} -Y \
       ~{ref_fasta} \
       ~{sep=" " input_fastqs} \
-    | samtools view -1 - > ~{output_basename}.bam
+    | samtools view -output-fmt-option level=2 - > ~{output_basename}.bam
   >>>
   
   output {
@@ -397,9 +457,9 @@ task AddRg {
   }
 
   runtime {
-    preemptible: 3
+    preemptible: 5
     docker: docker
-    memory: "7.5 GiB"
+    memory: "3.5 GiB"
     cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
   }
@@ -439,7 +499,7 @@ task Bam2Cram {
       -C \
       -T ~{ref_fa} \
       -o ~{cram_filename} \
-      --threads 4 \
+      --threads 2 \
       ~{bam}
 
     samtools index \
@@ -454,9 +514,9 @@ task Bam2Cram {
 
   runtime {
     docker: docker
-    memory: "7.5 GB"
-    cpu: 4
+    memory: "3.5 GB"
+    cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
+    preemptible: 5
   }
 }

@@ -1,5 +1,5 @@
-# Pan-Cancer Germline WGS
-### Variant calling from germline whole-genome sequencing (WGS) across cancer types
+# The Germline Genomics of Cancer (G2C)
+## Variant calling from germline whole-genome sequencing (WGS) across cancer types
 
 Copyright (c) 2023-Present, [Ryan L. Collins](mailto:Ryan_Collins@dfci.harvard.edu) and the Van Allen, Gusev, and Haigis laboratories at Dana-Farber Cancer Institute.  
 Distributed under terms of the [GNU GPL v2.0 License](/LICENSE) (see `LICENSE`).  
@@ -18,5 +18,27 @@ This repository contains the working code and scripts used to detect, genotype, 
 
 | Directory | Description |  
 | :--- | :--- |  
+| [`docker/`](https://github.com/talkowski-lab/dsmap/tree/main/docker) | Instructions for building project-related Docker images |   
+| [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/main/scripts) | Stand-alone scripts called by various workflows |   
 | [`wdl/`](https://github.com/talkowski-lab/dsmap/tree/main/wdl) | Stand-alone WDL workflows |   
+
+---  
+
+## Storage
+
+All sample-level input data is stored in a secure Google Cloud bucket: `gs://dfci-g2c-inputs`  
+
+Note that permissions must be granted for bucket access.  
+
+The bucket is organized as follows:
+* One directory per cohort
+* Each cohort has the following subdirectories:
+    * `gatk-hc` : raw GATK-HC gVCFs and indexes  
+    * `gatk-sv` : evidence and metrics files collected by GATK-SV  
+        * `gatk-sv/coverage` : coverage counts files  
+        * `gatk-sv/metrics` : per-sample metrics generated during GATK-SV module 01  
+        * `gatk-sv/pesr` : PE/SR metadata files  
+    * `manta` : raw Manta VCFs and indexes  
+    * `melt` : raw MELT VCFs and indexes  
+  * `wham` : raw Wham VCFs and indexes  
 
