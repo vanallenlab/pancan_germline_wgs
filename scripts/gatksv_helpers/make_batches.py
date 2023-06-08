@@ -358,6 +358,8 @@ def main():
             msg = 'Batch-specific QC complete. Retained a total of {:,} ' + \
                   'samples across all batches.\n\n'
             log.write(msg.format(n_kept))
+            log.write('Final batch membership membership summary after QC:\n')
+            summarize_batches(md['final_batch_assignment'], log)
 
     # Write updated metadata to --outfile
     md.insert(0, colnames[0], md.index)
