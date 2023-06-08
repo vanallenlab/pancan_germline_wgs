@@ -51,7 +51,6 @@ workflow WgsFastqToCram {
     Int clean_fastq_disk_scaling_factor = 6
 
     Float clean_fastq_mem_gb = 64
-    Float? sort_and_fix_tags_mem_gb
     Int? sort_and_fix_tags_disk_size
     Float? bwa_mem_gb
     Int? bwa_num_cpu
@@ -99,7 +98,7 @@ workflow WgsFastqToCram {
     call Bwa as AlignPairs {
       input:
         input_fastqs = [fq_pair.left, fq_pair.right],
-        output_basename = sample_name + "." + basename(fq_pair.left, "fq.gz"),
+        output_basename = sample_name + "." + basename(fq_pair.left, ".fq.gz"),
         ref_fasta = reference_fasta,
         ref_fasta_index = reference_fasta_index,
         ref_dict = reference_dict,
@@ -152,7 +151,7 @@ workflow WgsFastqToCram {
   }
 
   # Sort deduped BAM file and fix tags
-  call GATK.SortAndFixTags {
+  call SortAndFixTags {
     input:
       input_bam = MarkDuplicates.output_bam,
       output_bam_basename = sample_name + ".aligned.duplicate_marked.sorted",
@@ -161,8 +160,7 @@ workflow WgsFastqToCram {
       ref_fasta_index = reference_fasta_index,
       docker_image = gatk_docker,
       gatk_path = gatk_path,
-      disk_size = select_first([sort_and_fix_tags_disk_size, ceil(3 * size(MarkDuplicates.output_bam, "GB")) + 10]),
-      mem_size_gb = select_first([sort_and_fix_tags_mem_gb, 8]),
+      disk_size = select_first([sort_and_fix_tags_disk_size, ceil(4 * size(MarkDuplicates.output_bam, "GB")) + 10]),
       preemptible_tries = 5,
       compression_level = 2
   }
@@ -344,14 +342,14 @@ task SplitFastq {
   }
 
   Int disk_gb = ceil(size(fastq, "GB") * 3) + 10
-  String out_prefix = basename(fastq, "fq.gz")
+  String out_prefix = basename(fastq, ".fq.gz")
 
   command <<<
     set -eu -o pipefail
 
     # Build fastqsplitter command
     cmd="fastqsplitter -i ~{fastq}"
-    for [ i in $( seq 1 ~{n_shards} ); do
+    for i in $( seq 1 ~{n_shards} ); do
       cmd="$cmd -o ~{out_prefix}.$i.fq.gz"
     done
 
@@ -406,7 +404,8 @@ task Bwa {
     /usr/gitc/bwa mem -v 3 -t ~{num_cpu} -Y \
       ~{ref_fasta} \
       ~{sep=" " input_fastqs} \
-    | samtools view -output-fmt-option level=2 - > ~{output_basename}.bam
+    | samtools view -b --output-fmt-option level=2 - \
+    > ~{output_basename}.bam
   >>>
   
   output {
@@ -462,6 +461,58 @@ task AddRg {
     memory: "3.5 GiB"
     cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
+  }
+}
+
+# Sort BAM file by coordinate order and fix tag values for NM and UQ
+# Note: taken from GATK-4 WDL but modified to use samtools sort
+task SortAndFixTags {
+  input {
+    File input_bam
+    String output_bam_basename
+    File ref_dict
+    File ref_fasta
+    File ref_fasta_index
+  
+    Int compression_level
+    Int preemptible_tries
+    Int disk_size
+    Int sort_mem_gb = 4
+    Int sort_cpu = 4
+    Int fix_tags_mem_gb = 2
+
+    String docker_image
+    String gatk_path
+  }
+  Int sort_extra_threads = sort_cpu - 1
+  Int total_mem_gb = sort_mem_gb + fix_tags_mem_gb + 2
+
+  command {
+    set -o pipefail
+
+    samtools sort \
+      -l 1 -O bam -@ ~{sort_extra_threads} \
+      ~{input_bam} \
+    | ~{gatk_path} \
+      --java-options "-Dsamjdk.compression_level=~{compression_level} -Xms~{fix_tags_mem_gb}G" \
+      SetNmMdAndUqTags \
+      --INPUT /dev/stdin \
+      --OUTPUT ~{output_bam_basename}.bam \
+      --CREATE_INDEX true \
+      --CREATE_MD5_FILE true \
+      --REFERENCE_SEQUENCE ~{ref_fasta}
+  }
+  runtime {
+    preemptible: preemptible_tries
+    docker: docker_image
+    memory: "~{total_mem_gb} GiB"
+    cpu: sort_cpu
+    disks: "local-disk " + disk_size + " HDD"
+  }
+  output {
+    File output_bam = "~{output_bam_basename}.bam"
+    File output_bam_index = "~{output_bam_basename}.bai"
+    File output_bam_md5 = "~{output_bam_basename}.bam.md5"
   }
 }
 

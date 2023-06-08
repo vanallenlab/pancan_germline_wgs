@@ -35,14 +35,21 @@ def main():
 
     # Prepare expected path formatting conventions
     base_path = '{}/{}'.format(args.bucket, args.cohort)
-    gs_fmts = {'gatksv_coverage' : '{}/gatk-sv/coverage/{}.counts.tsv.gz',
-               'gatksv_pe' : '{}/gatk-sv/pesr/{}.pe.txt.gz',
-               'gatksv_sd' : '{}/gatk-sv/pesr/{}.sd.txt.gz',
-               'gatksv_sr' : '{}/gatk-sv/pesr/{}.sr.txt.gz',
-               'gatkhc_gvcf' : '{}/gatk-hc/{}.g.vcf.gz',
+    gs_fmts = {'coverage_counts' : '{}/gatk-sv/coverage/{}.counts.tsv.gz',
+               'pesr_disc' : '{}/gatk-sv/pesr/{}.pe.txt.gz',
+               'pesr_disc_index' : '{}/gatk-sv/pesr/{}.pe.txt.gz.tbi',
+               'pesr_sd' : '{}/gatk-sv/pesr/{}.sd.txt.gz',
+               'pesr_sd_index' : '{}/gatk-sv/pesr/{}.sd.txt.gz.tbi',
+               'pesr_split' : '{}/gatk-sv/pesr/{}.sr.txt.gz',
+               'pesr_split_index' : '{}/gatk-sv/pesr/{}.sr.txt.gz.tbi',
+               'gvcf' : '{}/gatk-hc/{}.g.vcf.gz',
+               'gvcf_index' : '{}/gatk-hc/{}.g.vcf.gz.tbi',
                'manta_vcf' : '{}/manta/{}.manta.vcf.gz',
+               'manta_index' : '{}/manta/{}.manta.vcf.gz.tbi',
                'melt_vcf' : '{}/melt/{}.melt.vcf.gz',
-               'wham_vcf' : '{}/wham/{}.wham.vcf.gz'}
+               'melt_index' : '{}/melt/{}.melt.vcf.gz.tbi',
+               'wham_vcf' : '{}/wham/{}.wham.vcf.gz',
+               'wham_index' : '{}/wham/{}.wham.vcf.gz.tbi'}
 
     # Open connection to outfile
     if args.outfile in '- stdout /dev/stdout'.split():
