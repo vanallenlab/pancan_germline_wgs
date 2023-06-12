@@ -22,6 +22,22 @@ RUN mkdir -p /root/.ncbi
 COPY user-settings.mkfg /root/.ncbi/user-settings.mkfg
 ENV PATH="$PATH:/opt/sratoolkit.${VERSION}-ubuntu64/bin"
 
+# Install samtools dependencies
+RUN apt-get update && \
+    apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
+                       libcurl4-openssl-dev libssl-dev libncurses5-dev && \
+    apt-get clean
+
+# Install samtools
+ARG SAMTOOLS_VERISON=1.17
+RUN wget https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERISON}/samtools-${SAMTOOLS_VERISON}.tar.bz2 && \
+    tar -xvf samtools-${SAMTOOLS_VERISON}.tar.bz2 && \
+    cd samtools-${SAMTOOLS_VERISON} && \
+    ./configure --without-curses && \
+    make && \
+    make install && \
+    cd -
+
 # Developer aliases, etc (for convenience)
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc

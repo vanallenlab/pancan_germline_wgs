@@ -39,9 +39,10 @@ task B2F {
     String docker
     Int cpu = 4
     Float mem_gb_per_cpu = 1.75
+    Int? disk_gb
   }
 
-  Int disk_size = ceil( ( 4 * size(bam, "GB") ) + 10.0 )
+  Int default_disk_size = ceil( ( 4 * size(bam, "GB") ) + 10.0 )
   Float total_mem_gb = mem_gb_per_cpu * cpu
 
   command <<<
@@ -57,7 +58,7 @@ task B2F {
   runtime {
     docker: docker
     memory: "~{total_mem_gb} GB"
-    disks: "local-disk " + disk_size + " HDD"
+    disks: "local-disk " + select_first([disk_gb, default_disk_size]) + " HDD"
     preemptible: 3
   }
 

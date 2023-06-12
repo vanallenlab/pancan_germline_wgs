@@ -4,8 +4,10 @@
 
 # Align PE WGS fastqs with bwa mem and preprocess with GATK4 best practices
 
-# Originally based on a WDL by Tyler Chinsky <tyler_chinsky@dfci.harvard.edu>
+# Partially based on a WDL by Tyler Chinsky <tyler_chinsky@dfci.harvard.edu>
 # https://portal.firecloud.org/?return=terra#methods/tylerchinskydfci/paired_fastq_to_bam/5
+
+# Has been semi-optimized for cost efficiency for standard germline short-read WGS on Terra/GCP
 
 
 version 1.0
@@ -182,11 +184,13 @@ workflow WgsFastqToCram {
       docker_image = python_docker,
       preemptible_tries = 5
   }
+  Int n_bqsr_splits = length(CreateSequenceGroupingTSV.sequence_grouping)
+  Int n_bqsr_plus_unmapped_splits = length(CreateSequenceGroupingTSV.sequence_grouping_with_unmapped)
   
   # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
   scatter ( subgroup in CreateSequenceGroupingTSV.sequence_grouping ) {
     # Generate the recalibration model by interval
-    call GATK.BaseRecalibrator {
+    call StreamedBaseRecalibrator {
       input:
         input_bam = AddRg.bam_wRG,
         input_bam_index = AddRg.bam_wRG_idx,
@@ -201,7 +205,7 @@ workflow WgsFastqToCram {
         ref_fasta_index = reference_fasta_index,
         docker_image = gatk_docker,
         gatk_path = gatk_path,
-        disk_size = ceil(2 * size(AddRg.bam_wRG, "GB")) + 10,
+        disk_size = ceil(3 * size(AddRg.bam_wRG, "GB") / n_bqsr_splits) + 20,
         preemptible_tries = 5
     }  
   }  
@@ -209,7 +213,7 @@ workflow WgsFastqToCram {
   # Merge the recalibration reports resulting from by-interval recalibration
   call GATK.GatherBqsrReports {
     input:
-      input_bqsr_reports = BaseRecalibrator.recalibration_report,
+      input_bqsr_reports = StreamedBaseRecalibrator.recalibration_report,
       output_report_filename = sample_name + ".recal_data.csv",
       docker_image = gatk_docker,
       gatk_path = gatk_path,
@@ -217,10 +221,9 @@ workflow WgsFastqToCram {
       preemptible_tries = 5
   }
 
+  # Apply the BQSR model by interval
   scatter ( subgroup in CreateSequenceGroupingTSV.sequence_grouping_with_unmapped ) {
-
-    # Apply the recalibration model by interval
-    call GATK.ApplyBQSR {
+    call StreamedApplyBQSR {
       input:
         input_bam = AddRg.bam_wRG,
         input_bam_index = AddRg.bam_wRG_idx,
@@ -232,7 +235,7 @@ workflow WgsFastqToCram {
         ref_fasta_index = reference_fasta_index,
         docker_image = gatk_docker,
         gatk_path = gatk_path,
-        disk_size = ceil(2.5 * size(AddRg.bam_wRG, "GB")) + 10,
+        disk_size = ceil(3 * size(AddRg.bam_wRG, "GB") / n_bqsr_plus_unmapped_splits) + 20,
         preemptible_tries = 5
     }
   } 
@@ -240,7 +243,7 @@ workflow WgsFastqToCram {
   # Merge the recalibrated BAM files resulting from by-interval recalibration
   call GATK.GatherBamFiles {
     input:
-      input_bams = ApplyBQSR.recalibrated_bam,
+      input_bams = StreamedApplyBQSR.recalibrated_bam,
       output_bam_basename = sample_name,
       docker_image = gatk_docker,
       gatk_path = gatk_path,
@@ -513,6 +516,115 @@ task SortAndFixTags {
     File output_bam = "~{output_bam_basename}.bam"
     File output_bam_index = "~{output_bam_basename}.bai"
     File output_bam_md5 = "~{output_bam_basename}.bam.md5"
+  }
+}
+
+# Generate Base Quality Score Recalibration (BQSR) model
+# Note: taken from GATK-4 WDL but modified to stream intervals of interest
+# from a google bucket rather than localizing the entire BAM to save on disk
+task StreamedBaseRecalibrator {
+  input {
+    File input_bam
+    File input_bam_index
+    String recalibration_report_filename
+    Array[String] sequence_group_interval
+    File dbSNP_vcf
+    File dbSNP_vcf_index
+    Array[File] known_indels_sites_VCFs
+    Array[File] known_indels_sites_indices
+    File ref_dict
+    File ref_fasta
+    File ref_fasta_index
+  
+    Int preemptible_tries
+    Int disk_size
+    Float mem_size_gb = 6
+
+    String docker_image
+    String gatk_path
+  }
+  Int command_mem_gb = ceil(mem_size_gb) - 2
+  parameter_meta {
+    input_bam: {
+      localization_optional: true
+    }
+  }
+
+  command { 
+    set -eu -o pipefail
+    
+    ~{gatk_path} --java-options "-Xms~{command_mem_gb}G" \
+      BaseRecalibrator \
+      -R ~{ref_fasta} \
+      -I ~{input_bam} \
+      --use-original-qualities \
+      -O ~{recalibration_report_filename} \
+      --known-sites ~{dbSNP_vcf} \
+      --known-sites ~{sep=" --known-sites " known_indels_sites_VCFs} \
+      -L ~{sep=" -L " sequence_group_interval}
+  }
+  runtime {
+    preemptible: preemptible_tries
+    docker: docker_image
+    memory: "~{mem_size_gb} GiB"
+    disks: "local-disk " + disk_size + " HDD"
+  }
+  output {
+    File recalibration_report = "~{recalibration_report_filename}"
+  }
+}
+
+# Apply Base Quality Score Recalibration (BQSR) model
+# Note: taken from GATK-4 WDL but modified to stream intervals of interest
+# from a google bucket rather than localizing the entire BAM to save on disk
+task StreamedApplyBQSR {
+  input {
+    File input_bam
+    File input_bam_index
+    String output_bam_basename
+    File recalibration_report
+    Array[String] sequence_group_interval
+    File ref_dict
+    File ref_fasta
+    File ref_fasta_index
+
+    Int preemptible_tries
+    Int disk_size 
+    Float mem_size_gb = 4
+
+    String docker_image
+    String gatk_path
+  }
+  Int command_mem_gb = ceil(mem_size_gb) - 1
+  parameter_meta {
+    input_bam: {
+      localization_optional: true
+    }
+  }
+
+  command {
+    set -eu -o pipefail
+
+    ~{gatk_path} --java-options "-Xms~{command_mem_gb}G" \
+      ApplyBQSR \
+      -R ~{ref_fasta} \
+      -I ~{input_bam} \
+      -O ~{output_bam_basename}.bam \
+      -L ~{sep=" -L " sequence_group_interval} \
+      -bqsr ~{recalibration_report} \
+      --static-quantized-quals 10 --static-quantized-quals 20 --static-quantized-quals 30 \
+      --add-output-sam-program-record \
+      --create-output-bam-md5 \
+      --use-original-qualities
+  }
+  runtime {
+    preemptible: preemptible_tries
+    docker: docker_image
+    memory: "~{mem_size_gb} GiB"
+    disks: "local-disk " + disk_size + " HDD"
+  }
+  output {
+    File recalibrated_bam = "~{output_bam_basename}.bam"
   }
 }
 

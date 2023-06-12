@@ -297,9 +297,9 @@ def main():
     batch_name_template = args.prefix
     for bb in args.batch_by:
         if bb in bb_numeric:
-            batch_name_template += '|' + bb + '_{}'
+            batch_name_template += '-' + bb + '_{}'
         else:
-            batch_name_template += '|{}'
+            batch_name_template += '-{}'
     for strat, strat_ids in strata.items():
         for cv, branches in batch_trees.items():
             samples = filter_samples(md, zip(bb_categ.keys(), cv))
