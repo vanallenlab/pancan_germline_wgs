@@ -11,7 +11,6 @@ version 1.0
 workflow ExcludeSamplesFromVcf {
   input {
     File vcf
-    File? vcf_idx
     File exclude_samples_list
     
     String? outfile_prefix
@@ -25,7 +24,6 @@ workflow ExcludeSamplesFromVcf {
   call ExcludeSamples {
     input:
       vcf = vcf,
-      vcf_idx = vcf_idx,
       exclude_samples_list = exclude_samples_list,
       outfile_prefix = outfile_prefix,
       compression_level = compression_level,
@@ -44,7 +42,6 @@ workflow ExcludeSamplesFromVcf {
 task ExcludeSamples {
   input {
     File vcf
-    File? vcf_idx
     File exclude_samples_list
 
     String? outfile_prefix
@@ -62,10 +59,6 @@ task ExcludeSamples {
 
   command <<<
     set -eu -o pipefail
-
-    if [ ~{defined(vcf_idx)} != "true" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
 
     bcftools view \
       --compression-level ~{compression_level} \
