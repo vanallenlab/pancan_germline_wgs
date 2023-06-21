@@ -1,4 +1,4 @@
-# The Genomic Architecture of Human Cancers
+# The Germline Genomics of Cancer (G2C)
 # Copyright (c) 2023-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
@@ -60,7 +60,7 @@ task DumpBam {
       ~{accession}
 
     # Dump SAM and save as BAM
-    sam dump \
+    sam-dump \
       --unaligned \
       --header \
       --verbose \
@@ -74,13 +74,13 @@ task DumpBam {
   >>>
 
   output {
-    File bam_out = "~{accession}.bam"
-    File bai_out = "~{accession}.bam.bai"
+    File bam_out = "~{outfile_name}"
+    File bai_out = "~{outfile_name}.bai"
   }
 
   runtime {
-    cpu: 4
-    memory: "7.75 GiB"
+    cpu: 2
+    memory: "3.75 GiB"
     disks: "local-disk " + diskGb + " HDD"
     bootDiskSizeGb: 10
     docker: docker

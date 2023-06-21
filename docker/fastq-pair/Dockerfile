@@ -1,4 +1,4 @@
-# The Genomic Architecture of Human Cancers
+# The Germline Genomics of Cancer (G2C)
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 

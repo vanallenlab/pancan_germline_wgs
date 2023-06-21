@@ -1,4 +1,4 @@
-# The Genomic Architecture of Human Cancers
+# The Germline Genomics of Cancer (G2C)
 # Copyright (c) 2023-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0

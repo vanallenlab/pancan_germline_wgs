@@ -1,4 +1,4 @@
-# The Genomic Architecture of Human Cancers
+# The Germline Genomics of Cancer (G2C)
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
@@ -313,7 +313,9 @@ task CleanFastqs {
     hash_size=$( echo $n_reads | awk -v denom=~{reads_per_hash_cell} '{ printf "%.0f\n", $1 / denom }' | cut -f1 -d\. )
     echo -e "\nSetting hash size to $hash_size\n"
 
-    fastq_pair -t $hash_size ~{f1_basename}.fastq ~{f2_basename}.fastq
+    fastq_pair -p -t $hash_size \
+      ~{f1_basename}.fastq \
+      ~{f2_basename}.fastq
     for out in paired single; do
       gzip -f ~{f1_basename}.fastq.$out.fq
       gzip -f ~{f2_basename}.fastq.$out.fq
@@ -645,18 +647,6 @@ task Bam2Cram {
 
   command <<<
     set -euo pipefail
-
-    # log resource usage for debugging purposes
-    function runtimeInfo() {
-      echo [$(date)]
-      echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
-      echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
-      echo \* Disk usage: $(df | grep cromwell_root | awk '{ print $5 }')
-    }
-    while true; do
-      runtimeInfo
-      sleep 60s
-    done &
 
     samtools view \
       -C \
