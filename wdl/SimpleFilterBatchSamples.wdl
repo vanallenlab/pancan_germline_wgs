@@ -18,21 +18,15 @@ workflow SimpleFilterBatchSamples {
    input {
     String batch
     File? manta_vcf
-    File? manta_vcf_idx
     File? wham_vcf
-    File? wham_vcf_idx
     File? melt_vcf
-    File? melt_vcf_idx
     File? scramble_vcf
-    File? scramble_vcf_idx
     File? depth_vcf
-    File? depth_vcf_idx
     File exclude_samples_list
     String sv_base_mini_docker
   }
 
   Array[File?] vcfs = [manta_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
-  Array[File?] vcf_idxs = [manta_vcf_idx, wham_vcf_idx, melt_vcf_idx, scramble_vcf_idx, depth_vcf_idx]
   Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]  # fixed algorithms to enable File outputs to be determined
   Int num_algorithms = length(algorithms)
 
@@ -41,7 +35,6 @@ workflow SimpleFilterBatchSamples {
       call ExcludeTask.ExcludeSamplesFromVcf as Exclude {
         input:
           vcf = select_first([vcfs[i]]),
-          vcf_idx = select_first([vcf_idxs[i]]),
           exclude_samples_list = exclude_samples_list,
           outfile_prefix = "~{batch}.~{algorithms[i]}.outliers_removed",
           docker = sv_base_mini_docker
