@@ -15,7 +15,7 @@ workflow ExcludeSamplesFromVcf {
     
     String? outfile_prefix
     Int? compression_level
-    Boolean drop_empty_records = true
+    String? bcftools_filter_options
     Boolean update_info = true
 
     String docker
@@ -27,7 +27,7 @@ workflow ExcludeSamplesFromVcf {
       exclude_samples_list = exclude_samples_list,
       outfile_prefix = outfile_prefix,
       compression_level = compression_level,
-      drop_empty_records = drop_empty_records,
+      bcftools_filter_options = bcftools_filter_options,
       update_info = update_info,
       docker = docker
   }
@@ -46,7 +46,7 @@ task ExcludeSamples {
 
     String? outfile_prefix
     Int compression_level = 2
-    Boolean drop_empty_records
+    String bcftools_filter_options = ""
     Boolean update_info
 
     String docker
@@ -68,7 +68,7 @@ task ExcludeSamples {
       --samples-file ^~{exclude_samples_list} \
       --force-samples \
       ~{if update_info then "" else "--no-update"} \
-      ~{if drop_empty_records then "--include 'AC>0 | FILTER==\"MULTIALLELIC\"'" else ""} \
+      ~{bcftools_filter_options} \
       ~{vcf}
     tabix -p vcf -f ~{outfile}
   >>>

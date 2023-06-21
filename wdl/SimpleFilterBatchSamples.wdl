@@ -23,6 +23,7 @@ workflow SimpleFilterBatchSamples {
     File? scramble_vcf
     File? depth_vcf
     File exclude_samples_list
+    String? bcftools_filter_options
     String sv_base_mini_docker
   }
 
@@ -36,6 +37,7 @@ workflow SimpleFilterBatchSamples {
         input:
           vcf = select_first([vcfs[i]]),
           exclude_samples_list = exclude_samples_list,
+          bcftools_filter_options = bcftools_filter_options,
           outfile_prefix = "~{batch}.~{algorithms[i]}.outliers_removed",
           docker = sv_base_mini_docker
       }
