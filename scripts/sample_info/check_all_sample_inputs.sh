@@ -7,6 +7,7 @@
 
 # Check Google cloud storage bucket for availability of all data for all cohorts
 
+set -eu -o pipefail
 
 usage() {
 cat << EOF
@@ -23,6 +24,9 @@ EOF
 
 if [ $# -lt 1 ]; then
   cat $TMPDIR/listOfLists.txt | xargs -I {} basename {} | sed 's/\.samples\.list//g' > $TMPDIR/cohorts.list
+elif [ $1 == "--help" ] || [ $1 == "-h" ]; then
+  usage
+  exit 0
 else
   echo $1 > $TMPDIR/cohorts.list
 fi
