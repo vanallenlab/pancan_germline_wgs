@@ -7,7 +7,7 @@
 
 version 1.0
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/GenotypePESRPart1.wdl" as gp1     # This import also needed to be modified so the path has changed
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/GenotypePESRPart1.local_SR_training.wdl" as gp1     # This import also needed to be modified so the path has changed
 import "https://raw.githubusercontent.com/broadinstitute/gatk-sv/v0.27-beta/wdl/GenotypePESRPart2.wdl" as gp2
 import "https://raw.githubusercontent.com/broadinstitute/gatk-sv/v0.27-beta/wdl/GenotypeDepthPart1.wdl" as gd1
 import "https://raw.githubusercontent.com/broadinstitute/gatk-sv/v0.27-beta/wdl/GenotypeDepthPart2.wdl" as gd2
@@ -44,8 +44,9 @@ workflow GenotypeBatch {
     File? genotype_pesr_depth_sepcutoff
     File? genotype_depth_pesr_sepcutoff
     File? genotype_depth_depth_sepcutoff
-    File? SR_metrics
     File? PE_metrics
+
+    File precomputed_SR_metrics  # This is the main change to this WDL. Precomputed SR metrics (as in TrainSRGenotyping.wdl) must be supplied by the user
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
@@ -81,10 +82,6 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_count_pe
     RuntimeAttr? runtime_attr_pe_genotype
 
-    # SR train
-    RuntimeAttr? runtime_attr_count_sr
-    RuntimeAttr? runtime_attr_sr_genotype
-
     # RD train
     RuntimeAttr? runtime_attr_training_bed
     RuntimeAttr? runtime_attr_genotype_train
@@ -94,6 +91,7 @@ workflow GenotypeBatch {
 
     # PESR part 2
     RuntimeAttr? runtime_attr_genotype_pe
+    RuntimeAttr? runtime_attr_count_sr
     RuntimeAttr? runtime_attr_genotype_sr
     RuntimeAttr? runtime_attr_integrate_gq
     RuntimeAttr? runtime_attr_integrate_pesr_gq
@@ -105,7 +103,7 @@ workflow GenotypeBatch {
 
   }
 
-  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(genotype_depth_pesr_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
+  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(genotype_depth_pesr_sepcutoff) && defined(PE_metrics)
   call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesPESR {
     input:
       batch_vcf = batch_pesr_vcf,
@@ -159,10 +157,7 @@ workflow GenotypeBatch {
         reference_build = select_first([reference_build]),
         n_per_PE_split = n_per_split,
         famfile = SubsetPedFile.ped_subset_file,
-        splitfile = splitfile,
-        splitfile_index = splitfile_index,
         n_per_RD_split = n_per_split,
-        n_per_SR_split = n_per_split,
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -172,8 +167,6 @@ workflow GenotypeBatch {
         runtime_attr_make_batch_bed = runtime_attr_make_batch_bed,
         runtime_attr_count_pe = runtime_attr_count_pe,
         runtime_attr_pe_genotype = runtime_attr_pe_genotype,
-        runtime_attr_count_sr = runtime_attr_count_sr,
-        runtime_attr_sr_genotype = runtime_attr_sr_genotype,
         runtime_attr_training_bed = runtime_attr_training_bed,
         runtime_attr_genotype_train = runtime_attr_genotype_train,
         runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,
@@ -199,7 +192,7 @@ workflow GenotypeBatch {
       RD_pesr_sepcutoff = select_first([genotype_pesr_pesr_sepcutoff, GenotypePESRPart1.RD_pesr_sepcutoff]),
       coveragefile = coveragefile,
       coveragefile_index = coveragefile_index,
-      SR_metrics = select_first([SR_metrics, GenotypePESRPart1.SR_metrics]),
+      SR_metrics = precomputed_SR_metrics,
       n_per_split = n_per_split,
       famfile = SubsetPedFile.ped_subset_file,
       splitfile = splitfile,
@@ -306,7 +299,7 @@ workflow GenotypeBatch {
     File sr_background_fail = GenotypePESRPart2.background_fail
 
     File? trained_PE_metrics = GenotypePESRPart1.PE_metrics
-    File? trained_SR_metrics = GenotypePESRPart1.SR_metrics
+    File? trained_SR_metrics = precomputed_SR_metrics
 
     File? trained_genotype_pesr_pesr_sepcutoff = GenotypePESRPart1.RD_pesr_sepcutoff
     File? trained_genotype_pesr_depth_sepcutoff = GenotypePESRPart1.RD_depth_sepcutoff
