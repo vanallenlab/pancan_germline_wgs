@@ -159,6 +159,7 @@ workflow GenotypeBatch {
         famfile = SubsetPedFile.ped_subset_file,
         n_per_RD_split = n_per_split,
         ref_dict = ref_dict,
+        precomputed_SR_metrics = precomputed_SR_metrics,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
