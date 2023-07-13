@@ -192,7 +192,8 @@ def main():
     i_line = '##INFO=<ID=GROUPWISE_MASKED_GENOTYPES,Number=0,Type=Flag,' + \
              'Description="A subset of GTs for this record have been ' + \
              'masked by post hoc application of mark_batch_effects.py">'
-    out_header.add_line(i_line)
+    if 'GROUPWISE_MASKED_GENOTYPES' not in out_header.info.keys():
+        out_header.add_line(i_line)
     if args.strict:
         filter_id = 'NONUNIFORM_GENOTYPES'
         filter_descrip = 'Variant exhibits excessive differences in ' + \
@@ -203,6 +204,8 @@ def main():
         if args.filter_description is not None:
             filter_descrip = args.filter_description
         f_line = '##FILTER=<ID={},Description="{}">'
+        if filter_id not in out_header.filters.keys():
+            out_header.add_line(i_line)
         out_header.add_line(f_line.format(filter_id, filter_descrip))
 
     # Open connection to output VCF

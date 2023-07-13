@@ -1,4 +1,5 @@
-# The Genomic Architecture of Human Cancers
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2023-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
@@ -143,8 +144,8 @@ task MarkBatchEffectsSingleContig {
       --invcf "~{in_vcf_name}" \
       --group-membership ~{group_membership_tsv} \
       ~{if (strict) then "--strict" else ""} \
-      ~{if defined(custom_filter_id) then "--filter-id ~{custom_filter_id}" else ""} \
-      ~{if defined(custom_filter_description) then "--filter-description ~{custom_filter_description}" else ""} \
+      ~{if defined(custom_filter_id) then "--filter-id \"~{custom_filter_id}\"" else ""} \
+      ~{if defined(custom_filter_description) then "--filter-description \"~{custom_filter_description}\"" else ""} \
       --min-samples ~{min_n} \
       --lower-freq ~{lower_freq} \
       --upper-freq ~{upper_freq} \

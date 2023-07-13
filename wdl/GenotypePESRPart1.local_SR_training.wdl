@@ -5,6 +5,8 @@
 
 # Original WDL: https://raw.githubusercontent.com/broadinstitute/gatk-sv/v0.27-beta/wdl/GenotypePESRPart1.wdl
 
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+
 version 1.0
 
 import "https://raw.githubusercontent.com/broadinstitute/gatk-sv/v0.27-beta/wdl/TrainRDGenotyping.wdl" as rd_train
