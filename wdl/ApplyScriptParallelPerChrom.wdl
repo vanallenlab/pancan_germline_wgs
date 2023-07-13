@@ -11,14 +11,15 @@ version 1.0
 workflow ApplyScriptParallelPerChrom {
   input {
     File vcf
-    File script                   # User-supplied script staged in a google bucket. Must take input and output VCFs as final two positional arguments 
+    File script                     # User-supplied script staged in a google bucket. Must take input and output VCFs as final two positional arguments 
     String? out_vcf_prefix
 
-    String exec_prefix = "source" # Command to interpret script as an executable
-    String script_options = ""    # Any other command-line options to be passed to the script
+    String exec_prefix = "source"   # Command to interpret script as an executable
+    String script_options = ""      # Any other command-line options to be passed to the script
 
-    File? vcf_idx                 # Recommended but not strictly required
-    File? ref_fai                 # Used to determine contigs for parallelization. By default will take all contigs in vcf header
+    File? vcf_idx                   # Recommended but not strictly required
+    File? ref_fai                   # Used to determine contigs for parallelization. By default will take all contigs in vcf header
+    String? bcftools_concat_options 
 
     Float? script_mem_gb
     Int? script_cpu_cores
@@ -27,7 +28,7 @@ workflow ApplyScriptParallelPerChrom {
     Int? merge_cpu_cores
     Int? merge_disk_gb
 
-    String bcftools_docker        # Any linux-based image with bcftools & tabix installed. Must also have dependencies for running user-supplied script.
+    String bcftools_docker          # Any linux-based image with bcftools & tabix installed. Must also have dependencies for running user-supplied script.
   }
 
   # Get contigs for scatter depending on user input
@@ -71,7 +72,9 @@ workflow ApplyScriptParallelPerChrom {
   call ConcatVcfs {
     input:
       vcfs = ApplyScriptSingleContig.vcf_out,
+      vcf_idxs = ApplyScriptSingleContig.vcf_out_idx,
       out_prefix = select_first([out_vcf_prefix, basename(vcf, ".vcf.gz") + ".processed"]),
+      bcftools_concat_options = bcftools_concat_options,
       mem_gb = merge_mem_gb,
       cpu_cores = merge_cpu_cores,
       disk_gb = merge_disk_gb,
@@ -186,10 +189,12 @@ task ApplyScriptSingleContig {
     # Execute script
     cmd="~{exec_prefix} ~{script} ~{script_options} ~{in_vcf_name} ~{out_vcf_name}"
     eval "$cmd"
+    tabix -p vcf -f "~{out_vcf_name}"
   >>>
 
   output {
     File vcf_out = "~{out_vcf_name}"
+    File vcf_out_idx = "~{out_vcf_name}.tbi"
   }
 
   runtime {
@@ -205,7 +210,10 @@ task ApplyScriptSingleContig {
 task ConcatVcfs {
   input {
     Array[File] vcfs
+    Array[File] vcf_idxs
     String out_prefix
+
+    String bcftools_concat_options = ""
 
     Float mem_gb = 3.5
     Int cpu_cores = 2
@@ -222,8 +230,8 @@ task ConcatVcfs {
     set -eu -o pipefail
 
     bcftools concat \
-      --allow-overlaps \
-      --file-list <( write_lines(vcfs) ) \
+      ~{bcftools_concat_options} \
+      --file-list ~{write_lines(vcfs)} \
       -O z \
       -o ~{out_filename} \
       --threads ~{cpu_cores}
