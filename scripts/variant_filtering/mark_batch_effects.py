@@ -157,15 +157,15 @@ def main():
                         help='Custom VCF FILTER description to use when ' +
                         'tagging records with inter-group differences. Only ' +
                         'used with --strict.')
-    parser.add_argument('-M', '--min-samples', default=10, type=int,
+    parser.add_argument('-M', '--min-samples', default=10, type=int, 
                         help='Minimum number of samples per group to be ' +
-                        'included in comparisons [default: 10]')
+                        'included in comparisons [default: 10]', metavar='Int')
     parser.add_argument('-L', '--lower-freq', default=0.1, type=float,
                         help='Lower frequency threshold for inter-group ' +
-                        'comparisons [default: 0.1]')
+                        'comparisons [default: 0.1]', metavar='Float')
     parser.add_argument('-U', '--upper-freq', default=0.5, type=float,
                         help='Upper frequency threshold for inter-group ' +
-                        'comparisons [default: 0.5]')
+                        'comparisons [default: 0.5]', metavar='Float')
     args = parser.parse_args()
 
     # Open connection to input VCF
