@@ -141,7 +141,7 @@ task MarkBatchEffectsSingleContig {
 
     # Mark batch effects and update AC/AN/AF
     /opt/pancan_germline_wgs/scripts/variant_filtering/mark_batch_effects.py \
-      --invcf "~{in_vcf_name}" \
+      --input-vcf "~{in_vcf_name}" \
       --group-membership ~{group_membership_tsv} \
       ~{if (strict) then "--strict" else ""} \
       ~{if defined(custom_filter_id) then "--filter-id \"~{custom_filter_id}\"" else ""} \
