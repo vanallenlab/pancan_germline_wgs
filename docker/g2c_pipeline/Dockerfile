@@ -25,8 +25,7 @@ RUN apt-get -qqy update --fix-missing && \
 RUN cd /opt && \
     git clone https://github.com/vanallenlab/pancan_germline_wgs.git && \
     cd pancan_germline_wgs && \
-    git checkout $REPO_HASH && \
-    git pull
+    git checkout $REPO_HASH
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]

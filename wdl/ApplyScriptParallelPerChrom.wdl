@@ -12,14 +12,15 @@ version 1.0
 workflow ApplyScriptParallelPerChrom {
   input {
     File vcf
-    File script                     # User-supplied script staged in a google bucket. Must take input and output VCFs as final two positional arguments 
+    File script                      # User-supplied script staged in a google bucket. Must take input and output VCFs as final two positional arguments 
     String? out_vcf_prefix
 
-    String exec_prefix = "source"   # Command to interpret script as an executable
-    String script_options = ""      # Any other command-line options to be passed to the script
+    String exec_prefix = "source"    # Command to interpret script as an executable
+    String script_options = ""       # Any other command-line options to be passed to the script
+    Array[String?] script_files      # Files needed by script to be localized to execution directory
 
-    File? vcf_idx                   # Recommended but not strictly required
-    File? ref_fai                   # Used to determine contigs for parallelization. By default will take all contigs in vcf header
+    File? vcf_idx                    # Recommended but not strictly required
+    File? ref_fai                    # Used to determine contigs for parallelization. By default will take all contigs in vcf header
     String? bcftools_concat_options 
 
     Float? script_mem_gb
@@ -29,7 +30,7 @@ workflow ApplyScriptParallelPerChrom {
     Int? merge_cpu_cores
     Int? merge_disk_gb
 
-    String bcftools_docker          # Any linux-based image with bcftools & tabix installed. Must also have dependencies for running user-supplied script.
+    String bcftools_docker            # Any linux-based image with bcftools & tabix installed. Must also have dependencies for running user-supplied script.
   }
 
   # Get contigs for scatter depending on user input
@@ -61,6 +62,7 @@ workflow ApplyScriptParallelPerChrom {
         script = script,
         exec_prefix = exec_prefix,
         script_options = script_options,
+        script_files = script_files,
         mem_gb = script_mem_gb,
         cpu_cores = script_cpu_cores,
         disk_gb = script_disk_gb,
@@ -163,6 +165,7 @@ task ApplyScriptSingleContig {
     File script
     String exec_prefix
     String script_options
+    Array[String?] script_files
 
     Float mem_gb = 3.5
     Int cpu_cores = 2
@@ -179,6 +182,11 @@ task ApplyScriptSingleContig {
 
   command <<<
     set -eu -o pipefail
+
+    if [ ~{defined(script_files)} == "true" ]; then
+      cat ~{write_lines(select_all(script_files))} \
+      | gsutil -m cp -I ./
+    fi
 
     if [ ~{defined(vcf_idx)} == "false" ]; then
       tabix -p vcf -f ~{vcf}
