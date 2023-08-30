@@ -51,21 +51,20 @@ task DownloadFile {
     /opt/gdc-client download \
       ~{if defined(token) then "--token " + select_first([token]) else ""} \
       ~{uuid}
-
   >>>
 
   output {
-    File file_out = "~{filename}"
+    File file_out = "~{uuid}/~{filename}"
   }
 
   runtime {
     cpu: 2
     memory: "3.75 GiB"
-    disks: "local-disk " + diskGb + " HDD"
+    disks: "local-disk " + diskGb + 20 + " HDD"
     bootDiskSizeGb: 10
     docker: docker
     preemptible: 3
-    maxRetries: 2
+    maxRetries: 1
   }
 }
 

@@ -9,18 +9,23 @@
 
 COHORT=$1
 SAMPLE=$2
+GZ_LIST=$3 # Optional pre-computed list of GCP URIs to query
 
 usage() {
 cat << EOF
 
-USAGE: ./check_sample_inputs.sh cohort sample_id
+USAGE: ./check_sample_inputs.sh cohort sample_id [uri_list]
 
        Checks google cloud storage bucket for complete input data for a single sample ID
+
+       Can optionally provide a pre-computed list of GCP URIs as a third 
+       positional argument, which will be referenced directly instead of 
+       querying bucket on-the-fly
 
 EOF
 }
 
-if [ $# -ne 2 ]; then
+if [ $# -lt 2 ]; then
   echo -e "\nERROR: must supply cohort and sample name as positional arguments"
   usage
   exit
@@ -36,14 +41,19 @@ gatksv_pe$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.pe.txt.gz
 gatksv_sd$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sd.txt.gz
 gatksv_sr$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sr.txt.gz
 gatkhc_gvcf$TAB$BUCKET/$COHORT/gatk-hc/$SAMPLE.g.vcf.gz
+gatkhc_reblocked_gvcf$TAB$BUCKET/$COHORT/gatk-hc/reblocked/$SAMPLE.reblocked.g.vcf.gz
 manta$TAB$BUCKET/$COHORT/manta/$SAMPLE.manta.vcf.gz
 melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz
 wham$TAB$BUCKET/$COHORT/wham/$SAMPLE.wham.vcf.gz
 EOF
 
 # Check which files are present in gs://
-gsutil -m ls $( awk -v ORS=" " '{ print $2 }' $TMPDIR/$COHORT.$SAMPLE.paths ) \
-1> $TMPDIR/$COHORT.$SAMPLE.objects_found 2> /dev/null
+if [ -z $GZ_LIST ]; then
+  gsutil -m ls $( awk -v ORS=" " '{ print $2 }' $TMPDIR/$COHORT.$SAMPLE.paths ) \
+  1> $TMPDIR/$COHORT.$SAMPLE.objects_found 2> /dev/null
+else
+  cp $GZ_LIST $TMPDIR/$COHORT.$SAMPLE.objects_found
+fi
 
 # Build report of missing files
 missing=""
