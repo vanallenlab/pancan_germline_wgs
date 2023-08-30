@@ -12,7 +12,7 @@ version 1.0
 workflow ReheaderGvcf {
   input {
     File input_gvcf
-    File sample_name
+    String sample_name
     String bcftools_docker
     Int? bgzip_compression
   }
