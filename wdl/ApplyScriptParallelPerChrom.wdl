@@ -9,6 +9,9 @@
 version 1.0
 
 
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Tasks
+
+
 workflow ApplyScriptParallelPerChrom {
   input {
     File vcf
@@ -35,14 +38,14 @@ workflow ApplyScriptParallelPerChrom {
 
   # Get contigs for scatter depending on user input
   if (defined(ref_fai)) {
-    call GetContigsFromFai {
+    call Utilities.GetContigsFromFai {
       input:
         ref_fai = select_first([ref_fai]),
         docker = bcftools_docker
     }
   }
   if (!defined(ref_fai)) {
-    call GetContigsFromVcfHeader {
+    call Utilities.GetContigsFromVcfHeader {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
@@ -72,7 +75,7 @@ workflow ApplyScriptParallelPerChrom {
   }
 
   # Merge outputs from per-chromosome scatter
-  call ConcatVcfs {
+  call Tasks.ConcatVcfs {
     input:
       vcfs = ApplyScriptSingleContig.vcf_out,
       vcf_idxs = ApplyScriptSingleContig.vcf_out_idx,
@@ -81,78 +84,12 @@ workflow ApplyScriptParallelPerChrom {
       mem_gb = merge_mem_gb,
       cpu_cores = merge_cpu_cores,
       disk_gb = merge_disk_gb,
-      docker = bcftools_docker
+      bcftools_docker = bcftools_docker
   }
 
   output {
     File output_vcf = ConcatVcfs.merged_vcf
     File output_vcf_idx = ConcatVcfs.merged_vcf_idx
-  }
-}
-
-
-task GetContigsFromFai {
-  input {
-    File ref_fai
-    String docker
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    cut -f1 ~{ref_fai} > contigs.list
-  >>>
-
-  output {
-    Array[String] contigs = read_lines("contigs.list")
-  }
-
-  runtime {
-    docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk 10 HDD"
-    preemptible: 3
-  }
-}
-
-
-task GetContigsFromVcfHeader {
-  input {
-    File vcf
-    File? vcf_idx
-    String docker
-  }
-
-  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
-
-  command <<<
-    set -eu -o pipefail
-
-    if [ ~{defined(vcf_idx)} == "false" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
-
-    tabix -H ~{vcf} \
-    | fgrep "##contig" \
-    | sed 's/ID=/\t/g' \
-    | cut -f2 \
-    | cut -f1 -d, \
-    | sort -V \
-    > contigs.list
-  >>>
-
-  output {
-    Array[String] contigs = read_lines("contigs.list")
-    File vcf_idx_out = select_first([vcf_idx, vcf + ".tbi"])
-  }
-
-  runtime {
-    docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
   }
 }
 
@@ -204,53 +141,6 @@ task ApplyScriptSingleContig {
   output {
     File vcf_out = "~{out_vcf_name}"
     File vcf_out_idx = "~{out_vcf_name}.tbi"
-  }
-
-  runtime {
-    docker: docker
-    memory: mem_gb + " GB"
-    cpu: cpu_cores
-    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
-    preemptible: 3
-  }
-}
-
-
-task ConcatVcfs {
-  input {
-    Array[File] vcfs
-    Array[File] vcf_idxs
-    String out_prefix
-
-    String bcftools_concat_options = ""
-
-    Float mem_gb = 3.5
-    Int cpu_cores = 2
-    Int? disk_gb
-
-    String docker
-  }
-
-  String out_filename = out_prefix + ".vcf.gz"
-
-  Int default_disk_gb = ceil(2.5 * size(vcfs, "GB")) + 10
-
-  command <<<
-    set -eu -o pipefail
-
-    bcftools concat \
-      ~{bcftools_concat_options} \
-      --file-list ~{write_lines(vcfs)} \
-      -O z \
-      -o ~{out_filename} \
-      --threads ~{cpu_cores}
-
-    tabix -p vcf -f ~{out_filename}
-  >>>
-
-  output {
-    File merged_vcf = "~{out_filename}"
-    File merged_vcf_idx = "~{out_filename}.tbi"
   }
 
   runtime {

@@ -66,8 +66,6 @@ workflow GnarlyJointGenotypingPart2 {
     Float snp_filter_level = 99.7
     Float indel_filter_level = 99
     Int snp_vqsr_downsampleFactor = 10
-
-    Int snps_variant_recalibration_threshold = 500000
   }
 
   Int num_gvcfs = length(read_tsv(sample_name_map))
@@ -104,70 +102,38 @@ workflow GnarlyJointGenotypingPart2 {
       disk_size_gb = small_disk
   }
 
-  if (num_gvcfs > snps_variant_recalibration_threshold) {
-    call Tasks.SNPsVariantRecalibratorCreateModel {
-      input:
-        sites_only_variant_filtered_vcf = SitesOnlyGatherVcf.output_vcf,
-        sites_only_variant_filtered_vcf_index = SitesOnlyGatherVcf.output_vcf_index,
-        recalibration_filename = callset_name + ".snps.recal",
-        tranches_filename = callset_name + ".snps.tranches",
-        recalibration_tranche_values = snp_recalibration_tranche_values,
-        recalibration_annotation_values = snp_recalibration_annotation_values,
-        downsampleFactor = snp_vqsr_downsampleFactor,
-        model_report_filename = callset_name + ".snps.model.report",
-        hapmap_resource_vcf = hapmap_resource_vcf,
-        hapmap_resource_vcf_index = hapmap_resource_vcf_index,
-        omni_resource_vcf = omni_resource_vcf,
-        omni_resource_vcf_index = omni_resource_vcf_index,
-        one_thousand_genomes_resource_vcf = one_thousand_genomes_resource_vcf,
-        one_thousand_genomes_resource_vcf_index = one_thousand_genomes_resource_vcf_index,
-        dbsnp_resource_vcf = dbsnp_resource_vcf,
-        dbsnp_resource_vcf_index = dbsnp_resource_vcf_index,
-        use_allele_specific_annotations = false,
-        disk_size_gb = small_disk
-    }
-
-    scatter (idx in range(length(sites_only_vcfs))) {
-      call Tasks.SNPsVariantRecalibrator as SNPsVariantRecalibratorScattered {
-        input:
-          sites_only_variant_filtered_vcf = sites_only_vcfs[idx],
-          sites_only_variant_filtered_vcf_index = sites_only_vcfs_index[idx],
-          recalibration_filename = callset_name + ".snps." + idx + ".recal",
-          tranches_filename = callset_name + ".snps." + idx + ".tranches",
-          recalibration_tranche_values = snp_recalibration_tranche_values,
-          recalibration_annotation_values = snp_recalibration_annotation_values,
-          model_report = SNPsVariantRecalibratorCreateModel.model_report,
-          hapmap_resource_vcf = hapmap_resource_vcf,
-          hapmap_resource_vcf_index = hapmap_resource_vcf_index,
-          omni_resource_vcf = omni_resource_vcf,
-          omni_resource_vcf_index = omni_resource_vcf_index,
-          one_thousand_genomes_resource_vcf = one_thousand_genomes_resource_vcf,
-          one_thousand_genomes_resource_vcf_index = one_thousand_genomes_resource_vcf_index,
-          dbsnp_resource_vcf = dbsnp_resource_vcf,
-          dbsnp_resource_vcf_index = dbsnp_resource_vcf_index,
-          use_allele_specific_annotations = false,
-          disk_size_gb = small_disk
-        }
-      }
-
-    call Tasks.GatherTranches as SNPGatherTranches {
-      input:
-        tranches = SNPsVariantRecalibratorScattered.tranches,
-        output_filename = callset_name + ".snps.gathered.tranches",
-        mode = "SNP",
-        disk_size_gb = small_disk
-    }
+  call Tasks.SNPsVariantRecalibratorCreateModel {
+    input:
+      sites_only_variant_filtered_vcf = SitesOnlyGatherVcf.output_vcf,
+      sites_only_variant_filtered_vcf_index = SitesOnlyGatherVcf.output_vcf_index,
+      recalibration_filename = callset_name + ".snps.recal",
+      tranches_filename = callset_name + ".snps.tranches",
+      recalibration_tranche_values = snp_recalibration_tranche_values,
+      recalibration_annotation_values = snp_recalibration_annotation_values,
+      downsampleFactor = snp_vqsr_downsampleFactor,
+      model_report_filename = callset_name + ".snps.model.report",
+      hapmap_resource_vcf = hapmap_resource_vcf,
+      hapmap_resource_vcf_index = hapmap_resource_vcf_index,
+      omni_resource_vcf = omni_resource_vcf,
+      omni_resource_vcf_index = omni_resource_vcf_index,
+      one_thousand_genomes_resource_vcf = one_thousand_genomes_resource_vcf,
+      one_thousand_genomes_resource_vcf_index = one_thousand_genomes_resource_vcf_index,
+      dbsnp_resource_vcf = dbsnp_resource_vcf,
+      dbsnp_resource_vcf_index = dbsnp_resource_vcf_index,
+      use_allele_specific_annotations = false,
+      disk_size_gb = small_disk
   }
 
-  if (num_gvcfs <= snps_variant_recalibration_threshold) {
-    call Tasks.SNPsVariantRecalibrator as SNPsVariantRecalibratorClassic {
+  scatter (idx in range(length(sites_only_vcfs))) {
+    call Tasks.SNPsVariantRecalibrator as SNPsVariantRecalibratorScattered {
       input:
-        sites_only_variant_filtered_vcf = SitesOnlyGatherVcf.output_vcf,
-        sites_only_variant_filtered_vcf_index = SitesOnlyGatherVcf.output_vcf_index,
-        recalibration_filename = callset_name + ".snps.recal",
-        tranches_filename = callset_name + ".snps.tranches",
+        sites_only_variant_filtered_vcf = sites_only_vcfs[idx],
+        sites_only_variant_filtered_vcf_index = sites_only_vcfs_index[idx],
+        recalibration_filename = callset_name + ".snps." + idx + ".recal",
+        tranches_filename = callset_name + ".snps." + idx + ".tranches",
         recalibration_tranche_values = snp_recalibration_tranche_values,
         recalibration_annotation_values = snp_recalibration_annotation_values,
+        model_report = SNPsVariantRecalibratorCreateModel.model_report,
         hapmap_resource_vcf = hapmap_resource_vcf,
         hapmap_resource_vcf_index = hapmap_resource_vcf_index,
         omni_resource_vcf = omni_resource_vcf,
@@ -178,7 +144,15 @@ workflow GnarlyJointGenotypingPart2 {
         dbsnp_resource_vcf_index = dbsnp_resource_vcf_index,
         use_allele_specific_annotations = false,
         disk_size_gb = small_disk
+      }
     }
+
+  call Tasks.GatherTranches as SNPGatherTranches {
+    input:
+      tranches = SNPsVariantRecalibratorScattered.tranches,
+      output_filename = callset_name + ".snps.gathered.tranches",
+      mode = "SNP",
+      disk_size_gb = small_disk
   }
 
   scatter (idx in range(length(variant_filtered_vcfs))) {
@@ -190,9 +164,9 @@ workflow GnarlyJointGenotypingPart2 {
         indels_recalibration = IndelsVariantRecalibrator.recalibration,
         indels_recalibration_index = IndelsVariantRecalibrator.recalibration_index,
         indels_tranches = IndelsVariantRecalibrator.tranches,
-        snps_recalibration = if defined(SNPsVariantRecalibratorScattered.recalibration) then select_first([SNPsVariantRecalibratorScattered.recalibration])[idx] else select_first([SNPsVariantRecalibratorClassic.recalibration]),
-        snps_recalibration_index = if defined(SNPsVariantRecalibratorScattered.recalibration_index) then select_first([SNPsVariantRecalibratorScattered.recalibration_index])[idx] else select_first([SNPsVariantRecalibratorClassic.recalibration_index]),
-        snps_tranches = select_first([SNPGatherTranches.tranches_file, SNPsVariantRecalibratorClassic.tranches]),
+        snps_recalibration = SNPsVariantRecalibratorScattered.recalibration[idx],
+        snps_recalibration_index = SNPsVariantRecalibratorScattered.recalibration_index[idx],
+        snps_tranches = SNPGatherTranches.tranches_file,
         indel_filter_level = indel_filter_level,
         snp_filter_level = snp_filter_level,
         use_allele_specific_annotations = false,

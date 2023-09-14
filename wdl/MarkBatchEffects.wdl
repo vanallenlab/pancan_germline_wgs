@@ -10,7 +10,7 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/ApplyScriptParallelPerChrom.wdl" as Parallel
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Utilities
 
 
 workflow MarkBatchEffects {
@@ -44,14 +44,14 @@ workflow MarkBatchEffects {
 
   # Get contigs for scatter depending on user input
   if (defined(ref_fai)) {
-    call Parallel.GetContigsFromFai {
+    call Utilities.GetContigsFromFai {
       input:
         ref_fai = select_first([ref_fai]),
         docker = g2c_pipeline_docker
     }
   }
   if (!defined(ref_fai)) {
-    call Parallel.GetContigsFromVcfHeader {
+    call Utilities.GetContigsFromVcfHeader {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
@@ -83,7 +83,7 @@ workflow MarkBatchEffects {
   }
 
   # Merge outputs from per-chromosome scatter
-  call Parallel.ConcatVcfs {
+  call Utilities.ConcatVcfs {
     input:
       vcfs = MarkBatchEffectsSingleContig.vcf_out,
       vcf_idxs = MarkBatchEffectsSingleContig.vcf_out_idx,
@@ -92,7 +92,7 @@ workflow MarkBatchEffects {
       mem_gb = merge_mem_gb,
       cpu_cores = merge_cpu_cores,
       disk_gb = merge_disk_gb,
-      docker = g2c_pipeline_docker
+      bcftools_docker = g2c_pipeline_docker
   }
 
   output {
