@@ -9,7 +9,7 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Tasks
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Utilities
 
 
 workflow ApplyScriptParallelPerChrom {
@@ -75,7 +75,7 @@ workflow ApplyScriptParallelPerChrom {
   }
 
   # Merge outputs from per-chromosome scatter
-  call Tasks.ConcatVcfs {
+  call Utilities.ConcatVcfs {
     input:
       vcfs = ApplyScriptSingleContig.vcf_out,
       vcf_idxs = ApplyScriptSingleContig.vcf_out_idx,

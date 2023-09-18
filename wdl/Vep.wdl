@@ -17,11 +17,18 @@ workflow Vep {
     Array[File] vcfs
     Array[File] vcf_idxs
 
-    Int records_per_shard = 5000
+    File reference_fasta
+    File vep_cache_tarball # VEP cache tarball downloaded from Ensembl
+    Array[File?] other_vep_files # All other files needed for VEP. These will be moved to execution directory.
+    String vep_assembly = "GRCh38"
+    Int vep_version = 110
+
+    Int records_per_shard = 50000
     Boolean combine_output_vcfs = false
     String? cohort_prefix
 
     String bcftools_docker
+    String vep_docker = "vanallenlab/g2c-vep:latest"
   }
 
   scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
@@ -37,7 +44,16 @@ workflow Vep {
     }
 
     scatter ( shard_info in zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs) ) {
-      # TODO: call VEP here
+      call RunVep {
+        input:
+          vcf = shard_info.left,
+          vcf_idx = shard_info.right,
+          reference_fasta = reference_fasta,
+          vep_cache_tarball = vep_cache_tarball,
+          other_vep_files = other_vep_files,
+          vep_assembly = vep_assembly,
+          docker = vep_docker
+      }
     }
     
 
@@ -46,17 +62,17 @@ workflow Vep {
         vcfs = RunVep.annotated_vcf,
         vcf_idxs = RunVep.annotated_vcf_idx,
         out_prefix = basename(vcf, ".vcf.gz") + ".vep",
-        docker = bcftools_docker
+        bcftools_docker = bcftools_docker
     }
   }
 
   if ( combine_output_vcfs ) {
-    call ConcatVcfs as ConcatOuterShards {
+    call Tasks.ConcatVcfs as ConcatOuterShards {
       input:
         vcfs = ConcatInnerShards.merged_vcf,
         vcf_idxs = ConcatInnerShards.merged_vcf_idx,
-        out_prefix = select_first([cohort_prefix, "all_input_vcfs"]) + ".vep.merged"),
-        docker = bcftools_docker
+        out_prefix = select_first([cohort_prefix, "all_input_vcfs"]) + ".vep.merged",
+        bcftools_docker = bcftools_docker
     }
   }
 
@@ -69,3 +85,87 @@ workflow Vep {
 }
 
 
+task RunVep {
+  input {
+    File vcf
+    File vcf_idx
+
+    File reference_fasta
+    File vep_cache_tarball
+    Array[File?] other_vep_files
+    String vep_assembly
+    Int vep_max_sv_size = 50
+    Array[String] vep_options
+    Int vep_version = 110
+
+    Float mem_gb = 7.5
+    Int n_cpu = 4
+    Int disk_gb
+
+    String docker
+  }
+
+  String out_filename = basename(vcf, ".vcf.gz") + ".vep.vcf.gz"
+  Int default_disk_gb = ceil(3 * size([vcf, vep_cache_tarball, reference_fasta], "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # Unpack contents of cache into $VEP_CACHE/
+    # Note that $VEP_CACHE is a default ENV variable set in VEP docker
+    tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
+
+    # Relocate other_vep_files to execution directory
+    if [ ~{defined(other_vep_files)} == "true" ]; then
+      while read file; do
+        mv $file ./
+      done < ~{write_lines(select_all(other_vep_files))}
+    fi
+
+    vep \
+      --input_file ~{vcf} \
+      --format vcf \
+      --output_file ~{out_filename} \
+      --vcf \
+      --force_overwrite \
+      --species homo_sapiens \
+      --assembly ~{vep_assembly} \
+      --max_sv_size ~{vep_max_sv_size} \
+      --offline \
+      --no_stats \
+      --cache \
+      --dir_cache $VEP_CACHE/ \
+      --cache_version ~{vep_version} \
+      --buffer_size 2500 \
+      --dir_plugins $VEP_PLUGINS/ \
+      --fasta ~{reference_fasta} \
+      --minimal \
+      --sift b \
+      --polyphen b \
+      --nearest gene \
+      --distance 10000 \
+      --numbers \
+      --hgvs \
+      --no_escape \
+      --symbol \
+      --canonical \
+      --domains \
+      ~{sep=" " vep_options}
+
+    tabix -f ~{out_filename}
+
+  >>>
+
+  output {
+    File annotated_vcf = "~{out_filename}"
+    File annotated_vcf_idx = "~{out_filename}.tbi"
+  }
+
+  runtime {
+    docker: docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 3
+  }
+}

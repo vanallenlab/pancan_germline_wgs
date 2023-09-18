@@ -133,10 +133,10 @@ workflow GnarlyJointGenotypingPart1 {
   }
 
   output {
-    Array[File] variant_filtered_vcfs
-    Array[File] variant_filtered_vcfs_index
-    Array[File] sites_only_vcfs
-    Array[File] sites_only_vcfs_index
+    Array[File] variant_filtered_vcfs = HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf
+    Array[File] variant_filtered_vcfs_index = HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf_index
+    Array[File] sites_only_vcfs = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf
+    Array[File] sites_only_vcfs_index = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf_index
   }
 }
 
