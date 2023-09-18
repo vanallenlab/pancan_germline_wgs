@@ -20,6 +20,7 @@ workflow Vep {
     File reference_fasta
     File vep_cache_tarball # VEP cache tarball downloaded from Ensembl
     Array[File?] other_vep_files # All other files needed for VEP. These will be moved to execution directory.
+    Array[String] vep_options = [""]
     String vep_assembly = "GRCh38"
     Int vep_version = 110
 
@@ -51,7 +52,9 @@ workflow Vep {
           reference_fasta = reference_fasta,
           vep_cache_tarball = vep_cache_tarball,
           other_vep_files = other_vep_files,
+          vep_options = vep_options,
           vep_assembly = vep_assembly,
+          vep_version = vep_version,
           docker = vep_docker
       }
     }
@@ -94,13 +97,13 @@ task RunVep {
     File vep_cache_tarball
     Array[File?] other_vep_files
     String vep_assembly
-    Int vep_max_sv_size = 50
     Array[String] vep_options
+    Int vep_max_sv_size = 50
     Int vep_version = 110
 
     Float mem_gb = 7.5
     Int n_cpu = 4
-    Int disk_gb
+    Int? disk_gb
 
     String docker
   }

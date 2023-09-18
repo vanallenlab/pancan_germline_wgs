@@ -27,7 +27,7 @@ task ShardVcf {
     bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
 
     bcftools +scatter \
-      -Oz -p ~{out_prefix} \
+      -Oz -o `pwd`/ -p ~{out_prefix} \
       -n ~{records_per_shard} \
       ~{vcf}
 
