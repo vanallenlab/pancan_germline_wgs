@@ -41,7 +41,8 @@ RUN apt-get -qqy update && \
       libarchive-extract-perl \
       libtry-tiny-perl \
       libwww-perl \
-      libscalar-util-numeric-perl
+      libscalar-util-numeric-perl \
+      libset-intervaltree-perl
 
 # Install HTSLIB
 ARG HTSLIB_VERSION=1.18

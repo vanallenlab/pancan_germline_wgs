@@ -109,7 +109,7 @@ task RunVep {
   }
 
   String out_filename = basename(vcf, ".vcf.gz") + ".vep.vcf.gz"
-  Int default_disk_gb = ceil(3 * size([vcf, vep_cache_tarball, reference_fasta], "GB")) + 10
+  Int default_disk_gb = ceil(10 * size([vcf, vep_cache_tarball, reference_fasta], "GB")) + 50
 
   command <<<
     set -eu -o pipefail
@@ -130,6 +130,7 @@ task RunVep {
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
+      --verbose \
       --force_overwrite \
       --species homo_sapiens \
       --assembly ~{vep_assembly} \
@@ -139,12 +140,9 @@ task RunVep {
       --cache \
       --dir_cache $VEP_CACHE/ \
       --cache_version ~{vep_version} \
-      --buffer_size 2500 \
       --dir_plugins $VEP_PLUGINS/ \
       --fasta ~{reference_fasta} \
       --minimal \
-      --sift b \
-      --polyphen b \
       --nearest gene \
       --distance 10000 \
       --numbers \
@@ -169,6 +167,7 @@ task RunVep {
     memory: mem_gb + " GB"
     cpu: n_cpu
     disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    bootDiskSizeGb: 25
     preemptible: 3
   }
 }

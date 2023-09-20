@@ -17,7 +17,7 @@ task ShardVcf {
     String bcftools_docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded."
+  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded"
   Int disk_gb = ceil(3 * size(vcf, "GB"))
 
   command <<<
@@ -27,7 +27,7 @@ task ShardVcf {
     bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
 
     bcftools +scatter \
-      -Oz -o `pwd`/ -p ~{out_prefix} \
+      -O z3 -o `pwd`/ -p ~{out_prefix} \
       -n ~{records_per_shard} \
       ~{vcf}
 
