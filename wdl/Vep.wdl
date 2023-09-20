@@ -28,6 +28,8 @@ workflow Vep {
     Boolean combine_output_vcfs = false
     String? cohort_prefix
 
+    Boolean reindex_on_task = false # Debugging parameter
+
     String bcftools_docker
     String vep_docker = "vanallenlab/g2c-vep:latest"
   }
@@ -55,6 +57,7 @@ workflow Vep {
           vep_options = vep_options,
           vep_assembly = vep_assembly,
           vep_version = vep_version,
+          reindex = reindex_on_task,
           docker = vep_docker
       }
     }
@@ -100,6 +103,7 @@ task RunVep {
     Array[String] vep_options
     Int vep_max_sv_size = 50
     Int vep_version = 110
+    Boolean reindex = false
 
     Float mem_gb = 7.5
     Int n_cpu = 4
@@ -125,8 +129,17 @@ task RunVep {
       done < ~{write_lines(select_all(other_vep_files))}
     fi
 
+    # Recompress & reindex VCF if optioned
+    if [ ~{reindex} == "true" ]; then
+      zcat ~{vcf} | bgzip -c > input.vcf.bgz
+      tabix -p vcf -f input.vcf.bgz
+    else
+      mv ~{vcf} input.vcf.bgz
+      mv ~{vcf_idx} input.vcf.bgz.tbi
+    fi
+
     vep \
-      --input_file ~{vcf} \
+      --input_file input.vcf.bgz \
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
