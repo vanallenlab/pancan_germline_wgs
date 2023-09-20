@@ -19,7 +19,10 @@ workflow Vep {
 
     File reference_fasta
     File vep_cache_tarball # VEP cache tarball downloaded from Ensembl
-    Array[File?] other_vep_files # All other files needed for VEP. These will be moved to execution directory.
+    Array[String?] vep_remote_files # URIs for files stored in Google buckets that can be remotely sliced using tabix for each shard
+    Array[File?] vep_remote_file_indexes # Indexes corresponding to vep_remote_files
+    Array[File?] other_vep_files # All other files needed for VEP. These will be localized in full to each VM and moved to execution directory.
+
     Array[String] vep_options = [""]
     String vep_assembly = "GRCh38"
     Int vep_version = 110
@@ -27,8 +30,6 @@ workflow Vep {
     Int records_per_shard = 50000
     Boolean combine_output_vcfs = false
     String? cohort_prefix
-
-    Boolean reindex_on_task = false # Debugging parameter
 
     String bcftools_docker
     String vep_docker = "vanallenlab/g2c-vep:latest"
@@ -53,15 +54,15 @@ workflow Vep {
           vcf_idx = shard_info.right,
           reference_fasta = reference_fasta,
           vep_cache_tarball = vep_cache_tarball,
+          vep_remote_files = vep_remote_files,
+          vep_remote_file_indexes = vep_remote_file_indexes,
           other_vep_files = other_vep_files,
           vep_options = vep_options,
           vep_assembly = vep_assembly,
           vep_version = vep_version,
-          reindex = reindex_on_task,
           docker = vep_docker
       }
     }
-    
 
     call Tasks.ConcatVcfs as ConcatInnerShards {
       input:
@@ -98,12 +99,14 @@ task RunVep {
 
     File reference_fasta
     File vep_cache_tarball
+    Array[String?] vep_remote_files
+    Array[File?] vep_remote_file_indexes
     Array[File?] other_vep_files
     String vep_assembly
+
     Array[String] vep_options
     Int vep_max_sv_size = 50
     Int vep_version = 110
-    Boolean reindex = false
 
     Float mem_gb = 7.5
     Int n_cpu = 4
@@ -122,6 +125,29 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
 
+    # If any remote files are specified, slice each to the minimal region needed
+    # for this shard. Keep file name unchanged.
+    if [ ~{length(vep_remote_files)} -gt 0 ]; then
+
+      bcftools query --format '%CHROM\t%POS\n' \
+      | awk -v OFS="\t" '{ print $1, $2, $3 }' \
+      | sort -Vk1,1 -k2,2n -k3,3n \
+      | bedtools merge -i - \
+      | bgzip -c \
+      > query.bed.gz
+      
+      mv ~{sep=" " select_all(vep_remote_file_indexes)} ./
+
+      while read uri; do
+        local_name=$( echo $uri | basename )
+        bcftools view \
+          -R query.bed.gz \
+          --with-header \
+          -O z -o $local_name
+        tabix -p vcf -f $local_name
+      done < ~{write_lines(select_all(vep_remote_files))}
+    fi
+
     # Relocate other_vep_files to execution directory
     if [ ~{defined(other_vep_files)} == "true" ]; then
       while read file; do
@@ -129,19 +155,10 @@ task RunVep {
       done < ~{write_lines(select_all(other_vep_files))}
     fi
 
-    # Recompress & reindex VCF if optioned
-    if [ ~{reindex} == "true" ]; then
-      zcat ~{vcf} | bgzip -c > input.vcf.bgz
-      tabix -p vcf -f input.vcf.bgz
-    else
-      mv ~{vcf} input.vcf.bgz
-      mv ~{vcf_idx} input.vcf.bgz.tbi
-    fi
-
     vep \
-      --input_file input.vcf.bgz \
+      --input_file ~{vcf} \
       --format vcf \
-      --output_file ~{out_filename} \
+      --output_file STDOUT \
       --vcf \
       --verbose \
       --force_overwrite \
@@ -164,7 +181,8 @@ task RunVep {
       --symbol \
       --canonical \
       --domains \
-      ~{sep=" " vep_options}
+      ~{sep=" " vep_options} \
+    | bgzip -c > ~{out_filename}
 
     tabix -f ~{out_filename}
 

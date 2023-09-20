@@ -27,10 +27,14 @@ task ShardVcf {
     bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
 
     bcftools +scatter \
-      -O z3 -o `pwd`/ -p ~{out_prefix} \
+      -O z3 -o . -p "~{out_prefix}". \
       -n ~{records_per_shard} \
       ~{vcf}
 
+    # Print all VCFs to stdout for logging purposes
+    find ./ -name "*.vcf.gz"
+
+    # Index all shards
     find ./ -name "~{out_prefix}.*.vcf.gz" \
     | xargs -I {} tabix -p vcf -f {}
   >>>

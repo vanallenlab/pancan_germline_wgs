@@ -44,7 +44,7 @@ RUN apt-get -qqy update && \
       libscalar-util-numeric-perl \
       libset-intervaltree-perl
 
-# Install HTSLIB
+# Install htslib & bcftools
 ARG HTSLIB_VERSION=1.18
 RUN cd /opt/ && \
     wget https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2 && \
@@ -53,6 +53,21 @@ RUN cd /opt/ && \
     ./configure && \
     make && \
     make install && \
+    cd -
+RUN cd /opt/ && \
+    wget https://github.com/samtools/bcftools/releases/download/${HTSLIB_VERSION}/bcftools-${HTSLIB_VERSION}.tar.bz2 && \
+    tar xjf bcftools-${HTSLIB_VERSION}.tar.bz2 && \
+    cd bcftools-${HTSLIB_VERSION} && \
+    ./configure && \
+    make && \
+    make install && \
+    cd -
+
+# Install bedtools
+RUN cd /opt/ && \
+    wget https://github.com/arq5x/bedtools2/releases/download/v2.31.0/bedtools.static && \
+    mv bedtools.static bedtools && \
+    chmod a+x bedtools && \
     cd -
 
 # Install VEP
