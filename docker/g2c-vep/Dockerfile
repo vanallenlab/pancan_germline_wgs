@@ -54,21 +54,6 @@ RUN cd /opt/ && \
     make && \
     make install && \
     cd -
-RUN cd /opt/ && \
-    wget https://github.com/samtools/bcftools/releases/download/${HTSLIB_VERSION}/bcftools-${HTSLIB_VERSION}.tar.bz2 && \
-    tar xjf bcftools-${HTSLIB_VERSION}.tar.bz2 && \
-    cd bcftools-${HTSLIB_VERSION} && \
-    ./configure && \
-    make && \
-    make install && \
-    cd -
-
-# Install bedtools
-RUN cd /opt/ && \
-    wget https://github.com/arq5x/bedtools2/releases/download/v2.31.0/bedtools.static && \
-    mv bedtools.static bedtools && \
-    chmod a+x bedtools && \
-    cd -
 
 # Install VEP
 ARG VEP_VERSION=110
