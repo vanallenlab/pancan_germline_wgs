@@ -30,8 +30,11 @@ ENV VEP_CACHE=/opt/vep_cache
 ENV VEP_PLUGINS=/opt/vep_plugins
 
 # Install other libraries & perl modules required for VEP
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_PRIORITY=critical
 RUN apt-get -qqy update && \
     apt-get -qqy install --fix-missing \
+      bioperl \
       libbz2-dev \
       liblzma-dev \
       libmodule-build-perl \
@@ -44,7 +47,7 @@ RUN apt-get -qqy update && \
       libscalar-util-numeric-perl \
       libset-intervaltree-perl
 
-# Install htslib & bcftools
+# Install htslib
 ARG HTSLIB_VERSION=1.18
 RUN cd /opt/ && \
     wget https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2 && \
@@ -55,6 +58,19 @@ RUN cd /opt/ && \
     make install && \
     cd -
 
+# Install Bio::DB::HTS using preinstalled htslib (from prior step)
+RUN cd /opt/ && \
+    git clone https://github.com/Ensembl/Bio-DB-HTS.git && \
+    cd Bio-DB-HTS && \
+    perl Build.PL && \
+    ./Build && \
+    export PERL5LIB=$PERL5LIB:$(pwd -P)/lib:$(pwd -P)/blib/arch/auto/Bio/DB/HTS/:$(pwd -P)/blib/arch/auto/Bio/DB/HTS/Faidx && \
+    cd t && \
+    for f in $(ls *.t); do perl $f; done && \
+    perl -e "use Bio::DB::HTS" && \
+    cd -
+ENV PERL5LIB=$PERL5LIB:/opt/Bio-DB-HTS/lib:/opt/Bio-DB-HTS/blib/arch/auto/Bio/DB/HTS/:/opt/Bio-DB-HTS/blib/arch/auto/Bio/DB/HTS/Faidx
+
 # Install VEP
 ARG VEP_VERSION=110
 RUN cd /opt && \
@@ -62,8 +78,9 @@ RUN cd /opt && \
     cd ensembl-vep && \
     perl INSTALL.pl \
       --NO_HTSLIB \
+      --NO_TEST \
       --CACHE_VERSION $VEP_VERSION \
-      --AUTO afp \
+      --AUTO ap \
       --SPECIES homo_sapiens \
       --PLUGINS UTRAnnotator,dbNSFP,SpliceAI \
       --CONVERT \

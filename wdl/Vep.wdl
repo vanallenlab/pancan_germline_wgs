@@ -21,6 +21,7 @@ workflow Vep {
     File vep_cache_tarball # VEP cache tarball downloaded from Ensembl
     Array[String?] gnomad_vcf_uris # URIs for gnomAD sites VCFs stored in Google buckets that can be remotely sliced using tabix for each shard
     Array[File?] gnomad_vcf_indexes # Indexes corresponding to gnomad_vcf_uris
+    Array[String?] gnomad_infos # INFO keys to annotate from gnomad VCFs
     Array[String?] vep_remote_files # URIs for files stored in Google buckets that can be remotely sliced using tabix for each shard
     Array[File?] vep_remote_file_indexes # Indexes corresponding to vep_remote_files
     Array[File?] other_vep_files # All other files needed for VEP. These will be localized in full to each VM and moved to execution directory.
@@ -63,6 +64,7 @@ workflow Vep {
             vcf_idx = vcf_idx,
             gnomad_vcf_uris = gnomad_vcf_uris,
             gnomad_vcf_indexes = gnomad_vcf_indexes,
+            gnomad_infos = gnomad_infos,
             vep_remote_files = vep_remote_files,
             vep_remote_file_indexes = vep_remote_file_indexes,
             query_buffer = remote_query_buffer
@@ -82,6 +84,7 @@ workflow Vep {
           reference_fasta = reference_fasta,
           vep_cache_tarball = vep_cache_tarball,
           other_vep_files = all_other_vep_files,
+          gnomad_infos = select_all(gnomad_infos),
           vep_options = vep_options,
           vep_assembly = vep_assembly,
           vep_version = vep_version,
@@ -119,15 +122,20 @@ workflow Vep {
 
 task SliceRemoteFiles {
   input {
-    File vcf
+    String vcf
     File vcf_idx
     Array[String?] gnomad_vcf_uris
     Array[File?] gnomad_vcf_indexes
     Array[String?] vep_remote_files
     Array[File?] vep_remote_file_indexes
+    Array[String?] gnomad_infos
 
-    Int query_buffer = 2
+    Int query_buffer = 1000
     String gnomad_outfile_prefix = "gnomad"
+
+    Int disk_gb = 550
+    Float mem_gb = 15.5
+    Int n_cpu = 4
 
     String docker = "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7"
   }
@@ -140,20 +148,25 @@ task SliceRemoteFiles {
 
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
-    bcftools query --format '%CHROM\t%POS\n' \
+    echo -e "\nSLICING QUERY REGIONS FROM VCF, REMOTELY\n"
+    mv ~{vcf_idx} ./
+    bcftools query --format '%CHROM\t%POS\n' ~{vcf} \
     | awk -v OFS="\t" -v buf=~{query_buffer} \
       '{ print $1, $2-buf, $2+buf }' \
-    | awk -v OFS="\t" '{ if ($2<0) $2=0; print $1, $2, $3 }' \
+    | awk -v OFS="\t" '{ if ($2<1) $2=1; print $1, $2, $3 }' \
     | sort -Vk1,1 -k2,2n -k3,3n \
     | bedtools merge -i - \
     | bgzip -c \
     > query.bed.gz
 
     if [ ~{n_remote_files} -gt 0 ]; then
+      echo -e "\nSLICING REMOTE ANNOTATION FILES:\n"
       mkdir remote_slices
       mv ~{sep=" " select_all(vep_remote_file_indexes)} ./
+
       while read uri; do
-        local_name=$( echo $uri | basename )
+        local_name=$( basename $uri )
+        echo -e "$local_name"
         tabix -h -R query.bed.gz $uri \
         | bgzip -c > remote_slices/$local_name
         tabix -p vcf -f remote_slices/$local_name
@@ -161,16 +174,31 @@ task SliceRemoteFiles {
     fi
 
     if [ ~{n_gnomad_files} -gt 0 ]; then
+      echo -e "\nSLICING GNOMAD VCFs:\n"
+      mkdir gnomad_slices/
       mv ~{sep=" " select_all(gnomad_vcf_indexes)} ./
-      tabix -H ~{gnomad_vcf_uris[0]} > ~{gnomad_outfile_prefix}.vcf.header
+
+      query_fmt="%CHROM\t%POS\t%ID\t%REF\t%ALT\t%QUAL\t%FILTER"
+      query_keys=$( cat ~{write_lines(select_all(gnomad_infos))} | awk '{ print $1"=%INFO/"$1 }' | paste -s -d\; )
+      query_fmt="$query_fmt\t$query_keys\n"
+      echo "Interpreted gnomAD query format as $query_fmt"
+
       while read uri; do
-        bcftools view \
+        local_name=$( basename $uri )
+        echo -e "$local_name"
+        tabix -H $uri | cut -f1-8 > "$local_name".header
+        bcftools query \
           -R query.bed.gz \
-          --with-header
-      done < ~{write_lines(select_all(gnomad_vcf_uris))} \
-      | cat ~{gnomad_outfile_prefix}.vcf.header - \
-      | bgzip -c \
-      > ~{gnomad_outfile_prefix}.vcf.gz
+          -f "$query_fmt" \
+          $uri \
+        | cat "$local_name".header - | bgzip -c \
+        > gnomad_slices/"$local_name"
+      done < ~{write_lines(select_all(gnomad_vcf_uris))}
+
+      echo -e "\nMERGING GNOMAD VCFs:\n"
+      bcftools concat --naive \
+        -O z -o ~{gnomad_outfile_prefix}.vcf.gz \
+        gnomad_slices/*.vcf.*z
       tabix -p vcf -f ~{gnomad_outfile_prefix}.vcf.gz
     fi
 
@@ -181,6 +209,15 @@ task SliceRemoteFiles {
     Array[File?] remote_slice_idxs = glob("remote_slices/*gz.tbi")
     File? gnomad_vcf = "~{gnomad_outfile_prefix}.vcf.gz"
     File? gnomad_vcf_idx = "~{gnomad_outfile_prefix}.vcf.gz.tbi"
+  }
+
+  runtime {
+    docker: docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    bootDiskSizeGb: 30
   }
 }
 
@@ -196,6 +233,7 @@ task RunVep {
     String vep_assembly
 
     Array[String] vep_options
+    Array[String] gnomad_infos = []
     Int vep_max_sv_size = 50
     Int vep_version = 110
 
@@ -221,6 +259,12 @@ task RunVep {
       while read file; do
         mv $file ./
       done < ~{write_lines(select_all(other_vep_files))}
+    fi
+
+    # Build gnomad annotation command based on gnomad_infos
+    gnomad_option=""
+    if [ ~{length(gnomad_infos)} -gt 0 ]; then
+      gnomad_option="--custom gnomad.vcf.gz,gnomAD,vcf,exact,0,~{sep=',' gnomad_infos}"
     fi
 
     vep \
@@ -250,6 +294,7 @@ task RunVep {
       --canonical \
       --domains \
       ~{sep=" " vep_options} \
+      $gnomad_option \
     | bgzip -c > ~{out_filename}
 
     tabix -f ~{out_filename}
