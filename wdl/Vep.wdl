@@ -30,6 +30,7 @@ workflow Vep {
     String vep_assembly = "GRCh38"
     Int vep_version = 110
 
+    Boolean shard_vcfs = true
     Int records_per_shard = 50000
     Int remote_query_buffer = 2
     Boolean combine_output_vcfs = false
@@ -47,15 +48,20 @@ workflow Vep {
     File vcf = vcf_info.left
     File vcf_idx = vcf_info.right
 
-    call Tasks.ShardVcf {
-      input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
-        records_per_shard = records_per_shard,
-        bcftools_docker = bcftools_docker
+    if (shard_vcfs) {
+      call Tasks.ShardVcf {
+        input:
+          vcf = vcf,
+          vcf_idx = vcf_idx,
+          records_per_shard = records_per_shard,
+          bcftools_docker = bcftools_docker
+      }
     }
+    Array[File] vcf_shards = select_first([ShardVcf.vcf_shards, [vcf]])
+    Array[File] vcf_shard_idxs = select_first([ShardVcf.vcf_shard_idxs, [vcf_idx]])
+    
 
-    scatter ( shard_info in zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs) ) {
+    scatter ( shard_info in zip(vcf_shards, vcf_shard_idxs) ) {
 
       if (any_remote) {
         call SliceRemoteFiles {
@@ -92,28 +98,32 @@ workflow Vep {
       }
     }
 
-    call Tasks.ConcatVcfs as ConcatInnerShards {
-      input:
-        vcfs = RunVep.annotated_vcf,
-        vcf_idxs = RunVep.annotated_vcf_idx,
-        out_prefix = basename(vcf, ".vcf.gz") + ".vep",
-        bcftools_docker = bcftools_docker
+    if (shard_vcfs) {
+      call Tasks.ConcatVcfs as ConcatInnerShards {
+        input:
+          vcfs = RunVep.annotated_vcf,
+          vcf_idxs = RunVep.annotated_vcf_idx,
+          out_prefix = basename(vcf, ".vcf.gz") + ".vep",
+          bcftools_docker = bcftools_docker
+      }
     }
+    File vepped_vcf = select_first([ConcatInnerShards.merged_vcf, RunVep.annotated_vcf[0]])
+    File vepped_vcf_idx = select_first([ConcatInnerShards.merged_vcf_idx, RunVep.annotated_vcf_idx[0]])
   }
 
   if ( combine_output_vcfs ) {
     call Tasks.ConcatVcfs as ConcatOuterShards {
       input:
-        vcfs = ConcatInnerShards.merged_vcf,
-        vcf_idxs = ConcatInnerShards.merged_vcf_idx,
+        vcfs = vepped_vcf,
+        vcf_idxs = vepped_vcf_idx,
         out_prefix = select_first([cohort_prefix, "all_input_vcfs"]) + ".vep.merged",
         bcftools_docker = bcftools_docker
     }
   }
 
   output {
-    Array[File] annotated_vcfs = ConcatInnerShards.merged_vcf
-    Array[File] annotated_vcf_idxs = ConcatInnerShards.merged_vcf_idx
+    Array[File] annotated_vcfs = vepped_vcf
+    Array[File] annotated_vcf_idxs = vepped_vcf_idx
     File? combined_annotated_vcf = ConcatOuterShards.merged_vcf
     File? combined_annotated_vcf_idx = ConcatOuterShards.merged_vcf_idx
   }
@@ -158,6 +168,7 @@ task SliceRemoteFiles {
     | bedtools merge -i - \
     | bgzip -c \
     > query.bed.gz
+    n_queries=$( zcat query.bed.gz | wc -l )
 
     if [ ~{n_remote_files} -gt 0 ]; then
       echo -e "\nSLICING REMOTE ANNOTATION FILES:\n"
@@ -167,9 +178,14 @@ task SliceRemoteFiles {
       while read uri; do
         local_name=$( basename $uri )
         echo -e "$local_name"
-        tabix -h -R query.bed.gz $uri \
-        | bgzip -c > remote_slices/$local_name
-        tabix -p vcf -f remote_slices/$local_name
+        if [ $n_queries -gt 0 ]; then
+          tabix -h -R query.bed.gz $uri \
+          | bgzip -c > remote_slices/$local_name
+        else
+          tabix --only-header $uri \
+          | bgzip -c > remote_slices/$local_name
+        fi
+        tabix -s 1 -b 2 -e 2 -f remote_slices/$local_name
       done < ~{write_lines(select_all(vep_remote_files))}
     fi
 
@@ -183,22 +199,27 @@ task SliceRemoteFiles {
       query_fmt="$query_fmt\t$query_keys\n"
       echo "Interpreted gnomAD query format as $query_fmt"
 
-      while read uri; do
-        local_name=$( basename $uri )
-        echo -e "$local_name"
-        tabix -H $uri | cut -f1-8 > "$local_name".header
-        bcftools query \
-          -R query.bed.gz \
-          -f "$query_fmt" \
-          $uri \
-        | cat "$local_name".header - | bgzip -c \
-        > gnomad_slices/"$local_name"
-      done < ~{write_lines(select_all(gnomad_vcf_uris))}
+      if [ $n_queries -gt 0 ]; then
+        while read uri; do
+          local_name=$( basename $uri )
+          echo -e "$local_name"
+          tabix -H $uri | cut -f1-8 > "$local_name".header
+          bcftools query \
+            -R query.bed.gz \
+            -f "$query_fmt" \
+            $uri \
+          | cat "$local_name".header - | bgzip -c \
+          > gnomad_slices/"$local_name"
+        done < ~{write_lines(select_all(gnomad_vcf_uris))}
 
-      echo -e "\nMERGING GNOMAD VCFs:\n"
-      bcftools concat --naive \
-        -O z -o ~{gnomad_outfile_prefix}.vcf.gz \
-        gnomad_slices/*.vcf.*z
+        echo -e "\nMERGING GNOMAD VCFs:\n"
+        bcftools concat --naive \
+          -O z -o ~{gnomad_outfile_prefix}.vcf.gz \
+          gnomad_slices/*.vcf.*z
+      else
+        tabix -H ~{select_all(gnomad_vcf_uris)[0]} \
+        | bgzip -c > ~{gnomad_outfile_prefix}.vcf.gz
+      fi
       tabix -p vcf -f ~{gnomad_outfile_prefix}.vcf.gz
     fi
 
@@ -270,15 +291,15 @@ task RunVep {
     vep \
       --input_file ~{vcf} \
       --format vcf \
-      --output_file STDOUT \
+      --output_file ~{out_filename} \
       --vcf \
       --verbose \
+      --compress_output bgzip \
       --force_overwrite \
       --species homo_sapiens \
       --assembly ~{vep_assembly} \
       --max_sv_size ~{vep_max_sv_size} \
       --offline \
-      --no_stats \
       --cache \
       --dir_cache $VEP_CACHE/ \
       --cache_version ~{vep_version} \
@@ -294,8 +315,7 @@ task RunVep {
       --canonical \
       --domains \
       ~{sep=" " vep_options} \
-      $gnomad_option \
-    | bgzip -c > ~{out_filename}
+      $gnomad_option
 
     tabix -f ~{out_filename}
 

@@ -167,3 +167,31 @@ task GetContigsFromVcfHeader {
     preemptible: 3
   }
 }
+
+
+task IndexVcf {
+  input {
+    File vcf
+    String docker
+  }
+
+  Int disk_gb = ceil(1.25 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    tabix -p vcf -f ~{vcf}
+  >>>
+
+  output {
+    File vcf_idx = basename(vcf) + ".tbi"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
