@@ -121,7 +121,7 @@ task ApplyScriptSingleContig {
   command <<<
     set -eu -o pipefail
 
-    if [ ~{defined(script_files)} == "true" ]; then
+    if [ ~{length(script_files)} -gt 0 ]; then
       cat ~{write_lines(select_all(script_files))} \
       | gsutil -m cp -I ./
     fi
