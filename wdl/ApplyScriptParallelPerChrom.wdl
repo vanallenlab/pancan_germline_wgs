@@ -112,7 +112,8 @@ task ApplyScript {
   }
 
   String vcf_basename = basename(vcf, ".vcf.gz")
-  String fname_tag = if defined(contig) then "." + select_first([contig]) else ""
+  String fname_tag = if defined(contig) then "." + contig else ""
+  String contig_str = if defined(contig) then contig else ""
   String in_vcf_name = vcf_basename + fname_tag + ".in.vcf.gz"
   String out_vcf_name = vcf_basename + fname_tag + ".out.vcf.gz"
 
@@ -133,7 +134,7 @@ task ApplyScript {
 
     # Subset VCF to contig of interest, if optioned
     if [ ~{defined(contig)} == "true" ]; then
-      tabix -h ~{vcf} "~{select_first([contig])}" | bgzip -c > "~{in_vcf_name}"
+      tabix -h ~{vcf} "~{contig_str}" | bgzip -c > "~{in_vcf_name}"
       tabix -p vcf -f "~{in_vcf_name}"
     else
       mv ~{vcf} ~{in_vcf_name}
