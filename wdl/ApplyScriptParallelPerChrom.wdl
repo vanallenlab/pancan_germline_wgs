@@ -57,7 +57,7 @@ workflow ApplyScriptParallelPerChrom {
 
   # Apply script to each chromosome in parallel
   scatter (contig in contigs) {
-    call ApplyScriptSingleContig {
+    call ApplyScript {
       input:
         vcf = vcf,
         vcf_idx = select_first([vcf_idx, GetContigsFromVcfHeader.vcf_idx_out]),
@@ -77,8 +77,8 @@ workflow ApplyScriptParallelPerChrom {
   # Merge outputs from per-chromosome scatter
   call Utilities.ConcatVcfs {
     input:
-      vcfs = ApplyScriptSingleContig.vcf_out,
-      vcf_idxs = ApplyScriptSingleContig.vcf_out_idx,
+      vcfs = ApplyScript.vcf_out,
+      vcf_idxs = ApplyScript.vcf_out_idx,
       out_prefix = select_first([out_vcf_prefix, basename(vcf, ".vcf.gz") + ".processed"]),
       bcftools_concat_options = bcftools_concat_options,
       mem_gb = merge_mem_gb,
@@ -94,11 +94,11 @@ workflow ApplyScriptParallelPerChrom {
 }
 
 
-task ApplyScriptSingleContig {
+task ApplyScript {
   input {
     File vcf
     File? vcf_idx
-    String contig
+    String? contig
     File script
     String exec_prefix
     String script_options
@@ -112,8 +112,9 @@ task ApplyScriptSingleContig {
   }
 
   String vcf_basename = basename(vcf, ".vcf.gz")
-  String in_vcf_name = vcf_basename + "." + contig + ".in.vcf.gz"
-  String out_vcf_name = vcf_basename + "." + contig + ".out.vcf.gz"
+  String fname_tag = if defined(contig) then "." + select_first([contig]) else ""
+  String in_vcf_name = vcf_basename + fname_tag + ".in.vcf.gz"
+  String out_vcf_name = vcf_basename + fname_tag + ".out.vcf.gz"
 
   Int default_disk_gb = ceil(2.5 * size(vcf, "GB")) + 10
   Int use_disk_gb = select_first([disk_gb, default_disk_gb])
@@ -130,8 +131,14 @@ task ApplyScriptSingleContig {
       tabix -p vcf -f ~{vcf}
     fi
 
-    # Subset VCF to contig of interest
-    tabix -h ~{vcf} "~{contig}" | bgzip -c > "~{in_vcf_name}"
+    # Subset VCF to contig of interest, if optioned
+    if [ ~{defined(contig)} == "true" ]; then
+      tabix -h ~{vcf} "~{select_first([contig])}" | bgzip -c > "~{in_vcf_name}"
+      tabix -p vcf -f "~{in_vcf_name}"
+    else
+      mv ~{vcf} ~{in_vcf_name}
+      mv ~{vcf}.tbi ~{in_vcf_name}.tbi
+    fi
 
     # Execute script
     cmd="~{exec_prefix} ~{script} ~{script_options} ~{in_vcf_name} ~{out_vcf_name}"

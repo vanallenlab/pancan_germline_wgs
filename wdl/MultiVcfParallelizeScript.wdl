@@ -25,6 +25,7 @@ workflow MultiVcfParallelizeScript {
     Array[String?] script_files
 
     String? out_vcf_prefix
+    Boolean scatter_by_chrom = true
     File? ref_fai
     String? inner_merge_bcftools_concat_options 
 
@@ -65,32 +66,54 @@ workflow MultiVcfParallelizeScript {
     File vcf = vcf_info.left
     File vcf_idx = vcf_info.right
 
-    call Parallelize.ApplyScriptParallelPerChrom {
-      input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
-        script = script,
-        out_vcf_prefix = out_vcf_prefix,
-        exec_prefix = exec_prefix,
-        script_options = script_options,
-        script_files = script_files,
-        ref_fai = ref_fai,
-        bcftools_concat_options = inner_merge_bcftools_concat_options,
-        script_mem_gb = script_mem_gb,
-        script_cpu_cores = script_cpu_cores,
-        script_disk_gb = script_disk_gb,
-        merge_mem_gb = inner_merge_mem_gb,
-        merge_cpu_cores = inner_merge_cpu_cores,
-        merge_disk_gb = inner_merge_disk_gb,
-        bcftools_docker = bcftools_docker
+    if ( scatter_by_chrom ) {
+      call Parallelize.ApplyScriptParallelPerChrom as ApplyPerChrom {
+        input:
+          vcf = vcf,
+          vcf_idx = vcf_idx,
+          script = script,
+          out_vcf_prefix = out_vcf_prefix,
+          exec_prefix = exec_prefix,
+          script_options = script_options,
+          script_files = script_files,
+          ref_fai = ref_fai,
+          bcftools_concat_options = inner_merge_bcftools_concat_options,
+          script_mem_gb = script_mem_gb,
+          script_cpu_cores = script_cpu_cores,
+          script_disk_gb = script_disk_gb,
+          merge_mem_gb = inner_merge_mem_gb,
+          merge_cpu_cores = inner_merge_cpu_cores,
+          merge_disk_gb = inner_merge_disk_gb,
+          bcftools_docker = bcftools_docker
+      }
+    }
+
+    if ( !scatter_by_chrom ) {
+      call Parallelize.ApplyScript as ApplyAsIs {
+        input:
+          vcf = vcf,
+          vcf_idx = vcf_idx,
+          script = script,
+          exec_prefix = exec_prefix,
+          script_options = script_options,
+          script_files = script_files,
+          mem_gb = script_mem_gb,
+          cpu_cores = script_cpu_cores,
+          disk_gb = script_disk_gb,
+          docker = bcftools_docker
+      }
     }
   }
+  Array[File] processed_vcfs = select_first([ApplyPerChrom.output_vcf,
+                                             ApplyAsIs.vcf_out])
+  Array[File] processed_vcf_idxs = select_first([ApplyPerChrom.output_vcf_idx,
+                                                 ApplyAsIs.vcf_out_idx])
 
   if ( merge_all_outputs ) {
     call Utilities.ConcatVcfs {
       input:
-        vcfs = ApplyScriptParallelPerChrom.output_vcf,
-        vcf_idxs = ApplyScriptParallelPerChrom.output_vcf_idx,
+        vcfs = processed_vcfs,
+        vcf_idxs = processed_vcf_idxs,
         out_prefix = outer_merge_prefix,
         bcftools_concat_options = outer_merge_bcftools_concat_options,
         mem_gb = outer_merge_mem_gb,
@@ -101,8 +124,8 @@ workflow MultiVcfParallelizeScript {
   }
 
   output {
-    Array[File] output_vcfs = ApplyScriptParallelPerChrom.output_vcf
-    Array[File] output_vcf_idxs = ApplyScriptParallelPerChrom.output_vcf_idx
+    Array[File] output_vcfs = processed_vcfs
+    Array[File] output_vcf_idxs = processed_vcf_idxs
     File? merged_output_vcf = ConcatVcfs.merged_vcf
     File? merged_output_vcf_idx = ConcatVcfs.merged_vcf_idx
   }
