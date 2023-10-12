@@ -104,10 +104,9 @@ workflow MultiVcfParallelizeScript {
       }
     }
   }
-  Array[File] processed_vcfs = select_all(select_first([ApplyPerChrom.output_vcf,
-                                                        ApplyAsIs.vcf_out]))
-  Array[File] processed_vcf_idxs = select_all(select_first([ApplyPerChrom.output_vcf_idx,
-                                                            ApplyAsIs.vcf_out_idx]))
+
+  Array[File] processed_vcfs = if scatter_by_chrom then select_all(ApplyPerChrom.output_vcf) else select_all(ApplyAsIs.vcf_out)
+  Array[File] processed_vcf_idxs = if scatter_by_chrom then select_all(ApplyPerChrom.output_vcf_idx) else select_all(ApplyAsIs.vcf_out_idx)
 
   if ( merge_all_outputs ) {
     call Utilities.ConcatVcfs {

@@ -195,3 +195,47 @@ task IndexVcf {
     preemptible: 3
   }
 }
+
+
+task ConcatTextFiles {
+  input {
+    Array[File] shards
+    String concat_command = "cat"
+    String? sort_command
+    String? compression_command
+    Boolean input_has_header = false
+    String output_filename
+
+    String docker
+  }
+
+  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
+  String sort = if defined(sort_command) then " | " + sort_command else ""
+  String compress = if defined(compression_command) then " | " + compression_command else ""
+  String posthoc_cmds = sort + " | cat header.txt - " + compress
+
+  command <<<
+    set -eu -o pipefail
+
+    if [ ~{input_has_header} == "true"]; then
+      ~{concat_command} ~{shards[0]} \
+      | head -n1 > header.txt || true
+    else
+      touch header.txt
+    fi
+
+    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename}
+  >>>
+
+  output {
+    File merged_file = "~{output_filename}"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
