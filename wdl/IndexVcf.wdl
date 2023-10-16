@@ -23,7 +23,7 @@ workflow IndexVcf {
   call Utilities.IndexVcf {
      input:
        vcf = vcf,
-       docker = bcftools_docker
+       docker = docker
    }
 
   if (copy_index_to_bam_bucket) {

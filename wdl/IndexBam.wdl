@@ -13,6 +13,7 @@ workflow IndexBam {
   input {
     File bam
     Boolean copy_index_to_bam_bucket = false
+    String suffix = "bai"
     String docker = "vanallenlab/g2c_pipeline:latest"
   }
 
@@ -27,6 +28,7 @@ workflow IndexBam {
       input:
         bai = MakeIndex.bai,
         bam = bam,
+        suffix = suffix,
         docker = docker
     }
   }
