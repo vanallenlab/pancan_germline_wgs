@@ -184,7 +184,7 @@ task IndexVcf {
   >>>
 
   output {
-    File vcf_idx = basename(vcf) + ".tbi"
+    File vcf_idx = "~{vcf}.tbi"
   }
 
   runtime {
