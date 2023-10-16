@@ -37,7 +37,7 @@ workflow IndexVcf {
   }
   
   output {
-    File bam_index = select_first([CopyIndex.bai_copy, IndexVcf.vcf_idx])
+    File vcf_index = select_first([CopyIndex.bai_copy, IndexVcf.vcf_idx])
   }
 }
 
