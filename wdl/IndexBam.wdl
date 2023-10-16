@@ -75,13 +75,14 @@ task CopyIndex {
   input {
     File bai
     String bam
+    String suffix = "bai"
     String docker
   }
 
   command <<<
     set -eu -o pipefail
 
-    gsutil cp ~{bai} ~{bam}.bai
+    gsutil cp ~{bai} ~{bam}.~{suffix}
   >>>
 
   runtime {
@@ -93,7 +94,7 @@ task CopyIndex {
  }
 
   output {
-    String bai_copy = "~{bam}.bai"
+    String bai_copy = "~{bam}.~{suffix}"
   }
 }
 
