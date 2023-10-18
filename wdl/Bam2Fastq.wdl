@@ -3,7 +3,7 @@
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Convert a paired-end BAM to paired, gzipped fastqs
+# Convert a paired-end BAM/CRAM to paired, gzipped fastqs
 
 
 version 1.0
@@ -59,7 +59,7 @@ task B2F {
     docker: docker
     memory: "~{total_mem_gb} GB"
     disks: "local-disk " + select_first([disk_gb, default_disk_size]) + " HDD"
-    preemptible: 3
+    preemptible: 1
   }
 
   output {

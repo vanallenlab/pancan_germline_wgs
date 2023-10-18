@@ -217,7 +217,7 @@ task ConcatTextFiles {
   command <<<
     set -eu -o pipefail
 
-    if [ ~{input_has_header} == "true"]; then
+    if [ "~{input_has_header}" == "true" ]; then
       ~{concat_command} ~{shards[0]} \
       | head -n1 > header.txt || true
     else
