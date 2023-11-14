@@ -26,9 +26,7 @@ This repository contains the working code and scripts used to detect, genotype, 
 
 ## Storage
 
-All sample-level input data is stored in a secure Google Cloud bucket: `gs://dfci-g2c-inputs`  
-
-Note that permissions must be granted for bucket access.  
+All sample-level input data is stored in a secure Google Cloud bucket. Note that permissions must be granted for bucket access.  
 
 The bucket is organized as follows:
 * One directory per cohort

@@ -118,11 +118,13 @@ for field in hg19_cram_usa hg19_crai_usa; do
   cat $WRKDIR/$field.list
 done | gsutil -m rm -I
 
-# All Terra-generated files
+# Terra-generated files
+# Note: focus on large files (not logs etc) to make cleaning faster
 cat $WRKDIR/mdat.tsv | sed 's/[\t,]/\n/g' | fgrep "gs://fc-secure-" \
 | tr -d '"[]' | cut -d/ -f1-7 | sort -V | uniq | awk '{ print $1"/**" }' \
 > $WRKDIR/gsdirs_to_rm.list
 gsutil -m ls $( paste -s -d\  $WRKDIR/gsdirs_to_rm.list ) \
+| grep '\.gz$\|\.bam$\|\.cram$|\.txt$|\.tsv$|\.bgz$' \
 > $WRKDIR/uris_to_rm.list || true
 cat $WRKDIR/uris_to_rm.list | gsutil -m rm -I
 
