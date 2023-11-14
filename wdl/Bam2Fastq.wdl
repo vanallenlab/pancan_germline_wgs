@@ -40,6 +40,7 @@ task B2F {
     Int cpu = 4
     Float mem_gb_per_cpu = 1.75
     Int? disk_gb
+    Int boot_disk_gb = 10
   }
 
   Int default_disk_size = ceil( ( 4 * size(bam, "GB") ) + 10.0 )
@@ -60,6 +61,7 @@ task B2F {
     memory: "~{total_mem_gb} GB"
     disks: "local-disk " + select_first([disk_gb, default_disk_size]) + " HDD"
     preemptible: 1
+    bootDiskSizeGb: boot_disk_gb
   }
 
   output {
