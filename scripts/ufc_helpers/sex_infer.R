@@ -21,21 +21,21 @@ estimate_chromosomes_processing <- function(file_path) {
   header_row <- grep("CONTIG", df$Chromosome)
   
   # Omit rows before the header row (if header is found)
-  df2 <- df[(header_row + 1):nrow(df), ]
+  df <- df[(header_row + 1):nrow(df), ]
   
   # Group by V1 and calculate the sum of V4 for each group
-  result_df <- df2 %>%
+  df <- df %>%
     group_by(Chromosome) %>%
     summarize(Sum_V4 = sum(as.numeric(V4)))
   
   # Merge the two data frames based on the "Chromosome" column
-  merged_df <- merge(result_df, chromosome_data, by = "Chromosome")
+  df <- merge(df, chromosome_data, by = "Chromosome")
   
   # Calculate normalized read coverage
-  merged_df$norm_read_cov <- merged_df$Sum_V4 / merged_df$Length
+  df$norm_read_cov <- df$Sum_V4 / df$Length
   
   # Return the merged data frame with normalized read coverage
-  return(merged_df)
+  return(df)
 }
 
 estimate_chromosomes <- function(df) {
