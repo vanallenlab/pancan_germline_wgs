@@ -9,9 +9,7 @@
 
 # It is based on the primary sv-pipeline image from GATK-SV, which is available here:
 # us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline
-# And can be reviewed in more detail here:
-# https://github.com/broadinstitute/gatk-sv/blob/main/dockerfiles/sv-pipeline/Dockerfile
-ARG BASE_IMAGE=sv-pipeline:latest
+ARG BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-09-13-v0.28.3-beta-af8362e3
 FROM $BASE_IMAGE as base
 
 # Aliases for convenience
@@ -26,6 +24,9 @@ RUN cd /opt && \
     git clone https://github.com/vanallenlab/pancan_germline_wgs.git && \
     cd pancan_germline_wgs && \
     git checkout $REPO_HASH
+
+# Install missing R libraries as necessary
+RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]
