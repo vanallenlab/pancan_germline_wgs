@@ -38,7 +38,10 @@ estimate_chromosomes_processing <- function(file_path) {
   return(df)
 }
 
-estimate_chromosomes <- function(df) {
+# ... (previous code remains unchanged)
+
+# Modify the estimate_chromosomes function
+estimate_chromosomes <- function(df, output_dir = "./") {
   # Extract 'norm_read_cov' values for autosomes and sex chromosomes
   autosomal_cov <- df$norm_read_cov[!df$Chromosome %in% c("chrX", "chrY")]
   chrX_cov <- df$norm_read_cov[df$Chromosome == "chrX"]
@@ -82,8 +85,9 @@ estimate_chromosomes <- function(df) {
     estimated_chrY <- estimated_chrY + 1
   }
   
-  # Return the estimates in the specified format
-  return(paste(estimated_chrX, estimated_chrY, sep = "-"))
+  # Write the results to separate files
+  writeLines(as.character(estimated_chrX), file.path(output_dir, "chrX.txt"))
+  writeLines(as.character(estimated_chrY), file.path(output_dir, "chrY.txt"))
 }
 
 
@@ -92,5 +96,4 @@ file_path <- commandArgs(trailingOnly = TRUE)[1]
 
 # Example usage
 result_df <- estimate_chromosomes_processing(file_path)
-result <- estimate_chromosomes(result_df)
-cat(result)
+estimate_chromosomes(result_df)
