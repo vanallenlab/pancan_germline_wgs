@@ -21,74 +21,48 @@ estimate_chromosomes_processing <- function(file_path) {
   header_row <- grep("CONTIG", df$Chromosome)
   
   # Omit rows before the header row (if header is found)
-  df <- df[(header_row + 1):nrow(df), ]
+  df2 <- df[(header_row + 1):nrow(df), ]
   
   # Group by V1 and calculate the sum of V4 for each group
-  df <- df %>%
+  result_df <- df2 %>%
     group_by(Chromosome) %>%
     summarize(Sum_V4 = sum(as.numeric(V4)))
   
   # Merge the two data frames based on the "Chromosome" column
-  df <- merge(df, chromosome_data, by = "Chromosome")
+  merged_df <- merge(result_df, chromosome_data, by = "Chromosome")
   
   # Calculate normalized read coverage
-  df$norm_read_cov <- df$Sum_V4 / df$Length
+  merged_df$norm_read_cov <- merged_df$Sum_V4 / merged_df$Length
   
   # Return the merged data frame with normalized read coverage
-  return(df)
+  return(merged_df)
 }
 
-# ... (previous code remains unchanged)
-
-# Modify the estimate_chromosomes function
-estimate_chromosomes <- function(df, output_dir = "./") {
+estimate_chromosomes <- function(df) {
   # Extract 'norm_read_cov' values for autosomes and sex chromosomes
   autosomal_cov <- df$norm_read_cov[!df$Chromosome %in% c("chrX", "chrY")]
   chrX_cov <- df$norm_read_cov[df$Chromosome == "chrX"]
   chrY_cov <- df$norm_read_cov[df$Chromosome == "chrY"]
   
-  # Calculate mean and standard deviation of autosomal counts
+  # Calculate mean of autosomal counts
   autosomal_mean <- mean(autosomal_cov)
-  autosomal_sd <- sd(autosomal_cov)
   
-  # Set thresholds based on mean and standard deviation
-  threshold_one_copy <- autosomal_mean - 3 * autosomal_sd
-  threshold_two_copies <- autosomal_mean - 2 * autosomal_sd
-  threshold_three_copies <- autosomal_mean + 2 * autosomal_sd
+  # Define values to compare proximity
+  zero_value <- 0
+  one_copy_value <- autosomal_mean / 2
+  two_copies_value <- autosomal_mean
+  three_copies_value <- 1.5 * autosomal_mean
   
-  # Initialize estimates
-  estimated_chrX <- 0
-  estimated_chrY <- 0
+  # Find the closest value for chrX_cov
+  closest_chrX <- which.min(abs(c(zero_value, one_copy_value, two_copies_value, three_copies_value) - chrX_cov))
   
-  # Iterate through each threshold and add 1 copy for every threshold it passes
-  if (max(chrX_cov) > threshold_one_copy) {
-    estimated_chrX <- estimated_chrX + 1
-  }
+  # Find the closest value for chrY_cov
+  closest_chrY <- which.min(abs(c(zero_value, one_copy_value, two_copies_value, three_copies_value) - chrY_cov))
   
-  if (max(chrX_cov) > threshold_two_copies) {
-    estimated_chrX <- estimated_chrX + 1
-  }
-  
-  if (max(chrX_cov) > threshold_three_copies) {
-    estimated_chrX <- estimated_chrX + 1
-  }
-  
-  if (max(chrY_cov) > threshold_one_copy) {
-    estimated_chrY <- estimated_chrY + 1
-  }
-  
-  if (max(chrY_cov) > threshold_two_copies) {
-    estimated_chrY <- estimated_chrY + 1
-  }
-  
-  if (max(chrY_cov) > threshold_three_copies) {
-    estimated_chrY <- estimated_chrY + 1
-  }
-  
-  # Write the results to separate files
-  writeLines(as.character(estimated_chrX), file.path(output_dir, "chrX.txt"))
-  writeLines(as.character(estimated_chrY), file.path(output_dir, "chrY.txt"))
+  # Return the estimates in the specified format
+  return(paste(closest_chrX - 1, closest_chrY - 1, sep = "-"))
 }
+
 
 
 # Extract the file path from the command-line arguments
@@ -96,4 +70,5 @@ file_path <- commandArgs(trailingOnly = TRUE)[1]
 
 # Example usage
 result_df <- estimate_chromosomes_processing(file_path)
-estimate_chromosomes(result_df)
+result <- estimate_chromosomes(result_df)
+cat(result)
