@@ -64,8 +64,8 @@ task infer_ancestry{
   >>>
   runtime{
     docker: "vanallenlab/g2c_pipeline:nf_graf_plink_alpha"
-    memory: "50 GB"  # Adjust the amount based on your requirements
-    bootDiskSizeGb: 8 # Adjust the amount based on your requirements
+    memory: "60 GB"  # Adjust the amount based on your requirements
+    bootDiskSizeGb: 10 # Adjust the amount based on your requirements
   }
   output{
     Int Ancestry_ID = read_int("ancestryID.txt")
