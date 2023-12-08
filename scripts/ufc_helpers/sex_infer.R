@@ -12,7 +12,7 @@ estimate_chromosomes_processing <- function(file_path) {
   )
   
   # Read the TSV file into a data frame
-  df <- read.table(file_path, header = FALSE, sep = "\t", col.names = c("Chromosome", "V2", "V3", "V4", "V5", "V6"), fill = TRUE)
+  df <- read.table(file_path, header = FALSE, sep = "\t", col.names = c("Chromosome", "V2", "V3", "V4", "V5", "V6","V7"), fill = TRUE)
   
   # Remove the 5th and 6th columns
   df <- df[, -c(5, 6)]
