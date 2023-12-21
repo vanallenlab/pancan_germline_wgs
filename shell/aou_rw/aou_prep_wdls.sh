@@ -30,7 +30,7 @@ git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatsv_tag
 export gatkhc_tag=2.3.1
 git clone git@github.com:gatk-workflows/gatk4-germline-snps-indels.git --branch=$gatkhc_tag
 
-# Make & populate directory of all WDLs
+# Make & populate directory of all WDLs and other reference files
 for dir in wdl wdl/pancan_germline_wgs wdl/gatk-sv wdl/gatk-hc; do
   if [ -e $dir ]; then rm -rf $dir; fi
   mkdir $dir
@@ -41,9 +41,12 @@ cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 
 # Copy WDLs to AoU RW bucket
 # Note: must use AoU Google credentials
-export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/
+export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 gcloud auth login
-gsutil -m cp -r wdl $rw_bucket/code/
+gsutil -m cp -r \
+  wdl \
+  pancan_germline_wgs/refs \
+  $rw_bucket/code/
 
 # Clean up
 cd ~

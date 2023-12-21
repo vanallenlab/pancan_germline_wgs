@@ -15,4 +15,7 @@ alias 'less=zless'
 # Colorize grep output
 alias 'grep=grep --color=auto'
 alias 'egrep=egrep --color=auto'
-alias 'fgrep=ggrep -F --color=auto'
+alias 'fgrep=fgrep --color=auto'
+
+# Always default to using cromshell-alpha
+alias 'cromshell=cromshell-alpha'

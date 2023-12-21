@@ -1,0 +1,9 @@
+{
+  "workflow_failure_mode": "ContinueWhilePossible",
+  "monitoring_script": "gs://gatk-sv-resources-public/scripts/cromwell_monitoring_script2.sh",
+  "jes_gcs_root": "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/cromwell/execution",
+  "final_workflow_outputs_dir": "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/cromwell/outputs",
+  "write_to_cache" : true,
+  "read_from_cache" : true,
+  "memory_retry_multiplier" : 1.5
+}
