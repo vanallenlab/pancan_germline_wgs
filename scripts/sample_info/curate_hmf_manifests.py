@@ -28,9 +28,9 @@ def load_superclass_table(supermap_tsv):
 
     for idx, rvals in superdf.iterrows():
 
-        pl = rvals.primaryTumorLocation
-        sl = rvals.primaryTumorSubLocation
-        pt = rvals.primaryTumorType
+        pl = str(rvals.primaryTumorLocation)
+        sl = str(rvals.primaryTumorSubLocation)
+        pt = str(rvals.primaryTumorType)
         g2c_class = rvals['class']
 
         if pl not in supermap.keys():
@@ -50,11 +50,14 @@ def map_g2c_cancer_type(vals, supermap):
     Converts a single HMF metadata entry to a G2C cancer type
     """
 
-    pl = vals.primaryTumorLocation
-    sl = vals.primaryTumorSubLocation
-    pt = vals.primaryTumorType
+    pl = str(vals.primaryTumorLocation)
+    sl = str(vals.primaryTumorSubLocation)
+    pt = str(vals.primaryTumorType)
 
-    return supermap[pl][sl][pt]
+    try:
+        return supermap[pl][sl][pt]
+    except:
+        import pdb; pdb.set_trace()
 
 
 def main():
@@ -71,6 +74,8 @@ def main():
     parser.add_argument('--tumor-superclass-table', help='.tsv with instructions ' +
                         'for classifying tumors based on primaryTumorLocation, ' +
                         'primaryTumorSubLocation, and primaryTumorType.')
+    parser.add_argument('--join', default='outer', help='behavior for joining ' +
+                        '--metadata and --manifest.')
     parser.add_argument('-o', '--outdir', help='path to output directory',
                         default='./')
     args = parser.parse_args()
@@ -102,7 +107,7 @@ def main():
             mfst.loc[len(mfst.index)] = srow
 
     # Merge metadata and manifest
-    df = md.merge(mfst, how='outer', on='sampleId')
+    df = md.merge(mfst, how=args.join, on='sampleId')
 
     # Write full metadata as tsv to outdir
     df.to_csv(args.outdir + '/HMF.combined_metadata_and_manifest.tsv.gz',
