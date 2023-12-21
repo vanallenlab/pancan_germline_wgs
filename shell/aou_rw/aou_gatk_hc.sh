@@ -17,6 +17,12 @@ for dir in data data/cram_paths; do
   if ! [ -e $dir ]; then mkdir $dir; fi
 done
 
+# Copy necessary code to local disk
+gsutil -m cp -r $WORKSPACE_BUCKET/code ./
+
+# Source .bashrc
+. code/dotfiles/aou.rw.bashrc
+
 # Copy sample info to local disk
 gsutil -m cp -r $WORKSPACE_BUCKET/data/sample_info/sample_lists ./
 
@@ -31,6 +37,4 @@ for cancer in pancreas; do
   | sed 's/,/\t/g' | sort -Vk1,1 \
   > data/cram_paths/$cancer.cram_paths.tsv
 done
-
-
 
