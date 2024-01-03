@@ -9,14 +9,13 @@
 
 set -eu -o pipefail
 
-BUCKET="gs://dfci-g2c-inputs"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 WRKDIR=`mktemp -d`
 
 usage() {
 cat << EOF
 
-USAGE: ./check_all_sample_inputs.sh [-h|--help] [COHORTS]
+USAGE: ./check_all_sample_inputs.sh [-h|--help] [COHORTS] [BUCKET]
 
        Checks google cloud storage bucket for complete input data for all DFCI-G2C cohorts
 
@@ -26,6 +25,14 @@ USAGE: ./check_all_sample_inputs.sh [-h|--help] [COHORTS]
 EOF
 }
 
+# Set default bucket unless provided as the second positional argument
+if [ $# -lt 2 ]; then
+  BUCKET="gs://dfci-g2c-inputs"
+else
+  BUCKET=$2
+fi
+
+# Define list of cohorts unless specified as the first positional argument
 if [ $# -lt 1 ]; then
   gsutil ls $BUCKET/sample-lists/*.samples.list \
   | xargs -I {} basename {} \
@@ -37,6 +44,7 @@ elif [ $1 == "--help" ] || [ $1 == "-h" ]; then
 else
   echo $1 | sed 's/,/\n/g' | sort -V | uniq > $WRKDIR/cohorts.list
 fi
+
 
 k=0
 while read COHORT; do
@@ -52,7 +60,7 @@ while read COHORT; do
     k=$((k+1))
     echo -e "Sample $k: $SAMPLE"
     $SCRIPT_DIR/check_sample_inputs.sh \
-      $COHORT $SAMPLE $WRKDIR/$COHORT.objects_found \
+      $COHORT $SAMPLE $BUCKET $WRKDIR/$COHORT.objects_found \
     >> $WRKDIR/$COHORT.sample_status.tsv
   done < <( gsutil cat $BUCKET/sample-lists/$COHORT.samples.list )
 done < <( sed '/^$/d' $WRKDIR/cohorts.list )

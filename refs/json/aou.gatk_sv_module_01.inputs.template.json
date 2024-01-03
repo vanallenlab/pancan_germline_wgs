@@ -17,7 +17,7 @@
 	"GatherSampleEvidence.reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 	"GatherSampleEvidence.reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
 	"GatherSampleEvidence.reference_index" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-	"GatherSampleEvidence.reference_version" : 38,
+	"GatherSampleEvidence.reference_version" : "38",
 	"GatherSampleEvidence.requester_pays_crams" : "true",
 	"GatherSampleEvidence.runtime_attr_wham" : {"mem_gb" : 48, "cpu_cores" : 8, "disk_gb" : 1000, "boot_disk_gb"  :  20},
 	"GatherSampleEvidence.sample_id" : "$SID",

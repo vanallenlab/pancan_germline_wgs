@@ -1,4 +1,5 @@
 {
+	"HaplotypeCallerGvcf_GATK4.CramToBamTask.disk_space_gb" : 520,
 	"HaplotypeCallerGvcf_GATK4.CramToBamTask.preemptible_attempts" : 3,
 	"HaplotypeCallerGvcf_GATK4.CramToBamTask.use_ssd" : false,
 	"HaplotypeCallerGvcf_GATK4.HaplotypeCaller.preemptible_attempts" : 3,
