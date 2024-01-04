@@ -16,6 +16,8 @@
 
 # Set up local environment
 export GPROJECT="vanallen-pancan-germline-wgs"
+export BOTO_CONFIG=~/code/refs/dotfiles/dfci-g2c.aou-rw.boto.cfg
+export BOTO_PATH=~/code/refs/dotfiles/
 
 # Prep working directory structure
 for dir in data data/cram_paths cromshell cromshell/inputs cromshell/job_ids \
@@ -27,7 +29,7 @@ done
 gsutil -m cp -r $WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
-# Source .bashrc
+# Source .bashrc and set boto config
 . code/refs/dotfiles/aou.rw.bashrc
 
 # Copy sample info to local disk
@@ -70,7 +72,7 @@ while read cancer; do
               cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
     if [ -z $status ] || [ $status == "not_started" ] || \
        [ $status == "failed" ] || [ $status == "aborted" ] || \
-       [ $status == "staged" ]; then
+       [ $status == "unknown" ]; then
       # Format sample-specific input .json
       CRAM=$cram CRAI=$crai \
         envsubst < code/refs/json/aou.gatk_hc.inputs.template.json \
@@ -87,58 +89,34 @@ while read cancer; do
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
 
-# Check progress of each sample
+# Check progress of each sample and stage completed samples
 while read cancer; do
+  n=$( cat sample_lists/$cancer.samples.list | wc -l )
+  k=0
   while read sid cram crai; do
+    ((k++))
+    echo -e "Checking $sid; sample $k of $n $cancer patients"
     code/scripts/check_aou_gatk_hc.py \
       --sample-id "$sid" \
       --status-tsv cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-      --update-status
+      --update-status \
+      --unsafe
   done < data/cram_paths/$cancer.cram_paths.tsv
-  # Print summary of status to terminal
-  cut -f2 cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-  | sort | uniq -c | sort -nrk1,1 | awk -v OFS="\t" '{ print $2, $1 }'
 done < cancers.list
-
-# Clean up finished samples
 while read cancer; do
-  # Reset lists of files to relocate and delete
-  for suf in to_move to_delete; do
-    if [ -e cromshell/progress/$cancer.gatk_hc.$suf.list ]; then
-      rm cromshell/progress/$cancer.gatk_hc.$suf.list
-    fi
-  done
-  while read sid status; do
-    # Only process samples that are reported as succeeded by Cromwell
-    if [ $status == "succeeded" ]; then
-      most_recent=$( tail -n1 cromshell/job_ids/$sid.gatk_hc.job_ids.list )
-      echo "$WORKSPACE_BUCKET/cromwell/outputs/HaplotypeCallerGvcf_GATK4/$most_recent/call-MergeGVCFs/**.g.vcf.gz*" \
-      >> cromshell/progress/$cancer.gatk_hc.to_move.list
-      while read subid; do
-        echo "$WORKSPACE_BUCKET/cromwell/execution/HaplotypeCallerGvcf_GATK4/$subid/**" \
-        >> cromshell/progress/$cancer.gatk_hc.to_delete.list
-        echo "$WORKSPACE_BUCKET/cromwell/outputs/HaplotypeCallerGvcf_GATK4/$subid/**" \
-        >> cromshell/progress/$cancer.gatk_hc.to_delete.list
-      done < cromshell/job_ids/$sid.gatk_hc.job_ids.list
-      status=staged
-    fi
-    echo -e "$sid\t$status"
-  done < cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-  > cromshell/progress/$cancer.gatk_hc.sample_progress.tsv2
-  # Copy final gVCFs and indexes
-  cat cromshell/progress/$cancer.gatk_hc.to_move.list \
-  | gsutil -m mv -I $WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-hc/
-  # Clean up all intermediate files
-  cat cromshell/progress/$cancer.gatk_hc.to_delete.list | gsutil -m rm -I
-  # Update sample progress manifest
-  mv \
-    cromshell/progress/$cancer.gatk_hc.sample_progress.tsv2 \
-    cromshell/progress/$cancer.gatk_hc.sample_progress.tsv
+  cut -f2 cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
+  | sort | uniq -c | sort -nrk1,1 \
+  | awk -v cancer=$cancer -v OFS="\t" '{ print cancer, "gatk-hc", $2, $1 }'
 done < cancers.list
 
-# TODO: Rename gVCF outputs to remove the "wgs_" prefix from each file
+# Clean up garbage
+gsutil -m cp \
+  uris_to_delete.list \
+  $WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$( date '+%m_%d_%Y.%Hh%Mm%Ss' ).garbage
+rm uris_to_delete.list
+# TODO: submit cromwell job that deletes these files using a high-thread / low-mem cloud instance
 
-# TODO: reblock & rename gVCFs
+# TODO: reblock & reheader gVCFs
 
 
 ###########

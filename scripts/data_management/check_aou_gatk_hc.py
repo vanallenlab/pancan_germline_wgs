@@ -16,15 +16,29 @@ import pandas as pd
 import subprocess
 from os import getenv, path
 from re import sub
-from sys import stdout
+from sys import stdout, stderr
 
 
 # Global formats
 gvcf_fmt = '{}/cromwell/outputs/HaplotypeCallerGvcf_GATK4/{}/call-MergeGVCFs/wgs_{}.g.{}'
+dest_fmt = '{}/dfci-g2c-inputs/aou/gatk-hc/{}.g.vcf.gz'
 
 
+def check_if_staged(bucket, sid):
+    """
+    Returns true if a sample's gVCF and tabix index are found in the staging bucket
+    """
 
-def find_gvcfs(workflow_ids, bucket, sid, suffix='vcf.gz'):
+    uri = dest_fmt.format(bucket, sid)
+    tbi_uri = uri + '.tbi'
+    query = 'gsutil -m ls {} {}'.format(uri, tbi_uri)
+    query_res = subprocess.run(query, capture_output=True, shell=True, 
+                               check=False, text=True)
+    uris_found = query_res.stdout.rstrip().split('\n')
+    return uri in uris_found and tbi_uri in uris_found
+
+
+def find_gvcfs(workflow_ids, bucket, sid, uri_fmt=gvcf_fmt, suffix='vcf.gz'):
     """
     Attempts to find output gVCFs for a list of workflow_ids
     """
@@ -35,7 +49,7 @@ def find_gvcfs(workflow_ids, bucket, sid, suffix='vcf.gz'):
         return []
 
     # Find GCP URIs for all final output gVCFs
-    expected_gvcfs = {gvcf_fmt.format(bucket, wid, sid, suffix) : wid \
+    expected_gvcfs = {uri_fmt.format(bucket, wid, sid, suffix) : wid \
                       for wid in workflow_ids}
     gvcf_query = 'gsutil -m ls ' + ' '.join(expected_gvcfs.keys())
     gvcf_query_res = subprocess.run(gvcf_query, capture_output=True, 
@@ -46,17 +60,27 @@ def find_gvcfs(workflow_ids, bucket, sid, suffix='vcf.gz'):
     return [uri.split('/')[6] for uri in gvcfs_found if uri.startswith('gs://')]
 
 
-def check_workflow_status(workflow_id):
+def check_workflow_status(workflow_id, max_retries=20):
     """
     Ping Cromwell server to check status of a single workflow
     """
 
-    cromshell_query = 'cromshell-alpha status ' + workflow_id
-    cromshell_query_res = subprocess.run(cromshell_query, capture_output=True, 
-                                         shell=True, check=False, text=True)
-    return [sub('[,"]', '', s.split('":"')[1]) 
-            for s in cromshell_query_res.stdout.split('\n') 
-            if 'status' in s][0].lower()
+    crom_query_res = ''
+    attempts = 0
+    while 'status' not in crom_query_res and attempts < 20:
+        crom_query = 'crom-alpha status ' + workflow_id
+        crom_query_res = subprocess.run(crom_query, capture_output=True, 
+                                        shell=True, check=False, text=True).stdout
+        attempts += 1
+    
+    if attempts == 20:
+        msg = 'Failed to get workflow status for {} after {} retries\n'
+        stderr.write(msg.format(workflow_id, attempts))
+        return 'unknown'
+    else:
+        return [sub('[,"]', '', s.split('":"')[1]) 
+                for s in crom_query_res.stdout.split('\n') 
+                if 'status' in s][0].lower()
 
 
 def relocate_outputs(workflow_id, bucket, sid, action='cp'):
@@ -64,15 +88,19 @@ def relocate_outputs(workflow_id, bucket, sid, action='cp'):
     Relocate final gVCF and index for a sample to permanent storage location
     """
 
+    msg = 'Relocating {} to {}\n'
+
     # Relocate gVCF
     src_gvcf = gvcf_fmt.format(bucket, workflow_id, sid, 'vcf.gz')
-    dest_gvcf = '{}/dfci-g2c-inputs/aou/gatk-hc/{}.g.vcf.gz'
-    subprocess.run(['gsutil', '-m', action, src_gvcf, dest_gvcf], shell=True)
+    dest_gvcf = dest_fmt.format(bucket, sid)
+    stdout.write(msg.format(src_gvcf, dest_gvcf))
+    subprocess.run(' '.join(['gsutil -m', action, src_gvcf, dest_gvcf]), shell=True)
 
     # Relocate tabix index
     src_tbi = src_gvcf + '.tbi'
     dest_tbi = dest_gvcf + '.tbi'
-    subprocess.run(['gsutil', '-m', action, src_tbi, dest_tbi], shell=True)
+    stdout.write(msg.format(src_tbi, dest_tbi))
+    subprocess.run(' '.join(['gsutil -m', action, src_tbi, dest_tbi]), shell=True)
 
 
 def collect_trash(workflow_ids, bucket, dumpster_path):
@@ -115,6 +143,9 @@ def main():
                         help='Path to file collecting all GCP URIs to be deleted. ' +
                         'Note that this script will only ever append to this file, ' +
                         'not overwrite it.')
+    parser.add_argument('--unsafe', default=False, action='store_true',
+                        help='Don\'t bother checking Cromwell workflow status ' +
+                        'if expected outputs are found. Not recommended.')
     args = parser.parse_args()
 
     # Check to make sure --bucket is set
@@ -144,10 +175,13 @@ def main():
     # gsutil/cromshell queries
     while True:
 
-        # # First, check if sample output has been already staged
-        # # If so, nothing more needs to be done
-        # if status == 'staged':
-        #     break
+        # First, check if sample output has been already staged
+        # If so, nothing more needs to be done
+        if status == 'staged':
+            break
+        if check_if_staged(bucket, sid):
+            status = 'staged'
+            break
 
         # Second, check if sample has any previous workflow submissions
         # If not, sample has not yet been started and can be reported as such
@@ -168,13 +202,19 @@ def main():
         
         # Try to find workflows with final output gVCFs and indexes
         wids_with_gvcf = find_gvcfs(wids, bucket, sid)
-        wids_with_tbi = find_gvcfs(wids_with_gvcf, bucket, sid, 'vcf.gz.tbi')
+        wids_with_tbi = find_gvcfs(wids_with_gvcf, bucket, sid, 
+                                   suffix='vcf.gz.tbi')
 
         # If at least one copy of gVCF + index are found, check cromwell status
         # of most recent job ID to confirm job was successful
         for wid in sorted(wids_with_tbi, key=lambda wid: wid_priority[wid]):
 
-            workflow_status = check_workflow_status(wid)
+            # The exception to this is if --unsafe is set, in which case the
+            # workflow is assumed to be successful
+            if not args.unsafe:
+                workflow_status = check_workflow_status(wid)
+            else:
+                workflow_status = 'succeeded'
 
             # If job was successful but gVCF had not been staged yet, relocate 
             # gVCF and index to output bucket and mark all temporary files 
