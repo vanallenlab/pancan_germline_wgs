@@ -29,8 +29,9 @@ done
 gsutil -m cp -r $WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
-# Source .bashrc and set boto config
+# Source .bashrc and bash utility functions
 . code/refs/dotfiles/aou.rw.bashrc
+. code/refs/aou_bash_utils.sh
 
 # Copy sample info to local disk
 gsutil -m cp -r $WORKSPACE_BUCKET/data/sample_info/sample_lists ./
@@ -55,6 +56,8 @@ while read cancer; do
   | sed 's/,/\t/g' | sort -Vk1,1 \
   > data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
+
+# B
 
 
 ###########
@@ -96,8 +99,9 @@ while read cancer; do
   while read sid cram crai; do
     ((k++))
     echo -e "Checking $sid; sample $k of $n $cancer patients"
-    code/scripts/check_aou_gatk_hc.py \
+    code/scripts/check_aou_gatk_status.py \
       --sample-id "$sid" \
+      --mode gatk-hc \
       --status-tsv cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
       --update-status \
       --unsafe
@@ -107,14 +111,11 @@ while read cancer; do
   cut -f2 cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
   | sort | uniq -c | sort -nrk1,1 \
   | awk -v cancer=$cancer -v OFS="\t" '{ print cancer, "gatk-hc", $2, $1 }'
-done < cancers.list
+done < cancers.list \
+> cromshell/progress/gatk_hc.sample_progress.summary.tsv
+cat cromshell/progress/gatk_hc.sample_progress.summary.tsv
 
 # Clean up garbage
-gsutil -m cp \
-  uris_to_delete.list \
-  $WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$( date '+%m_%d_%Y.%Hh%Mm%Ss' ).garbage
-rm uris_to_delete.list
-# TODO: submit cromwell job that deletes these files using a high-thread / low-mem cloud instance
 
 # TODO: reblock & reheader gVCFs
 
@@ -140,7 +141,7 @@ while read cancer; do
               cromshell/progress/$cancer.gatk_sv.sample_progress.tsv )
     if [ -z $status ] || [ $status == "not_started" ] || \
        [ $status == "failed" ] || [ $status == "aborted" ] || \
-       [ $status == "staged" ]; then
+       [ $status == "unknown" ]; then
       # Format sample-specific input .json
       SID=$sid CRAM=$cram CRAI=$crai \
         envsubst < code/refs/json/aou.gatk_sv_module_01.inputs.template.json \
@@ -160,29 +161,35 @@ done < cancers.list
 
 # Check progress of each sample
 while read cancer; do
+  n=$( cat sample_lists/$cancer.samples.list | wc -l )
+  k=0
   while read sid cram crai; do
-
-    # TODO: update to new 
-
-    echo $sid
-    if ! [ -e cromshell/job_ids/$sid.gatk_sv.job_ids.list ]; then
-      echo "not_started"
-    else
-      status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
-                cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
-      if [ $status == "succeeded" ] || [ $status == "staged" ]; then
-        echo $status
-      else
-        jid=$( tail -n1 cromshell/job_ids/$sid.gatk_sv.job_ids.list )
-        cromshell-alpha status $jid 2>/dev/null \
-        | tail -n2 | jq .status | tr -d '"' | tr '[A-Z]' '[a-z]'
-      fi
-    fi
-  done < data/cram_paths/$cancer.cram_paths.tsv  | paste - - \
-  > cromshell/progress/$cancer.gatk_sv.sample_progress.tsv
+    ((k++))
+    echo -e "Checking $sid; sample $k of $n $cancer patients"
+    code/scripts/check_aou_gatk_status.py \
+      --sample-id "$sid" \
+      --mode gatk-sv \
+      --status-tsv cromshell/progress/$cancer.gatk_sv.sample_progress.tsv \
+      --update-status \
+      --unsafe
+  done < data/cram_paths/$cancer.cram_paths.tsv
+done < cancers.list
+while read cancer; do
   cut -f2 cromshell/progress/$cancer.gatk_sv.sample_progress.tsv \
-  | sort | uniq -c | sort -nrk1,1 | awk -v OFS="\t" '{ print $2, $1 }'
+  | sort | uniq -c | sort -nrk1,1 \
+  | awk -v cancer=$cancer -v OFS="\t" '{ print cancer, "gatk-sv", $2, $1 }'
 done < cancers.list
 
-# # Clean up finished samples
-# TODO: implement this
+# Clean up garbage
+dt_fmt=$( date '+%m_%d_%Y.%Hh%Mm%Ss' )
+garbage_uri="$WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$dt_fmt.garbage"
+gsutil -m cp uris_to_delete.list $garbage_uri
+rm uris_to_delete.list
+echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
+> cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+cromshell-alpha submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  code/wdl/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
+  cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
+| tail -n4 | jq .id | tr -d '"' \
+>> cromshell/job_ids/empty_dumpster.job_ids.list
