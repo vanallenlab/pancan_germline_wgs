@@ -11,15 +11,39 @@
 cleanup_garbage() {
   dt_fmt=$( date '+%m_%d_%Y.%Hh%Mm%Ss' )
   garbage_uri="$WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$dt_fmt.garbage"
-  gsutil -m cp uris_to_delete.list $garbage_uri
-  rm uris_to_delete.list
+  gsutil -m cp ~/uris_to_delete.list $garbage_uri
+  rm ~/uris_to_delete.list
   echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
-  > cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+  > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
   cromshell-alpha submit \
-    --options-json code/refs/json/aou.cromwell_options.default.json \
-    code/wdl/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
-    cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
+    --options-json ~/code/refs/json/aou.cromwell_options.default.json \
+    ~/code/wdl/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
+    ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
   | tail -n4 | jq .id | tr -d '"' \
-  >> cromshell/job_ids/empty_dumpster.job_ids.list
+  >> ~/cromshell/job_ids/empty_dumpster.job_ids.list
 }
 
+# Update status table of sample progress
+update_status() {
+  if [ $# -ne 1 ]; then
+    echo "Must specify gatk-hc, gatk-sv, or gvcf-pp as only positional argument"
+  else
+    wflow=$1
+  fi
+  while read cancer; do
+    awk -v cancer=$cancer -v wflow=$wflow \
+      '{ if ($1!=cancer || $2!=wflow) print $0 }' \
+      ~/cromshell/progress/gatk.sample_progress.summary.tsv \
+    > ~/cromshell/progress/gatk.sample_progress.summary.tsv2
+    cut -f2 \
+      ~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv \
+    | sort | uniq -c | sort -nrk1,1 \
+    | awk -v cancer=$cancer -v wflow=$wflow -v OFS="\t" \
+      '{ print cancer, wflow, $2, $1 }' \
+    >> ~/cromshell/progress/gatk.sample_progress.summary.tsv2
+    mv \
+      ~/cromshell/progress/gatk.sample_progress.summary.tsv2 \
+      ~/cromshell/progress/gatk.sample_progress.summary.tsv
+  done < ~/cancers.list
+  sort -Vk1,3 ~/cromshell/progress/gatk.sample_progress.summary.tsv
+}

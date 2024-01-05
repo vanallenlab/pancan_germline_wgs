@@ -57,8 +57,6 @@ while read cancer; do
   > data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
 
-# B
-
 
 ###########
 # GATK-HC #
@@ -107,15 +105,12 @@ while read cancer; do
       --unsafe
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
-while read cancer; do
-  cut -f2 cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-  | sort | uniq -c | sort -nrk1,1 \
-  | awk -v cancer=$cancer -v OFS="\t" '{ print cancer, "gatk-hc", $2, $1 }'
-done < cancers.list \
-> cromshell/progress/gatk_hc.sample_progress.summary.tsv
-cat cromshell/progress/gatk_hc.sample_progress.summary.tsv
 
-# Clean up garbage
+# Print table of sample progress (function defined in function defined in code/refs/aou_bash_utils.sh)
+update_status gatk-hc
+
+# Clean up garbage (function defined in code/refs/aou_bash_utils.sh)
+cleanup_garbage
 
 # TODO: reblock & reheader gVCFs
 
@@ -159,7 +154,7 @@ while read cancer; do
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
 
-# Check progress of each sample
+# Check progress of each sample and stage completed samples
 while read cancer; do
   n=$( cat sample_lists/$cancer.samples.list | wc -l )
   k=0
@@ -174,22 +169,10 @@ while read cancer; do
       --unsafe
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
-while read cancer; do
-  cut -f2 cromshell/progress/$cancer.gatk_sv.sample_progress.tsv \
-  | sort | uniq -c | sort -nrk1,1 \
-  | awk -v cancer=$cancer -v OFS="\t" '{ print cancer, "gatk-sv", $2, $1 }'
-done < cancers.list
 
-# Clean up garbage
-dt_fmt=$( date '+%m_%d_%Y.%Hh%Mm%Ss' )
-garbage_uri="$WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$dt_fmt.garbage"
-gsutil -m cp uris_to_delete.list $garbage_uri
-rm uris_to_delete.list
-echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
-> cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
-cromshell-alpha submit \
-  --options-json code/refs/json/aou.cromwell_options.default.json \
-  code/wdl/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
-  cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
-| tail -n4 | jq .id | tr -d '"' \
->> cromshell/job_ids/empty_dumpster.job_ids.list
+# Print table of sample progress (function defined in function defined in code/refs/aou_bash_utils.sh)
+update_status gatk-sv
+
+# Clean up garbage (function defined in code/refs/aou_bash_utils.sh)
+cleanup_garbage
+
