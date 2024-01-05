@@ -1,4 +1,4 @@
-library(dplyr)
+library(dplyr, quietly = TRUE)
 
 estimate_chromosomes_processing <- function(file_path) {
   # Create an R data frame with chromosome numbers and lengths
@@ -12,7 +12,7 @@ estimate_chromosomes_processing <- function(file_path) {
   )
   
   # Read the TSV file into a data frame
-  df <- read.table(file_path, header = FALSE, sep = "\t", col.names = c("Chromosome", "V2", "V3", "V4", "V5", "V6","V7"), fill = TRUE)
+  df <- read.table(file_path, header = FALSE, sep = "\t", col.names = c("Chromosome", "V2", "V3", "V4","V5","V6","V7"), fill = TRUE)
   
   # Keep only the first four columns
   df <- df[, 1:4]
@@ -43,10 +43,10 @@ estimate_chromosomes <- function(df) {
   autosomal_cov <- df$norm_read_cov[!df$Chromosome %in% c("chrX", "chrY")]
   chrX_cov <- df$norm_read_cov[df$Chromosome == "chrX"]
   chrY_cov <- df$norm_read_cov[df$Chromosome == "chrY"]
-  
+
   # Calculate mean of autosomal counts
   autosomal_mean <- mean(autosomal_cov)
-  
+  cat(chrX_cov,chrY_cov)
   # Define values to compare proximity
   zero_value <- 0
   one_copy_value <- autosomal_mean / 2
@@ -72,3 +72,4 @@ file_path <- commandArgs(trailingOnly = TRUE)[1]
 result_df <- estimate_chromosomes_processing(file_path)
 result <- estimate_chromosomes(result_df)
 cat(result)
+
