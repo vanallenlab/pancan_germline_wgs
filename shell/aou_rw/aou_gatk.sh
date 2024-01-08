@@ -18,6 +18,7 @@
 export GPROJECT="vanallen-pancan-germline-wgs"
 export BOTO_CONFIG=~/code/refs/dotfiles/dfci-g2c.aou-rw.boto.cfg
 export BOTO_PATH=~/code/refs/dotfiles/
+export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
 for dir in data data/cram_paths cromshell cromshell/inputs cromshell/job_ids \
@@ -26,15 +27,15 @@ for dir in data data/cram_paths cromshell cromshell/inputs cromshell/job_ids \
 done
 
 # Copy necessary code to local disk
-gsutil -m cp -r $WORKSPACE_BUCKET/code ./
+gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
 # Source .bashrc and bash utility functions
-. code/refs/dotfiles/aou.rw.bashrc
+. ~/code/refs/dotfiles/aou.rw.bashrc
 . code/refs/aou_bash_utils.sh
 
 # Copy sample info to local disk
-gsutil -m cp -r $WORKSPACE_BUCKET/data/sample_info/sample_lists ./
+gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/data/sample_info/sample_lists ./
 
 # Copy manifest of CRAM/CRAI paths
 gsutil -u $GPROJECT -m cp \
@@ -48,6 +49,7 @@ esophagus
 stomach
 lung
 liver
+colorectal
 EOF
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
@@ -75,12 +77,20 @@ while read cancer; do
        [ $status == "failed" ] || [ $status == "aborted" ] || \
        [ $status == "unknown" ]; then
       # Format sample-specific input .json
-      CRAM=$cram CRAI=$crai \
-        envsubst < code/refs/json/aou.gatk_hc.inputs.template.json \
-      | sed 's/\t//g' | paste -s -d\ \
+      sed -e "s/\$CRAM/$cram/g" -e "s/\$CRAI/$crai/g" -e 's/\t//g' \
+        code/refs/json/aou.gatk_hc.inputs.template.json \
+      | paste -s -d\ \
       > cromshell/inputs/$sid.gatkhc.inputs.json
+#       CRAM=$cram CRAI=$crai \
+#         envsubst < code/refs/json/aou.gatk_hc.inputs.template.json \
+      
+
+#       eval "cat << EOF
+#               $(<code/refs/json/aou.gatk_hc.inputs.template.json)
+# EOF" \
+#       | sed 's/\t//g' 
       # Submit job and add job ID to list of jobs for this sample
-      cromshell-alpha submit \
+      cromshell --no_turtle -t 120 -mc submit \
         --options-json code/refs/json/aou.cromwell_options.default.json \
         code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl \
         cromshell/inputs/$sid.gatkhc.inputs.json \
@@ -133,7 +143,7 @@ while read cancer; do
       | sed 's/\t//g' | paste -s -d\ \
       > cromshell/inputs/$sid.gatksv.inputs.json
       # Submit job and add job ID to list of jobs for this sample
-      cromshell-alpha submit \
+      cromshell --no_turtle -t 120 -mc submit \
         --options-json code/refs/json/aou.cromwell_options.default.json \
         --dependencies-zip gatksv.dependencies.zip \
         code/wdl/gatk-sv/GatherSampleEvidence.wdl \

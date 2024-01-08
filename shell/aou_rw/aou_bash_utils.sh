@@ -63,9 +63,9 @@ cleanup_garbage() {
   rm ~/uris_to_delete.list
   echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
   > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
-  cromshell-alpha submit \
+  cromshell --no_turtle -t 120 -mc submit \
     --options-json ~/code/refs/json/aou.cromwell_options.default.json \
-    ~/code/wdl/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
+    ~/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
     ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
   | tail -n4 | jq .id | tr -d '"' \
   >> ~/cromshell/job_ids/empty_dumpster.job_ids.list

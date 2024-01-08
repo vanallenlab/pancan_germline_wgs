@@ -188,7 +188,7 @@ def check_workflow_status(workflow_id, max_retries=20):
     crom_query_res = ''
     attempts = 0
     while 'status' not in crom_query_res and attempts < 20:
-        crom_query = 'crom-alpha status ' + workflow_id
+        crom_query = 'cromshell --no_turtle -t 120 -mc status ' + workflow_id
         crom_query_res = subprocess.run(crom_query, capture_output=True, 
                                         shell=True, check=False, text=True).stdout
         attempts += 1

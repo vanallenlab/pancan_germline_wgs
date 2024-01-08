@@ -1,5 +1,7 @@
+#!/usr/bin/env bash
+
 # .bash_profile for AoU RW
-# Updated December 2023
+# Updated January 2024
 # Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 
 # Colorize shell and utilities
@@ -16,6 +18,3 @@ alias 'less=zless'
 alias 'grep=grep --color=auto'
 alias 'egrep=egrep --color=auto'
 alias 'fgrep=fgrep --color=auto'
-
-# Always default to using cromshell-alpha
-alias 'cromshell=cromshell-alpha'
