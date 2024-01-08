@@ -92,7 +92,6 @@ def check_if_staged(bucket, sid, mode):
         uri = formats[mode]['dest'].format(bucket, sid)
         tbi_uri = uri + '.tbi'
         uris = [uri, tbi_uri]
-        return uri in uris_found and tbi_uri in uris_found
 
     elif mode == 'gatk-sv':
         uris = []

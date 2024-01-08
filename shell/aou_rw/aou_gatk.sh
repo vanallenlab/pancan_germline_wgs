@@ -91,25 +91,15 @@ while read cancer; do
 done < cancers.list
 
 # Check progress of each sample and stage completed samples
-while read cancer; do
-  n=$( cat sample_lists/$cancer.samples.list | wc -l )
-  k=0
-  while read sid cram crai; do
-    ((k++))
-    echo -e "Checking $sid; sample $k of $n $cancer patients"
-    code/scripts/check_aou_gatk_status.py \
-      --sample-id "$sid" \
-      --mode gatk-hc \
-      --status-tsv cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-      --update-status \
-      --unsafe
-  done < data/cram_paths/$cancer.cram_paths.tsv
-done < cancers.list
+# (Function defined in function defined in code/refs/aou_bash_utils.sh)
+check_status gatk-hc
 
-# Print table of sample progress (function defined in function defined in code/refs/aou_bash_utils.sh)
-update_status gatk-hc
+# Print table of sample progress
+# (Function defined in function defined in code/refs/aou_bash_utils.sh)
+update_status_table gatk-hc
 
-# Clean up garbage (function defined in code/refs/aou_bash_utils.sh)
+# Clean up garbage
+# (Function defined in code/refs/aou_bash_utils.sh)
 cleanup_garbage
 
 # TODO: reblock & reheader gVCFs
@@ -155,24 +145,14 @@ while read cancer; do
 done < cancers.list
 
 # Check progress of each sample and stage completed samples
-while read cancer; do
-  n=$( cat sample_lists/$cancer.samples.list | wc -l )
-  k=0
-  while read sid cram crai; do
-    ((k++))
-    echo -e "Checking $sid; sample $k of $n $cancer patients"
-    code/scripts/check_aou_gatk_status.py \
-      --sample-id "$sid" \
-      --mode gatk-sv \
-      --status-tsv cromshell/progress/$cancer.gatk_sv.sample_progress.tsv \
-      --update-status \
-      --unsafe
-  done < data/cram_paths/$cancer.cram_paths.tsv
-done < cancers.list
+# (Function defined in function defined in code/refs/aou_bash_utils.sh)
+check_status gatk-sv
 
-# Print table of sample progress (function defined in function defined in code/refs/aou_bash_utils.sh)
-update_status gatk-sv
+# Print table of sample progress
+# (Function defined in function defined in code/refs/aou_bash_utils.sh)
+update_status_table gatk-sv
 
-# Clean up garbage (function defined in code/refs/aou_bash_utils.sh)
+# Clean up garbage
+# (Function defined in code/refs/aou_bash_utils.sh)
 cleanup_garbage
 
