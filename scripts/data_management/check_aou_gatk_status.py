@@ -180,30 +180,32 @@ def find_complete_wids(workflow_ids, bucket, sid, mode):
         import pdb; pdb.set_trace()
 
 
-def check_workflow_status(workflow_id, max_retries=20):
+def check_workflow_status(workflow_id, max_retries=20, timeout=5):
     """
     Ping Cromwell server to check status of a single workflow
     """
 
     crom_query_res = ''
     attempts = 0
-    while 'status' not in crom_query_res and attempts < 20:
-        crom_query = 'cromshell --no_turtle -t 120 -mc status ' + workflow_id
+    while attempts < max_retries:
+        crom_query = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc status ' + workflow_id
         crom_query_res = subprocess.run(crom_query, capture_output=True, 
                                         shell=True, check=False, text=True).stdout
-        attempts += 1
+        res_splits = [sub('[,"]', '', s.split('":"')[1]) 
+                      for s in crom_query_res.split('\n') 
+                      if 'status' in s]
+        if len(res_splits) > 0:
+            return res_splits[0].lower()
+        else:
+            attempts += 1
     
-    if attempts == 20:
+    if attempts == max_retries:
         msg = 'Failed to get workflow status for {} after {} retries\n'
         stderr.write(msg.format(workflow_id, attempts))
-        return 'unknown'
-    else:
-        return [sub('[,"]', '', s.split('":"')[1]) 
-                for s in crom_query_res.stdout.split('\n') 
-                if 'status' in s][0].lower()
+        return 'unknown'        
 
 
-def relocate_outputs(workflow_id, bucket, sid, mode, action='cp'):
+def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'):
     """
     Relocate final output files for a sample to permanent storage location
     """
@@ -213,7 +215,7 @@ def relocate_outputs(workflow_id, bucket, sid, mode, action='cp'):
     if mode == 'gatk-hc':
         # Relocate gVCF
         src_gvcf = formats[mode]['gvcf'].format(bucket, workflow_id, sid, 'vcf.gz')
-        dest_gvcf = formats[mode]['dest'].format(bucket, sid)
+        dest_gvcf = formats[mode]['dest'].format(staging_bucket, sid)
         stdout.write(msg.format(src_gvcf, dest_gvcf))
         subprocess.run(' '.join(['gsutil -m', action, src_gvcf, dest_gvcf]), shell=True)
 
@@ -226,7 +228,7 @@ def relocate_outputs(workflow_id, bucket, sid, mode, action='cp'):
     elif mode == 'gatk-sv':
         for key, has_index in sv_has_index.items():
             src_uri = formats[mode][key]['src'].format(bucket, workflow_id, sid)
-            dest_uri = formats[mode][key]['dest'].format(bucket, sid)
+            dest_uri = formats[mode][key]['dest'].format(staging_bucket, sid)
             stdout.write(msg.format(src_uri, dest_uri))
             subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
             if has_index:
@@ -268,6 +270,8 @@ def main():
                         choices='gatk-hc gatk-sv gvcf-pp'.split())
     parser.add_argument('-b', '--bucket', help='Root bucket [defaut: use ' +
                         '$WORKSPACE_BUCKET environment variable]')
+    parser.add_argument('-o', '--staging-bucket', help='G2C output staging ' + 
+                        'bucket [defaut: same value as --bucket]')
     parser.add_argument('-t', '--status-tsv', help='Two-column .tsv of sample ' +
                         'ID and last known sample status')
     parser.add_argument('-u', '--update-status', default=False, action='store_true',
@@ -291,6 +295,10 @@ def main():
         bucket = getenv('WORKSPACE_BUCKET')
     if bucket is None:
         exit('Must provide a valid value for --bucket. See --help for more information.')
+    if args.staging_bucket is not None:
+        staging_bucket = args.staging_bucket
+    else:
+        staging_bucket = bucket
 
     # Default status is always "not_started"
     sid = args.sample_id
@@ -316,7 +324,7 @@ def main():
         # If so, nothing more needs to be done
         if status == 'staged':
             break
-        if check_if_staged(bucket, sid, args.mode):
+        if check_if_staged(staging_bucket, sid, args.mode):
             status = 'staged'
             break
 
@@ -356,7 +364,7 @@ def main():
             # If job was successful but files have not been staged yet, relocate 
             # files to output bucket and mark all temporary files for deletion
             if workflow_status == 'succeeded':
-                relocate_outputs(wid, bucket, sid, args.mode)
+                relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
                 collect_trash(wids, bucket, args.dumpster, args.mode)
                 status = 'staged'
                 break

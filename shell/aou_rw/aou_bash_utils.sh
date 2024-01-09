@@ -7,33 +7,34 @@
 
 # Helper bash functions for All of Us Researcher Workbench
 
-# Check sample status for a single workflow (gatk-hc, gatk-sv, or gcnv-pp)
+# Check sample status for one cancer type and a single workflow (gatk-hc, gatk-sv, or gcnv-pp)
 check_status() {
-  if [ $# -ne 1 ]; then
-    echo "Must specify gatk-hc, gatk-sv, or gvcf-pp as only positional argument"
+  if [ $# -ne 2 ]; then
+    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) and cancer type as first two positional arguments"
   else
     wflow=$1
+    cancer=$2
   fi
-  while read cancer; do
-    n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
-    k=0
-    while read sid cram crai; do
-      ((k++))
-      echo -e "Checking $sid; sample $k of $n $cancer patients"
-      ~/code/scripts/check_aou_gatk_status.py \
-        --sample-id "$sid" \
-        --mode gatk-hc \
-        --status-tsv ~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv \
-        --update-status \
-        --unsafe
-    done < ~/data/cram_paths/$cancer.cram_paths.tsv
-  done < ~/cancers.list
+  n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
+  k=0
+  while read sid cram crai; do
+    ((k++))
+    echo -e "Checking $sid; sample $k of $n $cancer patients"
+    ~/code/scripts/check_aou_gatk_status.py \
+      --sample-id "$sid" \
+      --mode gatk-hc \
+      --bucket $WORKSPACE_BUCKET \
+      --staging-bucket $MAIN_WORKSPACE_BUCKET \
+      --status-tsv ~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv \
+      --update-status \
+      --unsafe
+  done < ~/data/cram_paths/$cancer.cram_paths.tsv
 }
 
 # Update status table of sample progress
 update_status_table() {
   if [ $# -ne 1 ]; then
-    echo "Must specify gatk-hc, gatk-sv, or gvcf-pp as only positional argument"
+    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) as first positional argument"
   else
     wflow=$1
   fi
@@ -67,6 +68,6 @@ cleanup_garbage() {
     --options-json ~/code/refs/json/aou.cromwell_options.default.json \
     ~/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
     ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
-  | tail -n4 | jq .id | tr -d '"' \
+  | jq .id | tr -d '"' \
   >> ~/cromshell/job_ids/empty_dumpster.job_ids.list
 }

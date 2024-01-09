@@ -50,7 +50,14 @@ stomach
 lung
 liver
 colorectal
+kidney
+melanoma
 EOF
+# Note: as of 1/8/24, single-sample processing for cancers were divided among 
+# multiple workspaces as follows:
+# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney
+# Second workspace: colorectal
+# Third workspace: melanoma
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
 while read cancer; do
@@ -69,7 +76,7 @@ while read cancer; do
   if ! [ -e cromshell/progress/$cancer.gatk_hc.sample_progress.tsv ]; then
     touch cromshell/progress/$cancer.gatk_hc.sample_progress.tsv
   fi
-  while read sid cram crai; do
+  while read sid CRAM CRAI; do
     # Check if sample has not been launched or has failed/aborted
     status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
               cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
@@ -77,24 +84,18 @@ while read cancer; do
        [ $status == "failed" ] || [ $status == "aborted" ] || \
        [ $status == "unknown" ]; then
       # Format sample-specific input .json
-      sed -e "s/\$CRAM/$cram/g" -e "s/\$CRAI/$crai/g" -e 's/\t//g' \
-        code/refs/json/aou.gatk_hc.inputs.template.json \
-      | paste -s -d\ \
-      > cromshell/inputs/$sid.gatkhc.inputs.json
-#       CRAM=$cram CRAI=$crai \
-#         envsubst < code/refs/json/aou.gatk_hc.inputs.template.json \
-      
+      echo -e "Submitting GATK-HC for $sid ($cancer cancer)"
 
-#       eval "cat << EOF
-#               $(<code/refs/json/aou.gatk_hc.inputs.template.json)
-# EOF" \
-#       | sed 's/\t//g' 
+      eval "cat << EOF
+              $(<code/refs/json/aou.gatk_hc.inputs.template.json)
+EOF"  | sed 's/\t//g' | paste -s -d\ \
+      > cromshell/inputs/$sid.gatkhc.inputs.json
       # Submit job and add job ID to list of jobs for this sample
       cromshell --no_turtle -t 120 -mc submit \
         --options-json code/refs/json/aou.cromwell_options.default.json \
         code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl \
         cromshell/inputs/$sid.gatkhc.inputs.json \
-      | tail -n4 | jq .id | tr -d '"' \
+      | jq .id | tr -d '"' \
       >> cromshell/job_ids/$sid.gatk_hc.job_ids.list
     fi
   done < data/cram_paths/$cancer.cram_paths.tsv
@@ -102,7 +103,9 @@ done < cancers.list
 
 # Check progress of each sample and stage completed samples
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
-check_status gatk-hc
+while read cancer; do
+  check_status gatk-hc $cancer
+done < cancers.list
 
 # Print table of sample progress
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
@@ -125,12 +128,12 @@ zip gatksv.dependencies.zip *.wdl && \
 mv gatksv.dependencies.zip ~/ && \
 cd ~
 
-# Launch one GATK-SV workflow for each sample
+# Launch one GATK-HC workflow for each sample
 while read cancer; do
   if ! [ -e cromshell/progress/$cancer.gatk_sv.sample_progress.tsv ]; then
     touch cromshell/progress/$cancer.gatk_sv.sample_progress.tsv
   fi
-  while read sid cram crai; do
+  while read sid CRAM CRAI; do
     # Check if sample has not been launched or has failed/aborted
     status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
               cromshell/progress/$cancer.gatk_sv.sample_progress.tsv )
@@ -138,9 +141,11 @@ while read cancer; do
        [ $status == "failed" ] || [ $status == "aborted" ] || \
        [ $status == "unknown" ]; then
       # Format sample-specific input .json
-      SID=$sid CRAM=$cram CRAI=$crai \
-        envsubst < code/refs/json/aou.gatk_sv_module_01.inputs.template.json \
-      | sed 's/\t//g' | paste -s -d\ \
+      echo -e "Submitting GATK-SV for $sid ($cancer cancer)"
+
+      eval "cat << EOF
+              $(<code/refs/json/aou.gatk_sv.inputs.template.json)
+EOF"  | sed 's/\t//g' | paste -s -d\ \
       > cromshell/inputs/$sid.gatksv.inputs.json
       # Submit job and add job ID to list of jobs for this sample
       cromshell --no_turtle -t 120 -mc submit \
@@ -156,11 +161,13 @@ done < cancers.list
 
 # Check progress of each sample and stage completed samples
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
-check_status gatk-sv
+while read cancer; do
+  check_status gatk-sv $cancer
+done < cancers.list
 
 # Print table of sample progress
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
-update_status_table gatk-sv
+update_status_table gatk-sv $cancer
 
 # Clean up garbage
 # (Function defined in code/refs/aou_bash_utils.sh)

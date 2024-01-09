@@ -71,8 +71,6 @@ task DeleteObjects {
   Int disk_gb = 10 + ceil(2 * size(uri_list, "GB"))
 
   command <<<
-    set -eu -o pipefail
-
     cat ~{uri_list} \
     | gsutil \
         -m \
