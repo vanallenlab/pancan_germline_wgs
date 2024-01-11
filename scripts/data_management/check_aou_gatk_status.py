@@ -287,6 +287,9 @@ def main():
     parser.add_argument('--unsafe', default=False, action='store_true',
                         help='Don\'t bother checking Cromwell workflow status ' +
                         'if expected outputs are found. Not recommended.')
+    parser.add_argument('--always-print-status-to-stdout', default=False, 
+                        action='store_true', help='Always print sample status ' +
+                        'to stdout even if --update-status is specified')
     args = parser.parse_args()
 
     # Check to make sure --bucket is set
@@ -387,7 +390,8 @@ def main():
             status_tsv.loc[status_tsv.shape[0], :] = [sid, status]
         status_tsv.to_csv(args.status_tsv, sep='\t', na_rep='NA', 
                           header=False, index=False)
-    else:
+    if args.always_print_status_to_stdout \
+    or not (args.update_status and status_tsv is not None):
         stdout.write('{}\t{}\n'.format(sid, status))
 
 

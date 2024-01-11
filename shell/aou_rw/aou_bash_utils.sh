@@ -15,20 +15,24 @@ check_status() {
     wflow=$1
     cancer=$2
   fi
-  n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
-  k=0
-  while read sid cram crai; do
-    ((k++))
-    echo -e "Checking $sid; sample $k of $n $cancer patients"
-    ~/code/scripts/check_aou_gatk_status.py \
-      --sample-id "$sid" \
-      --mode gatk-hc \
-      --bucket $WORKSPACE_BUCKET \
-      --staging-bucket $MAIN_WORKSPACE_BUCKET \
-      --status-tsv ~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv \
-      --update-status \
-      --unsafe
-  done < ~/data/cram_paths/$cancer.cram_paths.tsv
+  status_tsv=~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv
+  if [ -e $status_tsv ]; then
+    n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
+    k=0
+    while read sid cram crai; do
+      ((k++))
+      echo -e "Checking $sid; sample $k of $n $cancer patients"
+      ~/code/scripts/check_aou_gatk_status.py \
+        --sample-id "$sid" \
+        --mode $wflow \
+        --bucket $WORKSPACE_BUCKET \
+        --staging-bucket $MAIN_WORKSPACE_BUCKET \
+        --status-tsv $status_tsv \
+        --update-status \
+        --unsafe \
+        --always-print-status-to-stdout
+    done < ~/data/cram_paths/$cancer.cram_paths.tsv
+  fi
 }
 
 # Update status table of sample progress

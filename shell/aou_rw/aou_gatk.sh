@@ -52,12 +52,15 @@ liver
 colorectal
 kidney
 melanoma
+prostate
+ovary
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
-# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney
+# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary
 # Second workspace: colorectal
 # Third workspace: melanoma
+# Fourth workspace: prostate
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
 while read cancer; do
@@ -128,7 +131,7 @@ zip gatksv.dependencies.zip *.wdl && \
 mv gatksv.dependencies.zip ~/ && \
 cd ~
 
-# Launch one GATK-HC workflow for each sample
+# Launch one GATK-SV workflow for each sample
 while read cancer; do
   if ! [ -e cromshell/progress/$cancer.gatk_sv.sample_progress.tsv ]; then
     touch cromshell/progress/$cancer.gatk_sv.sample_progress.tsv
@@ -144,7 +147,7 @@ while read cancer; do
       echo -e "Submitting GATK-SV for $sid ($cancer cancer)"
 
       eval "cat << EOF
-              $(<code/refs/json/aou.gatk_sv.inputs.template.json)
+              $(<code/refs/json/aou.gatk_sv_module_01.inputs.template.json)
 EOF"  | sed 's/\t//g' | paste -s -d\ \
       > cromshell/inputs/$sid.gatksv.inputs.json
       # Submit job and add job ID to list of jobs for this sample
@@ -167,7 +170,7 @@ done < cancers.list
 
 # Print table of sample progress
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
-update_status_table gatk-sv $cancer
+update_status_table gatk-sv
 
 # Clean up garbage
 # (Function defined in code/refs/aou_bash_utils.sh)
