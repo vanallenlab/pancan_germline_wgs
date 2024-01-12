@@ -9,7 +9,7 @@
 
 import argparse
 
-def process_data(input_file, output_file, ancestry, ancestry_ID, chrX_count, chrY_count):
+def process_data(input_file, ancestry, ancestry_ID, chrX_count, chrY_count):
     # Read the file line by line
     with open(input_file, 'r') as file:
         lines = file.readlines()
@@ -52,14 +52,11 @@ def process_data(input_file, output_file, ancestry, ancestry_ID, chrX_count, chr
         f"{output_data['chrY_count']}\t{output_data['ancestry']}\t{output_data['ancestry_ID']}\n"
     )
 
-    # Save output to TSV
-    with open(output_file, 'w') as output_file:
-        output_file.write(output_csv)
+    print(output_csv)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process input data and create output TSV.')
     parser.add_argument('--file', type=str, help='Input file path', required=True)
-    parser.add_argument('--output_file', type=str, help='Input file path', required=True)
     parser.add_argument('--ancestry', type=str, help='Column name for Ancestry', required=True)
     parser.add_argument('--ancestryID', type=int, help='Column name for Ancestry ID', required=True)
     parser.add_argument('--chrX_count', type=int, help='Column name for chrX count', required=True)
@@ -67,4 +64,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    process_data(args.file, args.output_file, args.ancestry, args.ancestryID, args.chrX_count, args.chrY_count)
+    process_data(args.file, args.ancestry, args.ancestryID, args.chrX_count, args.chrY_count)
