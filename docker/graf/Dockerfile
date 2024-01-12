@@ -2,7 +2,7 @@
 # Contact: Ryan Collins <Noah_Fields@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Simple Dockerfile for basic image with fastq-pair installed
+# Simple Dockerfile for vanallenlab/g2c_pipeline:nf_graf_plink_alpha
 
 #FROM ubuntu:22.04
 #FROM ubuntu:focal-20220531
@@ -53,6 +53,7 @@ RUN rm GrafPop1.0.tar.gz
 
 COPY infer_ancestry.py /opt/
 RUN chmod a+x /opt/infer_ancestry.py
+RUN chmod a+x /opt/organize_results.py
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
