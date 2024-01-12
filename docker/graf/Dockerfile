@@ -53,7 +53,6 @@ RUN rm GrafPop1.0.tar.gz
 
 COPY infer_ancestry.py /opt/
 RUN chmod a+x /opt/infer_ancestry.py
-RUN chmod a+x /opt/organize_results.py
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
