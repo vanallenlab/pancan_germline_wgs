@@ -46,7 +46,7 @@ estimate_chromosomes <- function(df) {
 
   # Calculate mean of autosomal counts
   autosomal_mean <- mean(autosomal_cov)
-  cat(chrX_cov,chrY_cov)
+  #cat(chrX_cov,chrY_cov)
   # Define values to compare proximity
   zero_value <- 0
   one_copy_value <- autosomal_mean / 2
