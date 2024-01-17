@@ -205,7 +205,8 @@ def check_workflow_status(workflow_id, max_retries=20, timeout=5):
         return 'unknown'        
 
 
-def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'):
+def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp',
+                     verbose=False):
     """
     Relocate final output files for a sample to permanent storage location
     """
@@ -216,20 +217,23 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'
         # Relocate gVCF
         src_gvcf = formats[mode]['gvcf'].format(bucket, workflow_id, sid, 'vcf.gz')
         dest_gvcf = formats[mode]['dest'].format(staging_bucket, sid)
-        stdout.write(msg.format(src_gvcf, dest_gvcf))
+        if verbose:
+            stdout.write(msg.format(src_gvcf, dest_gvcf))
         subprocess.run(' '.join(['gsutil -m', action, src_gvcf, dest_gvcf]), shell=True)
 
         # Relocate tabix index
         src_tbi = src_gvcf + '.tbi'
         dest_tbi = dest_gvcf + '.tbi'
-        stdout.write(msg.format(src_tbi, dest_tbi))
+        if verbose:
+            stdout.write(msg.format(src_tbi, dest_tbi))
         subprocess.run(' '.join(['gsutil -m', action, src_tbi, dest_tbi]), shell=True)
 
     elif mode == 'gatk-sv':
         for key, has_index in sv_has_index.items():
             src_uri = formats[mode][key]['src'].format(bucket, workflow_id, sid)
             dest_uri = formats[mode][key]['dest'].format(staging_bucket, sid)
-            stdout.write(msg.format(src_uri, dest_uri))
+            if verbose:
+                stdout.write(msg.format(src_uri, dest_uri))
             subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
             if has_index:
                 subprocess.run(' '.join(['gsutil -m', action, src_uri + '.tbi', 
@@ -248,7 +252,10 @@ def collect_trash(workflow_ids, bucket, dumpster_path, mode):
     # Find list of all files present in execution buckets
     ex_fmt = '{}/cromwell/execution/{}/{}/**'
     ex_uris = [ex_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
-    garbage_raw = subprocess.run('gsutil -m ls ' + ' '.join(ex_uris), 
+    out_fmt = '{}/cromwell/outputs/{}/{}/**'
+    out_uris = [out_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
+    all_uris = ex_uris + out_uris
+    garbage_raw = subprocess.run('gsutil -m ls ' + ' '.join(all_uris), 
                                  check=False, capture_output=True, 
                                  shell=True, text=True).stdout
     with open(dumpster_path, 'a') as fout:

@@ -19,18 +19,23 @@ check_status() {
   if [ -e $status_tsv ]; then
     n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
     k=0
+    j=0
     while read sid cram crai; do
       ((k++))
-      echo -e "Checking $sid; sample $k of $n $cancer patients"
+      ((j++))
+      # Only print to stdout every 25 samples to limit terminal verbosity
+      if [ $j -eq 25 ]; then
+        echo -e "Checking $sid; sample $k of $n $cancer patients"
+        j=0
+      fi
       ~/code/scripts/check_aou_gatk_status.py \
         --sample-id "$sid" \
         --mode $wflow \
-        --bucket $WORKSPACE_BUCKET \
-        --staging-bucket $MAIN_WORKSPACE_BUCKET \
+        --bucket $MAIN_WORKSPACE_BUCKET \
         --status-tsv $status_tsv \
         --update-status \
         --unsafe \
-        --always-print-status-to-stdout
+      2> /dev/null
     done < ~/data/cram_paths/$cancer.cram_paths.tsv
   fi
 }
@@ -64,14 +69,16 @@ update_status_table() {
 cleanup_garbage() {
   dt_fmt=$( date '+%m_%d_%Y.%Hh%Mm%Ss' )
   garbage_uri="$WORKSPACE_BUCKET/dumpster/dfci_g2c.aou_rw.$dt_fmt.garbage"
-  gsutil -m cp ~/uris_to_delete.list $garbage_uri
-  rm ~/uris_to_delete.list
-  echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
-  > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
-  cromshell --no_turtle -t 120 -mc submit \
-    --options-json ~/code/refs/json/aou.cromwell_options.default.json \
-    ~/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
-    ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
-  | jq .id | tr -d '"' \
-  >> ~/cromshell/job_ids/empty_dumpster.job_ids.list
+  if [ -e ~/uris_to_delete.list ]; then
+    gsutil -m cp ~/uris_to_delete.list $garbage_uri
+    rm ~/uris_to_delete.list
+    echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
+    > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+    cromshell --no_turtle -t 120 -mc submit \
+      --options-json ~/code/refs/json/aou.cromwell_options.default.json \
+      ~/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
+      ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json \
+    | jq .id | tr -d '"' \
+    >> ~/cromshell/job_ids/empty_dumpster.job_ids.list
+  fi
 }

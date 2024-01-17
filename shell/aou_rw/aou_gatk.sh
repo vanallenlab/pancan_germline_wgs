@@ -75,24 +75,28 @@ done < cancers.list
 ###########
 
 # Launch one GATK-HC workflow for each sample
+# touch cromshell/progress/$cancer.gatk_hc.sample_progress.tsv
 while read cancer; do
   if ! [ -e cromshell/progress/$cancer.gatk_hc.sample_progress.tsv ]; then
-    touch cromshell/progress/$cancer.gatk_hc.sample_progress.tsv
+    continue
   fi
+  k=0; j=0; s=0
+  n=$( cat data/cram_paths/$cancer.cram_paths.tsv | wc -l )
   while read sid CRAM CRAI; do
+    ((k++)); ((j++))
     # Check if sample has not been launched or has failed/aborted
     status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
               cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
     if [ -z $status ] || [ $status == "not_started" ] || \
        [ $status == "failed" ] || [ $status == "aborted" ] || \
        [ $status == "unknown" ]; then
-      # Format sample-specific input .json
-      echo -e "Submitting GATK-HC for $sid ($cancer cancer)"
 
-      eval "cat << EOF
-              $(<code/refs/json/aou.gatk_hc.inputs.template.json)
-EOF"  | sed 's/\t//g' | paste -s -d\ \
-      > cromshell/inputs/$sid.gatkhc.inputs.json
+      # Format sample-specific input .json
+      ((s++))
+      ~/code/scripts/envsubst.py \
+        -i code/refs/json/aou.gatk_hc.inputs.template.json \
+        -o cromshell/inputs/$sid.gatkhc.inputs.json
+
       # Submit job and add job ID to list of jobs for this sample
       cromshell --no_turtle -t 120 -mc submit \
         --options-json code/refs/json/aou.cromwell_options.default.json \
@@ -101,24 +105,66 @@ EOF"  | sed 's/\t//g' | paste -s -d\ \
       | jq .id | tr -d '"' \
       >> cromshell/job_ids/$sid.gatk_hc.job_ids.list
     fi
+    if [ $j -eq 25 ]; then
+      echo -e "$k of $n $cancer samples evaluated; $s GATK-SV jobs submitted"
+      j=0
+    fi
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
 
 # Check progress of each sample and stage completed samples
+# Cleans up intermediate/temporary files after staging completed samples
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
 while read cancer; do
   check_status gatk-hc $cancer
+  cleanup_garbage
 done < cancers.list
 
 # Print table of sample progress
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
 update_status_table gatk-hc
 
-# Clean up garbage
-# (Function defined in code/refs/aou_bash_utils.sh)
-cleanup_garbage
 
-# TODO: reblock & reheader gVCFs
+# Reblock & reheader each GATK-gVCF
+while read cancer; do
+  if ! [ -e cromshell/progress/$cancer.gatk_hc.sample_progress.tsv ]; then
+    continue
+  fi
+  touch cromshell/progress/$cancer.gvcf_pp.sample_progress.tsv
+  k=0; j=0; s=0
+  n=$( cat data/cram_paths/$cancer.cram_paths.tsv | wc -l )
+  while read sid; do
+    ((k++)); ((j++))
+    # Check if sample has not been launched or has failed/aborted
+    status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
+              cromshell/progress/$cancer.gvcf_pp.sample_progress.tsv )
+    if [ -z $status ] || [ $status == "not_started" ] || \
+       [ $status == "failed" ] || [ $status == "aborted" ] || \
+       [ $status == "unknown" ]; then
+
+      # Format sample-specific input .json
+      ((s++))
+      ~/code/scripts/envsubst.py \
+        -i code/refs/json/aou.gvcf_pp.inputs.template.json \
+      | sed 's/\t//g' | paste -s -d\ \
+      > cromshell/inputs/$sid.gvcfpp.inputs.json
+
+      # Submit job and add job ID to list of jobs for this sample
+      cromshell --no_turtle -t 120 -mc submit \
+        --options-json code/refs/json/aou.cromwell_options.default.json \
+        code/wdl/pancan_germline_wgs/PostprocessGvcf.wdl \
+        cromshell/inputs/$sid.gvcfpp.inputs.json \
+      | jq .id | tr -d '"' \
+      >> cromshell/job_ids/$sid.gvcf_pp.job_ids.list
+    fi
+    if [ $j -eq 25 ]; then
+      echo -e "$k of $n $cancer samples evaluated; $s gVCF postprocessing jobs submitted"
+      j=0
+    fi
+  done < <( awk '{ if ($2=="staged") print $1 }' \
+            cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
+done < cancers.list
+
 
 
 ###########
@@ -132,20 +178,24 @@ mv gatksv.dependencies.zip ~/ && \
 cd ~
 
 # Launch one GATK-SV workflow for each sample
+# touch cromshell/progress/$cancer.gatk_sv.sample_progress.tsv
 while read cancer; do
   if ! [ -e cromshell/progress/$cancer.gatk_sv.sample_progress.tsv ]; then
-    touch cromshell/progress/$cancer.gatk_sv.sample_progress.tsv
+    continue
   fi
+  k=0; j=0; s=0
+  n=$( cat data/cram_paths/$cancer.cram_paths.tsv | wc -l )
   while read sid CRAM CRAI; do
+    ((k++)); ((j++))
     # Check if sample has not been launched or has failed/aborted
     status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
               cromshell/progress/$cancer.gatk_sv.sample_progress.tsv )
     if [ -z $status ] || [ $status == "not_started" ] || \
        [ $status == "failed" ] || [ $status == "aborted" ] || \
        [ $status == "unknown" ]; then
-      # Format sample-specific input .json
-      echo -e "Submitting GATK-SV for $sid ($cancer cancer)"
 
+      # Format sample-specific input .json
+      ((s++))
       eval "cat << EOF
               $(<code/refs/json/aou.gatk_sv_module_01.inputs.template.json)
 EOF"  | sed 's/\t//g' | paste -s -d\ \
@@ -159,20 +209,22 @@ EOF"  | sed 's/\t//g' | paste -s -d\ \
       | tail -n4 | jq .id | tr -d '"' \
       >> cromshell/job_ids/$sid.gatk_sv.job_ids.list
     fi
+    if [ $j -eq 25 ]; then
+      echo -e "$k of $n $cancer samples evaluated; $s GATK-SV jobs submitted"
+      j=0
+    fi
   done < data/cram_paths/$cancer.cram_paths.tsv
 done < cancers.list
 
 # Check progress of each sample and stage completed samples
+# Cleans up intermediate/temporary files after staging completed samples
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
 while read cancer; do
   check_status gatk-sv $cancer
+  cleanup_garbage
 done < cancers.list
 
 # Print table of sample progress
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
 update_status_table gatk-sv
-
-# Clean up garbage
-# (Function defined in code/refs/aou_bash_utils.sh)
-cleanup_garbage
 
