@@ -1,0 +1,187 @@
+==============================
+Cohort: biome
+East-Asian: 107
+Latin-American-1: 539
+European: 1875
+African-American: 146
+Latin-American-2: 41
+Other: 58
+Asian-Pacific-Islander: 22
+South-Asian: 38
+Unknown: 13
+African: 3
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 1331
+Female: 1501
+Aneuploidy: 10
+Total: 2842
+==============================
+Cohort: mesa
+European: 1581
+Latin-American-1: 198
+Latin-American-2: 245
+African-American: 327
+Asian-Pacific-Islander: 5
+East-Asian: 77
+Other: 39
+Unknown: 4
+African: 1
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 1199
+Female: 1276
+Aneuploidy: 2
+Total: 2477
+==============================
+Cohort: ufc
+European: 42
+Latin-American-1: 5
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 30
+Female: 17
+Total: 47
+==============================
+Cohort: gtex
+African-American: 113
+European: 733
+East-Asian: 7
+Latin-American-1: 13
+Latin-American-2: 13
+African: 1
+South-Asian: 3
+Other: 6
+Asian-Pacific-Islander: 3
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Female: 302
+Male: 583
+Aneuploidy: 7
+Total: 892
+==============================
+Cohort: cptac
+East-Asian: 202
+European: 851
+Latin-American-2: 32
+South-Asian: 7
+Other: 2
+Unknown: 13
+Asian-Pacific-Islander: 7
+Latin-American-1: 12
+African-American: 19
+African: 1
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 602
+Female: 533
+Aneuploidy: 11
+Total: 1146
+==============================
+Cohort: hgsvc
+European: 133
+Unknown: 7
+Latin-American-2: 46
+East-Asian: 60
+Latin-American-1: 11
+Other: 3
+African-American: 93
+African: 32
+South-Asian: 68
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 226
+Female: 224
+Aneuploidy: 3
+Total: 453
+==============================
+Cohort: icgc
+Latin-American-1: 17
+European: 1066
+African-American: 14
+South-Asian: 25
+Latin-American-2: 7
+Asian-Pacific-Islander: 5
+East-Asian: 221
+Unknown: 12
+Other: 1
+African: 6
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Female: 446
+Male: 908
+Aneuploidy: 20
+Total: 1374
+==============================
+Cohort: hmf
+European: 4114
+Unknown: 86
+African-American: 36
+Latin-American-1: 91
+Asian-Pacific-Islander: 65
+East-Asian: 33
+Other: 22
+Latin-American-2: 14
+South-Asian: 19
+African: 3
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 2122
+Female: 2321
+Aneuploidy: 40
+Total: 4483
+==============================
+Cohort: lcins
+European: 213
+Latin-American-1: 9
+African-American: 4
+Latin-American-2: 1
+East-Asian: 3
+Asian-Pacific-Islander: 2
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Female: 175
+Male: 56
+Aneuploidy: 1
+Total: 232
+==============================
+Cohort: proactive-core
+Latin-American-1: 78
+European: 1004
+Asian-Pacific-Islander: 8
+Other: 6
+African-American: 35
+East-Asian: 28
+Latin-American-2: 18
+South-Asian: 14
+Unknown: 6
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 488
+Female: 708
+Aneuploidy: 1
+Total: 1197
+==============================
+Cohort: proactive-other
+Latin-American-1: 32
+European: 252
+East-Asian: 29
+African: 1
+African-American: 20
+Latin-American-2: 17
+South-Asian: 5
+Asian-Pacific-Islander: 5
+Unknown: 3
+Other: 4
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Female: 227
+Male: 140
+Aneuploidy: 1
+Total: 368
+==============================
+Overall Statistics
+East-Asian: 767
+Latin-American-1: 1005
+European: 11864
+African-American: 807
+Latin-American-2: 434
+Other: 141
+Asian-Pacific-Islander: 122
+South-Asian: 179
+Unknown: 144
+African: 48
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Male: 7685
+Female: 7730
+Aneuploidy: 96
+Total: 15511
