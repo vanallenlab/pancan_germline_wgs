@@ -21,6 +21,11 @@ submit_workflows() {
   # Set workflow-specific parameters
   wflow_lower=$( echo $wflow | sed 's/-/_/g' )
   wflow_nospace=$( echo $wflow_lower | sed 's/_//g' )
+  status_tsv=~/cromshell/progress/$cancer_sub.$wflow_lower.sample_progress.tsv
+  if ! [ -e $status_tsv ]; then
+    echo -e "Status tracker $status_tsv not found; skipping $workflow_name submissions for $cancer_sub patients"
+    return 0
+  fi
   case $wflow in
     "gatk-hc")
       wdl=~/code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl
@@ -57,11 +62,6 @@ submit_workflows() {
   esac
 
   # Only submit tasks for eligible samples (depending on last known status)
-  status_tsv=~/cromshell/progress/$cancer_sub.$wflow_lower.sample_progress.tsv
-  if ! [ -e $status_tsv ]; then
-    echo -e "Status tracker $status_tsv not found; skipping $workflow_name submissions for $cancer_sub patients"
-    return 0
-  fi
   k=0; j=0; s=0; g=0
   n=$( cat ~/data/cram_paths/$cancer_sub.cram_paths.tsv | wc -l )
   while read sid CRAM CRAI; do
