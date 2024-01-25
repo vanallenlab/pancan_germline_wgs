@@ -1,9 +1,9 @@
 {
 	"PostprocessGvcf.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-03-07-v0.26.10-beta-0c876f63",
-	"PostprocessGvcf.input_gvcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-hc/$sid.g.vcf.gz",
-	"PostprocessGvcf.input_gvcf_index": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-hc/$sid.g.vcf.gz.tbi",
+	"PostprocessGvcf.input_gvcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-hc/$SID.g.vcf.gz",
+	"PostprocessGvcf.input_gvcf_index": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-hc/$SID.g.vcf.gz.tbi",
 	"PostprocessGvcf.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 	"PostprocessGvcf.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
 	"PostprocessGvcf.ref_fai": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-	"PostprocessGvcf.sample_name": "$sid"
+	"PostprocessGvcf.sample_name": "$SID"
 }

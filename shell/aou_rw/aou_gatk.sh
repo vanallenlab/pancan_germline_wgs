@@ -42,40 +42,8 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
-# Copy sample info to local disk
-gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/data/sample_info/sample_lists ./
-
-# Copy manifest of CRAM/CRAI paths
-gsutil -u $GPROJECT -m cp \
-  gs://fc-aou-datasets-controlled/v7/wgs/cram/manifest.csv \
-  ./cram_manifest.csv
-
-# Write list of cancers ready to be processed
-cat << EOF > cancers.list
-pancreas
-esophagus
-stomach
-lung
-liver
-colorectal
-kidney
-melanoma
-prostate
-ovary
-EOF
-# Note: as of 1/8/24, single-sample processing for cancers were divided among 
-# multiple workspaces as follows:
-# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary
-# Second workspace: colorectal
-# Third workspace: melanoma
-# Fourth workspace: prostate
-
-# Make .tsv mapping person_id, cram path, and crai path for each cancer type
-while read cancer; do
-  fgrep -wf sample_lists/$cancer.samples.list cram_manifest.csv \
-  | sed 's/,/\t/g' | sort -Vk1,1 \
-  > data/cram_paths/$cancer.cram_paths.tsv
-done < cancers.list
+# Localize & format sample ID lists and manifests
+. code/refs/setup_sample_info.sh
 
 
 ###########

@@ -75,6 +75,7 @@ submit_workflows() {
       # Format sample-specific input .json
       ((s++)); ((g++))
       export sid=$sid
+      export SID=$sid
       export CRAM=$CRAM
       export CRAI=$CRAI
       ~/code/scripts/envsubst.py \
@@ -140,6 +141,7 @@ check_status() {
         --sample-id "$sid" \
         --mode $wflow \
         --bucket $WORKSPACE_BUCKET \
+        --staging-bucket $MAIN_WORKSPACE_BUCKET \
         --status-tsv $status_tsv \
         --update-status \
         --unsafe \
