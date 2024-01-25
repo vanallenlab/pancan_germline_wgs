@@ -7,6 +7,7 @@
 
 # Helper bash functions for All of Us Researcher Workbench
 
+
 # Submit workflows for one cancer type and a single workflow (gatk-hc, gatk-sv, or gcnv-pp)
 submit_workflows() {
   # Check inputs
@@ -14,7 +15,7 @@ submit_workflows() {
     echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) and cancer type as first two positional arguments"
   else
     wflow=$1
-    cancer=$2
+    cancer_sub=$2
   fi
 
   # Set workflow-specific parameters
@@ -27,7 +28,7 @@ submit_workflows() {
       gate_width=100
       gate_timeout=30m
       workflow_name="GATK-HC"
-      sid_cram_list=~/data/cram_paths/$cancer.cram_paths.tsv
+      sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       ;;
     "gatk-sv")
       wdl=~/code/wdl/gatk-sv/GatherSampleEvidence.wdl
@@ -35,7 +36,11 @@ submit_workflows() {
       gate_width=25
       gate_timeout=60m
       workflow_name="GATK-SV"
-      sid_cram_list=~/data/cram_paths/$cancer.cram_paths.tsv
+      sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
+      cd code/wdl/gatk-sv && \
+      zip gatksv.dependencies.zip *.wdl && \
+      mv gatksv.dependencies.zip ~/ && \
+      cd ~
       ;;
     "gvcf-pp")
       wdl=~/code/wdl/pancan_germline_wgs/PostprocessGvcf.wdl
@@ -44,21 +49,21 @@ submit_workflows() {
       gate_timeout=30m
       workflow_name="gVCF postprocessing"
       awk '{ if ($2=="staged") print $1 }' \
-        cromshell/progress/$cancer.gatk_hc.sample_progress.tsv \
-      | fgrep -wf - data/cram_paths/$cancer.cram_paths.tsv \
-      > $cancer.$wflow.sids_to_submit.list
-      sid_cram_list=$cancer.$wflow.sids_to_submit.list
+        cromshell/progress/$cancer_sub.gatk_hc.sample_progress.tsv \
+      | fgrep -wf - data/cram_paths/$cancer_sub.cram_paths.tsv \
+      > $cancer_sub.$wflow.sids_to_submit.list
+      sid_cram_list=$cancer_sub.$wflow.sids_to_submit.list
       ;;
   esac
 
   # Only submit tasks for eligible samples (depending on last known status)
-  status_tsv=~/cromshell/progress/$cancer.$wflow_lower.sample_progress.tsv
+  status_tsv=~/cromshell/progress/$cancer_sub.$wflow_lower.sample_progress.tsv
   if ! [ -e $status_tsv ]; then
-    echo -e "Status tracker $status_tsv not found for $cancer; skipping $workflow_name submissions for this cancer type"
+    echo -e "Status tracker $status_tsv not found; skipping $workflow_name submissions for $cancer_sub patients"
     return 0
   fi
   k=0; j=0; s=0; g=0
-  n=$( cat ~/data/cram_paths/$cancer.cram_paths.tsv | wc -l )
+  n=$( cat ~/data/cram_paths/$cancer_sub.cram_paths.tsv | wc -l )
   while read sid CRAM CRAI; do
     ((k++)); ((j++))
     # Check if sample has not been launched or has failed/aborted
@@ -78,18 +83,20 @@ submit_workflows() {
       > cromshell/inputs/$sid.$wflow_nospace.inputs.json
 
       # Submit job and add job ID to list of jobs for this sample
-      cromshell --no_turtle -t 120 -mc submit \
-        --options-json code/refs/json/aou.cromwell_options.default.json \
-        $wdl \
-        cromshell/inputs/$sid.$wflow_nospace.inputs.json \
-      | jq .id | tr -d '"' \
+      cmd="cromshell --no_turtle -t 120 -mc submit"
+      cmd="$cmd --options-json code/refs/json/aou.cromwell_options.default.json"
+      if [ $wflow == "gatk-sv" ]; then
+        cmd="$cmd --dependencies-zip gatksv.dependencies.zip"
+      fi
+      cmd="$cmd $wdl cromshell/inputs/$sid.$wflow_nospace.inputs.json"
+      eval $cmd | jq .id | tr -d '"' \
       >> cromshell/job_ids/$sid.$wflow_lower.job_ids.list
     fi
 
     # Only report on progress every 50 samples to limit terminal verbosity
     # This is one of the possible causes of large data egress warnings
     if [ $j -eq 50 ]; then
-      echo -e "$k of $n $cancer samples evaluated; $s GATK-SV jobs submitted"
+      echo -e "$k of $n $cancer_sub samples evaluated; $s $workflow_name jobs submitted"
       j=0
     fi
 
@@ -102,7 +109,7 @@ submit_workflows() {
     fi
   done < $sid_cram_list
   if [ $wflow == "gvcf-pp" ]; then
-    rm $cancer.$wflow.sids_to_submit.list
+    rm $cancer_sub.$wflow.sids_to_submit.list
   fi
 }
 
@@ -113,11 +120,11 @@ check_status() {
     echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) and cancer type as first two positional arguments"
   else
     wflow=$1
-    cancer=$2
+    cancer_sub=$2
   fi
-  status_tsv=~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv
+  status_tsv=~/cromshell/progress/$cancer_sub.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv
   if [ -e $status_tsv ]; then
-    n=$( cat ~/sample_lists/$cancer.samples.list | wc -l )
+    n=$( cat ~/sample_lists/$cancer_sub.samples.list | wc -l )
     k=0
     j=0
     while read sid cram crai; do
@@ -126,7 +133,7 @@ check_status() {
       # Only print to stdout every 50 samples to limit terminal verbosity
       # This is one of the possible causes of large data egress warnings
       if [ $j -eq 50 ]; then
-        echo -e "Checking $wflow for $sid; sample $k of $n $cancer patients"
+        echo -e "Checking $wflow for $sid; sample $k of $n $cancer_sub patients"
         j=0
       fi
       ~/code/scripts/check_aou_gatk_status.py \
@@ -137,7 +144,7 @@ check_status() {
         --update-status \
         --unsafe \
       2> /dev/null
-    done < ~/data/cram_paths/$cancer.cram_paths.tsv
+    done < ~/data/cram_paths/$cancer_sub.cram_paths.tsv
   fi
 }
 
@@ -149,15 +156,18 @@ update_status_table() {
   else
     wflow=$1
   fi
-  while read cancer; do
-    awk -v cancer=$cancer -v wflow=$wflow \
+  while read cancer_sub; do
+    cancer_progress_tsv=~/cromshell/progress/$cancer_sub.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv
+    if ! [ -e $cancer_progress_tsv ]; then
+      continue
+    fi
+    awk -v cancer=$cancer_sub -v wflow=$wflow \
       '{ if ($1!=cancer || $2!=wflow) print $0 }' \
       ~/cromshell/progress/gatk.sample_progress.summary.tsv \
     > ~/cromshell/progress/gatk.sample_progress.summary.tsv2
-    cut -f2 \
-      ~/cromshell/progress/$cancer.$( echo $wflow | sed 's/-/_/g' ).sample_progress.tsv \
+    cut -f2 $cancer_progress_tsv \
     | sort | uniq -c | sort -nrk1,1 \
-    | awk -v cancer=$cancer -v wflow=$wflow -v OFS="\t" \
+    | awk -v cancer=$cancer_sub -v wflow=$wflow -v OFS="\t" \
       '{ print cancer, wflow, $2, $1 }' \
     >> ~/cromshell/progress/gatk.sample_progress.summary.tsv2
     mv \
