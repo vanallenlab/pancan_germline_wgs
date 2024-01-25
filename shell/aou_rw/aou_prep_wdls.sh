@@ -47,6 +47,9 @@ gsutil -m cp -r \
   wdl \
   pancan_germline_wgs/refs \
   $rw_bucket/code/
+gsutil -m cp \
+  pancan_germline_wgs/shell/aou_rw/aou_bash_utils.sh \
+  $rw_bucket/code/refs/
 
 # Clean up
 cd ~

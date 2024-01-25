@@ -55,7 +55,7 @@ submit_workflows() {
   status_tsv=~/cromshell/progress/$cancer.$wflow_lower.sample_progress.tsv
   if ! [ -e $status_tsv ]; then
     echo -e "Status tracker $status_tsv not found for $cancer; skipping $workflow_name submissions for this cancer type"
-    exit
+    return 0
   fi
   k=0; j=0; s=0; g=0
   n=$( cat ~/data/cram_paths/$cancer.cram_paths.tsv | wc -l )

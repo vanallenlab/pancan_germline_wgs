@@ -98,47 +98,10 @@ while read cancer; do
   cleanup_garbage
 done < cancers.list
 
-
 # Reblock & reheader each GATK-gVCF
 # (Function defined in function defined in code/refs/aou_bash_utils.sh)
 while read cancer; do
-  if ! [ -e cromshell/progress/$cancer.gatk_hc.sample_progress.tsv ]; then
-    continue
-  fi
-  touch cromshell/progress/$cancer.gvcf_pp.sample_progress.tsv
-  k=0; j=0; s=0
-  n=$( cat data/cram_paths/$cancer.cram_paths.tsv | wc -l )
-  while read sid; do
-    ((k++)); ((j++))
-    # Check if sample has not been launched or has failed/aborted
-    status=$( awk -v FS="\t" -v sid=$sid '{ if ($1==sid) print $2 }' \
-              cromshell/progress/$cancer.gvcf_pp.sample_progress.tsv )
-    if [ -z $status ] || [ $status == "not_started" ] || \
-       [ $status == "failed" ] || [ $status == "aborted" ] || \
-       [ $status == "unknown" ]; then
-
-      # Format sample-specific input .json
-      ((s++))
-      export sid=$sid
-      ~/code/scripts/envsubst.py \
-        -i code/refs/json/aou.gvcf_pp.inputs.template.json \
-      | sed 's/\t//g' | paste -s -d\ \
-      > cromshell/inputs/$sid.gvcfpp.inputs.json
-
-      # Submit job and add job ID to list of jobs for this sample
-      cromshell --no_turtle -t 120 -mc submit \
-        --options-json code/refs/json/aou.cromwell_options.default.json \
-        code/wdl/pancan_germline_wgs/PostprocessGvcf.wdl \
-        cromshell/inputs/$sid.gvcfpp.inputs.json \
-      | jq .id | tr -d '"' \
-      >> cromshell/job_ids/$sid.gvcf_pp.job_ids.list
-    fi
-    if [ $j -eq 25 ]; then
-      echo -e "$k of $n $cancer samples evaluated; $s gVCF postprocessing jobs submitted"
-      j=0
-    fi
-  done < <( awk '{ if ($2=="staged") print $1 }' \
-            cromshell/progress/$cancer.gatk_hc.sample_progress.tsv )
+  submit_workflows gvcf-pp $cancer
 done < cancers.list
 
 # Check progress of postprocessing job for each sample and stage completed samples
