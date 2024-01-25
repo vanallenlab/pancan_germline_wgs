@@ -24,7 +24,8 @@ from sys import stdout, stderr
 # Note that these definitions make strong assumptions about the structure of 
 # WDL/Cromwell execution and output buckets
 wdl_names = {'gatk-hc' : 'HaplotypeCallerGvcf_GATK4',
-             'gatk-sv' : 'GatherSampleEvidence'}
+             'gatk-sv' : 'GatherSampleEvidence',
+             'gvcf-pp' : 'PostprocessGvcf'}
 hc_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gatk-hc'] + '/{}/call-MergeGVCFs/**wgs_{}.g.{}',
            'dest' : '{}/dfci-g2c-inputs/aou/gatk-hc/{}.g.vcf.gz'}
 cov_fmts = {'src' : '{}/cromwell/outputs/' + wdl_names['gatk-sv'] + '/{}/call-CollectCounts/**{}.counts.tsv.gz',
@@ -66,7 +67,9 @@ sv_fmts = {'cov' : cov_fmts,
            'melt-metrics' : melt_metrics_fmts,
            'wham' : wham_fmts,
            'wham-metrics' : wham_metrics_fmts}
-formats = {'gatk-hc' : hc_fmts, 'gatk-sv' : sv_fmts}
+pp_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gvcf-pp'] + '/{}/call-Step2/{}.reblocked.g.{}',
+           'dest' : '{}/dfci-g2c-inputs/aou/gatk-hc/reblocked/{}.reblocked.g.vcf.gz'}
+formats = {'gatk-hc' : hc_fmts, 'gatk-sv' : sv_fmts, 'gvcf-pp' : pp_fmts}
 sv_has_index = {'cov' : False,
                 'cov-metrics' : False,
                 'pe' : True,
@@ -88,7 +91,7 @@ def check_if_staged(bucket, sid, mode):
     """
 
     # List of expected outputs depends on mode
-    if mode == 'gatk-hc':
+    if mode in 'gatk-hc gvcf-pp':
         uri = formats[mode]['dest'].format(bucket, sid)
         tbi_uri = uri + '.tbi'
         uris = [uri, tbi_uri]
@@ -100,9 +103,6 @@ def check_if_staged(bucket, sid, mode):
             uris.append(uri)
             if has_index:
                 uris.append(uri + '.tbi')
-    
-    else:
-        import pdb; pdb.set_trace()
 
     # Check for the presence of all expected URIs
     query = 'gsutil -m ls ' + ' '.join(uris)
@@ -164,9 +164,12 @@ def find_complete_wids(workflow_ids, bucket, sid, mode):
     Find the subset of workflow_ids that have fully complete expected output files
     """
 
-    if mode == 'gatk-hc':
-        wids_with_gvcf = find_gvcfs(workflow_ids, bucket, sid)
-        wids_with_tbi = find_gvcfs(wids_with_gvcf, bucket, sid, suffix='vcf.gz.tbi')
+    if mode in 'gatk-hc gvcf-pp'.split():
+        wids_with_gvcf = find_gvcfs(workflow_ids, bucket, sid, 
+                                    uri_fmt=formats[mode]['gvcf'])
+        wids_with_tbi = find_gvcfs(wids_with_gvcf, bucket, sid, 
+                                   uri_fmt=formats[mode]['gvcf'],
+                                   suffix='vcf.gz.tbi')
         return wids_with_tbi
     
     elif mode == 'gatk-sv':
@@ -175,9 +178,6 @@ def find_complete_wids(workflow_ids, bucket, sid, mode):
             surviving_wids = find_sv_files(surviving_wids, bucket, sid, 
                                            formats[mode][key]['src'])
         return surviving_wids
-
-    else:
-        import pdb; pdb.set_trace()
 
 
 def check_workflow_status(workflow_id, max_retries=20, timeout=5):
@@ -213,7 +213,7 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'
 
     msg = 'Relocating {} to {}\n'
 
-    if mode == 'gatk-hc':
+    if mode in 'gatk-hc gvcf-pp'.split():
         # Relocate gVCF
         src_gvcf = formats[mode]['gvcf'].format(bucket, workflow_id, sid, 'vcf.gz')
         dest_gvcf = formats[mode]['dest'].format(staging_bucket, sid)
@@ -238,9 +238,6 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'
             if has_index:
                 subprocess.run(' '.join(['gsutil -m', action, src_uri + '.tbi', 
                                          dest_uri + '.tbi']), shell=True)
-
-    else:
-        import pdb; pdb.set_trace()
 
 
 def collect_trash(workflow_ids, bucket, dumpster_path, mode):
