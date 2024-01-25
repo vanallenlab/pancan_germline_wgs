@@ -1,3 +1,8 @@
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2023-Present, Noah Fields and the Dana-Farber Cancer Institute
+# Contact: Noah Fields <Noah_Fields@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
 import pandas as pd
 import gcsfs
 from tqdm import tqdm
@@ -5,11 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-# File paths
-local_tsv_path = '/Users/noah/Desktop/g2c_demo.tsv'
-
-# Read the local TSV file
-df = pd.read_csv(local_tsv_path, sep='\t')
 
 cohorts = ['aou','biome','mesa','ufc','gtex','cptac','hgsvc','icgc','hmf','lcins','proactive-core','proactive-other']
 ancestries = ['European', 'Latin-American-1','Latin-American-2','South-Asian','Asian-Pacific-Islander','East-Asian','African', 'African-American','Unknown','Other']
