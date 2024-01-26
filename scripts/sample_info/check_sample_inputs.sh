@@ -56,6 +56,7 @@ gatkhc_reblocked_gvcf$TAB$BUCKET/$COHORT/gatk-hc/reblocked/$SAMPLE.reblocked.g.v
 manta$TAB$BUCKET/$COHORT/manta/$SAMPLE.manta.vcf.gz
 melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz
 wham$TAB$BUCKET/$COHORT/wham/$SAMPLE.wham.vcf.gz
+demographics$TAB$BUCKET/$COHORT/demographics/$SAMPLE.txt
 EOF
 
 # Check which files are present in gs://

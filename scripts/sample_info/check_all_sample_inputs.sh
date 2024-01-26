@@ -51,8 +51,10 @@ while read COHORT; do
   nsamp=$( gsutil cat $BUCKET/sample-lists/$COHORT.samples.list | wc -l )
   echo -e "Checking status of $nsamp samples for $COHORT"
 
-  # For efficiency, first compile list of all URIs suffixed with *.gz
-  gsutil -m ls $BUCKET/$COHORT/**.gz \
+  # For efficiency, first compile list of all URIs suffixed with *.gz or *.txt
+  gsutil -m ls \
+    $BUCKET/$COHORT/**.gz \
+    $BUCKET/$COHORT/**.txt \
   1> $WRKDIR/$COHORT.objects_found 2> /dev/null
 
   echo -e "#sample\tmissing_inputs" > $WRKDIR/$COHORT.sample_status.tsv

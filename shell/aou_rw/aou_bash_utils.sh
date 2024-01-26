@@ -30,7 +30,7 @@ submit_workflows() {
     "gatk-hc")
       wdl=~/code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl
       inputs_json_prefix=gatk_hc
-      gate_width=100
+      gate_width=150
       gate_timeout=30m
       workflow_name="GATK-HC"
       sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
@@ -39,7 +39,7 @@ submit_workflows() {
       wdl=~/code/wdl/gatk-sv/GatherSampleEvidence.wdl
       inputs_json_prefix=gatk_sv_module_01
       gate_width=25
-      gate_timeout=60m
+      gate_timeout=45m
       workflow_name="GATK-SV"
       sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       cd code/wdl/gatk-sv && \
@@ -50,8 +50,8 @@ submit_workflows() {
     "gvcf-pp")
       wdl=~/code/wdl/pancan_germline_wgs/PostprocessGvcf.wdl
       inputs_json_prefix=gvcf_pp
-      gate_width=100
-      gate_timeout=30m
+      gate_width=200
+      gate_timeout=20m
       workflow_name="gVCF postprocessing"
       awk '{ if ($2=="staged") print $1 }' \
         cromshell/progress/$cancer_sub.gatk_hc.sample_progress.tsv \
@@ -96,7 +96,7 @@ submit_workflows() {
 
     # Only report on progress every 50 samples to limit terminal verbosity
     # This is one of the possible causes of large data egress warnings
-    if [ $j -eq 50 ]; then
+    if [ $j -eq 50 ] || [ $k -eq $n ]; then
       echo -e "$k of $n $cancer_sub samples evaluated; $s $workflow_name jobs submitted"
       j=0
     fi

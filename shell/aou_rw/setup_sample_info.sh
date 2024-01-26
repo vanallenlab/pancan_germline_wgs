@@ -30,6 +30,7 @@ kidney
 melanoma
 prostate
 ovary
+breast
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
@@ -37,6 +38,7 @@ EOF
 # Second workspace: colorectal
 # Third workspace: melanoma
 # Fourth workspace: prostate
+# Fifth workspace: breast
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
 while read cancer; do
