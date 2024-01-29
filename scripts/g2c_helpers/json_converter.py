@@ -17,16 +17,23 @@ def process_json(input_file, output_file):
     line = line.replace('\"[','[').replace(']\"',']')
 
     arr = re.split(r',(?![^\[]*\])', line)
+    arr = [s for s in arr if '\"\"' not in s]
+    arr = [s for s in arr if '[]' not in s]
+    print(len(arr))
 
     with open(output_file, 'w') as f:
         f.write('{\n')
         for val in arr:
-            val = re.sub(r'"(\d+(\.\d+)?)",?', r'\1', val)
+
+            val = re.sub(r'"(\d+(\.\d+)?)",?', r'\1', val) #turns strings into floats or ints if applicable
+            val = val.replace('\\',"")
             if val != arr[-1]:
                 f.write(f"\t{val},\n")
             else:
                 f.write(f"\t{val}\n")
+                
         f.write('}')
+    
     print(f"Output written to: {output_file}")
 
 

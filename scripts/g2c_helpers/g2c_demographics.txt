@@ -17,20 +17,20 @@ Aneuploidy: 10
 Total: 2842
 ==============================
 Cohort: mesa
-European: 1581
-Latin-American-1: 198
-Latin-American-2: 245
-African-American: 327
+European: 1583
+Latin-American-1: 209
+Latin-American-2: 299
+East-Asian: 111
+African-American: 1004
 Asian-Pacific-Islander: 5
-East-Asian: 77
-Other: 39
+Other: 44
 Unknown: 4
-African: 1
+African: 2
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-Male: 1199
-Female: 1276
-Aneuploidy: 2
-Total: 2477
+Male: 1519
+Female: 1738
+Aneuploidy: 4
+Total: 3261
 ==============================
 Cohort: ufc
 European: 42
@@ -170,18 +170,18 @@ Aneuploidy: 1
 Total: 368
 ==============================
 Overall Statistics
-East-Asian: 767
-Latin-American-1: 1005
-European: 11864
-African-American: 807
-Latin-American-2: 434
-Other: 141
+East-Asian: 801
+Latin-American-1: 1016
+European: 11866
+African-American: 1484
+Latin-American-2: 488
+Other: 146
 Asian-Pacific-Islander: 122
 South-Asian: 179
 Unknown: 144
-African: 48
+African: 49
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-Male: 7685
-Female: 7730
-Aneuploidy: 96
-Total: 15511
+Male: 8005
+Female: 8192
+Aneuploidy: 98
+Total: 16295
