@@ -66,8 +66,8 @@ workflow Vep {
       if (any_remote) {
         call SliceRemoteFiles {
           input:
-            vcf = vcf,
-            vcf_idx = vcf_idx,
+            vcf = shard_info.left,
+            vcf_idx = shard_info.right,
             gnomad_vcf_uris = gnomad_vcf_uris,
             gnomad_vcf_indexes = gnomad_vcf_indexes,
             gnomad_infos = gnomad_infos,
