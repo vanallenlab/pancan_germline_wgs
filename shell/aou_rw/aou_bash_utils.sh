@@ -30,7 +30,7 @@ submit_workflows() {
     "gatk-hc")
       wdl=~/code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl
       inputs_json_prefix=gatk_hc
-      gate_width=150
+      gate_width=100
       gate_timeout=30m
       workflow_name="GATK-HC"
       sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
