@@ -33,5 +33,8 @@ RUN wget https://github.com/HTGenomeAnalysisUnit/SCE-VCF/releases/download/v0.1.
 RUN chmod +x sceVCF
 RUN mv sceVCF /bin/sceVCF
 
+RUN wget -O ~/bin/echtvar https://github.com/brentp/echtvar/releases/download/v0.1.9/echtvar \
+    && chmod +x ~/bin/echtvar
+
 # Launch bash at runtime
 CMD ["/bin/bash"]
