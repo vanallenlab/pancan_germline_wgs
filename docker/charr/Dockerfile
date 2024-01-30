@@ -30,7 +30,7 @@ RUN apt-get clean && \
 # Clone NCBI Grafpop
 RUN wget https://github.com/HTGenomeAnalysisUnit/SCE-VCF/releases/download/v0.1.2/sceVCF
 
-RUN chmod a+x sceVCF
+#RUN chmod a+x sceVCF
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
