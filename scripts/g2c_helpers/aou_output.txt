@@ -1,1 +1,0 @@
-{"Bam2Fastq.B2F.boot_disk_gb" : 25,"Bam2Fastq.B2F.disk_gb" : 525,"Bam2Fastq.bam" : "this.bam_or_cram_file","Bam2Fastq.sample_name" : "this.sample_id","Bam2Fastq.samtools_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-base-mini:5994670"}
