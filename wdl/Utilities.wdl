@@ -55,6 +55,55 @@ task ShardVcf {
   }
 }
 
+task ShardVcfByRegion {
+  input {
+    File vcf
+    File vcf_idx
+    File scatter_regions
+    String bcftools_docker
+  }
+
+  Int disk_gb = ceil(3 * size(vcf, "GB"))
+
+  command <<<
+    set -eu -o pipefail
+
+    # Strips either .vcf or .bcf, and .gz if present, appends sharded
+    out_prefix=$(awk -v fname="root.bcf.gz" 'BEGIN {sub(/.[vb]cf(.gz)?/,"",fname); print fname".sharded"}');
+    echo ${out_prefix} > out_prefix.txt
+
+    # Make an empty shard in case the input VCF is totally empty
+    bcftools view -h ~{vcf} | bgzip -c > "${out_prefix}.0.vcf.gz"
+
+    bcftools +scatter \
+      -O z3 -o . -p "${out_prefix}". \
+      -S ~{scatter_regions} \
+      ~{vcf}
+
+    # Print all VCFs to stdout for logging purposes
+    find ./ -name "*.vcf.gz"
+
+    # Index all shards
+    find ./ -name "${out_prefix}.*.vcf.gz" \
+    | xargs -I {} tabix -p vcf -f {}
+  >>>
+
+  output {
+    String out_prefix = read_string("out_prefix.txt")
+    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
+    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
+  }
+
+  runtime {
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + disk_gb + 20 + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
+    preemptible: 3
+    maxRetries: 1
+  }
+}
 
 task ConcatVcfs {
   input {
