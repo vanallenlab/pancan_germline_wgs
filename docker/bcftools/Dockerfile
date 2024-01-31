@@ -26,7 +26,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Install bcftools
-ARG BCFTOOLS_VERISON=1.19
+#ARG BCFTOOLS_VERISON=1.19
 RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2 && \
     tar -xvf bcftools-1.19.tar.bz2 && \
     cd bcftools-1.19 && \
