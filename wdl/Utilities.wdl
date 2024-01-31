@@ -55,6 +55,7 @@ task ShardVcf {
   }
 }
 
+
 task ShardVcfByRegion {
   input {
     File vcf
@@ -104,6 +105,7 @@ task ShardVcfByRegion {
     maxRetries: 1
   }
 }
+
 
 task ConcatVcfs {
   input {
