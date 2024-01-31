@@ -2,7 +2,7 @@ import math, sys, os
 from collections import deque
 import numpy as np
 
-if len(sys.argv < 4):
+if len(sys.argv) < 4:
   print("Script requires 3 arguments: input vcf, buffer length, and maximum buffered span")
 
 in_vcf = sys.argv[1]
@@ -39,7 +39,7 @@ s = 0
 
 while len(borel) > 0:
     x, a, b = borel.pop() # deque supports O(1) resizing
-    if b-a > (r := T-S): # split a buffer if it overflows a fragment
+    if b-a > (r := T-s): # split a buffer if it overflows a fragment
         m = a + r
         borel.append((x,m,b)) # another reason for the deque
         b = m
