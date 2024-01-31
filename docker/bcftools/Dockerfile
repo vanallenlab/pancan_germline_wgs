@@ -10,19 +10,20 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
 # Install make, zlib, file, and git
-#RUN apt-get clean && \
-#    apt-get -qqy update && \
-#    apt-get -qqy install --fix-missing \
-#      apt-utils \
-#      default-libmysqlclient-dev \
-#      curl \
-#      vim \
-#      wget
+RUN apt-get clean && \
+    apt-get -qqy update && \
+    apt-get -qqy install --fix-missing \
+      apt-utils \
+      default-libmysqlclient-dev \
+      curl \
+      vim \
+      wget \
+      tar
 
 # Install bcftools dependencies
 RUN apt-get update && \
     apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
-                       libcurl4-openssl-dev libssl-dev libncurses5-dev wget tar && \
+                       libcurl4-openssl-dev libssl-dev libncurses5-dev && \
     apt-get clean
 
 # Install bcftools
