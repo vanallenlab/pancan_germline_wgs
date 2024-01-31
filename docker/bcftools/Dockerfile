@@ -22,7 +22,7 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 # Install bcftools dependencies
 RUN apt-get update && \
     apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
-                       libcurl4-openssl-dev libssl-dev libncurses5-dev wget && \
+                       libcurl4-openssl-dev libssl-dev libncurses5-dev wget tar && \
     apt-get clean
 
 # Install bcftools
