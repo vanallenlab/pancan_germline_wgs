@@ -30,10 +30,9 @@ ARG BCFTOOLS_VERISON=1.19
 RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2 && \
     tar -xvf bcftools-1.19.tar.bz2 && \
     cd bcftools-1.19 && \
-    ./configure --without-curses && \
+    ./configure --prefix=/bin/ && \
     make && \
-    make install && \
-    cd -
+    make install
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
