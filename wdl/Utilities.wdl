@@ -297,7 +297,7 @@ task SplitRegions {
     File vcf
     Int region_span = 1000000
     Int variant_buffer = 100
-    python_docker = "python:latest"
+    String python_docker = "python:latest"
   }
 
   Int disk_gb = ceil(1.3 * size(vcf, "GB"))
@@ -315,6 +315,6 @@ task SplitRegions {
     memory: "6 GiB"
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    docker: "python:latest"
+    docker: python_docker
   }
 }
