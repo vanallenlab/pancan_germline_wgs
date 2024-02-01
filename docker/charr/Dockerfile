@@ -22,8 +22,7 @@ RUN apt-get clean && \
       default-libmysqlclient-dev \
       curl \
       vim \
-      wget \
-      rm
+      wget
 
 #RUN apt install -y python3
 
@@ -52,8 +51,8 @@ RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.
     make && \
     make install
 
-RUN rm bcftools-1.19
-RUN rm bcftools-1.19.tar.bz2
+#RUN rm bcftools-1.19
+#RUN rm bcftools-1.19.tar.bz2
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
