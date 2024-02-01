@@ -22,8 +22,7 @@ RUN apt-get clean && \
       default-libmysqlclient-dev \
       curl \
       vim \
-      wget \
-      rm
+      wget
 
 #RUN apt install -y python3
 
