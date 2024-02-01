@@ -36,7 +36,20 @@ RUN mv sceVCF /bin/sceVCF
 RUN wget -O /bin/echtvar https://github.com/brentp/echtvar/releases/download/v0.1.9/echtvar \
     && chmod +x /bin/echtvar
 
-curl -L -o gnomad.v3.1.2.echtvar.popmax.v2.zip  https://surfdrive.surf.nl/files/index.php/s/LddbAYQAYPqtYu6/download
+# Install bcftools dependencies
+RUN apt-get update && \
+    apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
+                       libcurl4-openssl-dev libssl-dev libncurses5-dev && \
+    apt-get clean
+
+# Install bcftools
+#ARG BCFTOOLS_VERISON=1.19
+RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2 && \
+    tar -xvf bcftools-1.19.tar.bz2 && \
+    cd bcftools-1.19 && \
+    ./configure --prefix=/bin/ && \
+    make && \
+    make install
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
