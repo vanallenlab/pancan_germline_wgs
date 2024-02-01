@@ -36,5 +36,7 @@ RUN mv sceVCF /bin/sceVCF
 RUN wget -O /bin/echtvar https://github.com/brentp/echtvar/releases/download/v0.1.9/echtvar \
     && chmod +x /bin/echtvar
 
+curl -L -o gnomad.v3.1.2.echtvar.popmax.v2.zip  https://surfdrive.surf.nl/files/index.php/s/LddbAYQAYPqtYu6/download
+
 # Launch bash at runtime
 CMD ["/bin/bash"]
