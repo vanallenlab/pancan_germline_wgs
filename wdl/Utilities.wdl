@@ -70,7 +70,7 @@ task ShardVcfByRegion {
     set -eu -o pipefail
 
     # Strips either .vcf or .bcf, and .gz if present, appends sharded
-    out_prefix=$(awk -v fname="root.bcf.gz" 'BEGIN {sub(/.[vb]cf(.gz)?/,"",fname); print fname".sharded"}');
+    out_prefix=$(awk -v fname="~{vcf}" 'BEGIN {sub(/.[vb]cf(.gz)?/,"",fname); print fname".sharded"}');
     echo ${out_prefix} > out_prefix.txt
 
     # Make an empty shard in case the input VCF is totally empty
@@ -297,24 +297,30 @@ task SplitRegions {
     File vcf
     Int region_span = 1000000
     Int variant_buffer = 100
-    String python_docker = "python:latest"
+    String docker
   }
 
   Int disk_gb = ceil(1.3 * size(vcf, "GB"))
 
   command <<<
-    /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py ~{vcf} ~{region_span} ~{variant_buffer}
+    out_prefix=$(awk -v fname="~{vcf}" 'BEGIN {sub(/.[vb]cf(.gz)?/,"",fname); print fname}');
+    echo ${out_prefix} > out_prefix.txt
+
+    bcftools view -O v -o ${out_prefix}.vcf --threads 2
+
+    /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py ${out_prefix}.vcf ~{region_span} ~{variant_buffer}
   >>>
 
   output {
-    File regions = "~{vcf}.scatter_regions.txt"
+    String out_prefix = read_string("out_prefix.txt")
+    File regions = "~{out_prefix}.scatter_regions.txt"
   }
 
   runtime {
-    cpu: 1
+    cpu: 2
     memory: "6 GiB"
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    docker: python_docker
+    docker: docker
   }
 }
