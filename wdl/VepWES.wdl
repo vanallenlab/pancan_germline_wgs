@@ -32,7 +32,7 @@ workflow Vep {
 
     Boolean shard_vcfs = true
     Int records_per_shard = 50000
-    Int max_buffer_span = 1000000
+    Int max_buffered_span = 1000000
     Int remote_query_buffer = 2
     Boolean combine_output_vcfs = false
     String? cohort_prefix
