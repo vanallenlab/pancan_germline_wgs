@@ -290,3 +290,31 @@ task ConcatTextFiles {
     preemptible: 3
   }
 }
+
+
+task SplitRegions {
+  input {
+    File vcf
+    Int region_span = 1000000
+    Int variant_buffer = 100
+    python_docker = "python:latest"
+  }
+
+  Int disk_gb = ceil(1.3 * size(vcf, "GB"))
+
+  command <<<
+    /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py ~{vcf} ~{region_span} ~{variant_buffer}
+  >>>
+
+  output {
+    File regions = "~{vcf}.scatter_regions.txt"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "6 GiB"
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    docker: "python:latest"
+  }
+}
