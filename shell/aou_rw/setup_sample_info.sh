@@ -31,13 +31,17 @@ melanoma
 prostate
 ovary
 breast
+uterus
+cns
+bladder
+oral
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
-# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary
-# Second workspace: colorectal
-# Third workspace: melanoma
-# Fourth workspace: prostate
+# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns
+# Second workspace: colorectal, bladder
+# Third workspace: melanoma, uterus
+# Fourth workspace: prostate, oral
 # Fifth workspace: breast
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type

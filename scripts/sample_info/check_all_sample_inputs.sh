@@ -21,6 +21,7 @@ USAGE: ./check_all_sample_inputs.sh [-h|--help] [COHORTS] [BUCKET]
 
        Options:
        COHORTS: comma-delimited list of cohorts to check [default: check all cohorts]
+       BUCKET: Google bucket to query [default: gs://dfci-g2c-inputs]
 
 EOF
 }
