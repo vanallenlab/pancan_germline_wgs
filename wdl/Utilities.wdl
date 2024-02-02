@@ -56,6 +56,53 @@ task ShardVcf {
 }
 
 
+task ShardVcfByRegion {
+  input {
+    File vcf
+    File vcf_idx
+    File scatter_regions
+    String bcftools_docker
+  }
+
+  String out_prefix = basename(vcf, ".vcf.gz") + .sharded
+  Int disk_gb = ceil(3 * size(vcf, "GB"))
+
+  command <<<
+    set -eu -o pipefail
+
+    # Make an empty shard in case the input VCF is totally empty
+    bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
+
+    bcftools +scatter \
+      -O z3 -o . -p "~{out_prefix}". \
+      -S ~{scatter_regions} \
+      ~{vcf}
+
+    # Print all VCFs to stdout for logging purposes
+    find ./ -name "*.vcf.gz"
+
+    # Index all shards
+    find ./ -name "~{out_prefix}.*.vcf.gz" \
+    | xargs -I {} tabix -p vcf -f {}
+  >>>
+
+  output {
+    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
+    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
+  }
+
+  runtime {
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + disk_gb + 20 + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
+    preemptible: 3
+    maxRetries: 1
+  }
+}
+
+
 task ConcatVcfs {
   input {
     Array[File] vcfs
@@ -237,5 +284,37 @@ task ConcatTextFiles {
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
+  }
+}
+
+
+task SplitRegions {
+  input {
+    File vcf
+    Int region_span = 1000000
+    Int variant_buffer = 100
+    String docker
+  }
+
+  # Tentative
+  String out_prefix = basename(basename(basename(vcf, ".gz"), ".vcf"), ".bcf")
+  Int disk_gb = ceil(1.3 * size(vcf, "GB"))
+
+  command <<<
+    bcftools view -O v -o ~{out_prefix}.vcf --threads 2 ~{vcf}
+    /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py \
+      ~{out_prefix}.vcf ~{region_span} ~{variant_buffer}
+  >>>
+
+  output {
+    File regions = "~{out_prefix}.scatter_regions.txt"
+  }
+
+  runtime {
+    cpu: 2
+    memory: "6 GiB"
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    docker: docker
   }
 }
