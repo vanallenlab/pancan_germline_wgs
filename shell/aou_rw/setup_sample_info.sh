@@ -35,6 +35,7 @@ uterus
 cns
 bladder
 oral
+other
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
@@ -42,7 +43,7 @@ EOF
 # Second workspace: colorectal, bladder
 # Third workspace: melanoma, uterus
 # Fourth workspace: prostate, oral
-# Fifth workspace: breast
+# Fifth workspace: breast, other (TGCT)
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
 while read cancer; do
