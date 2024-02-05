@@ -58,6 +58,7 @@ workflow WgsFastqToCram {
     Float? bwa_mem_gb
     Int? bwa_num_cpu
     Int? bwa_disk_size
+    Int? gather_bam_files_disk_size
   }
 
   # Clean up FASTQs with fastq-pair
@@ -248,7 +249,7 @@ workflow WgsFastqToCram {
       output_bam_basename = sample_name,
       docker_image = gatk_docker,
       gatk_path = gatk_path,
-      disk_size = ceil(3 * size(AddRg.bam_wRG, "GB")) + 10,
+      disk_size = select_first([gather_bam_files_disk_size, ceil(3 * size(AddRg.bam_wRG, "GB")) + 10]),
       preemptible_tries = 5,
       compression_level = 2
   }
