@@ -301,6 +301,8 @@ task SplitRegions {
   Int disk_gb = ceil(1.3 * size(vcf, "GB"))
 
   command <<<
+    set -eu -o pipefail
+    
     bcftools view -O v -o ~{out_prefix}.vcf --threads 2 ~{vcf}
     
     python /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py \

@@ -21,6 +21,10 @@ if len(sys.argv) < 4:
   print("Script requires 3 arguments: input vcf, maximum region span, and buffer size.")
 
 in_vcf = sys.argv[1]
+if not in_vcf.endswith('.vcf'):
+  print("Input vcf must be in vcf format! Attempting with", os.path.basename(in_vcf))
+out_prefix = os.path.splitext(in_vcf)[0]
+
 max_span = int(sys.argv[2])
 buffer = int(sys.argv[3])
 
@@ -47,7 +51,7 @@ print(S, 'sized buffer to', T, 'length fragments')
 queue = deque(zip(X, A, B))
 queue.reverse()             # deques pop from the end, and this is free I think
 s, i, N = 0, 0, True        # honest coincidence
-with open(f"{in_vcf}.scatter_regions.txt", 'w') as out:
+with open(f"{out_prefix}.scatter_regions.txt", 'w') as out:
   while len(queue) > 0:
     x, a, b = queue.pop()   # deque supports O(1) resizing
     if N: xl, al = x, a     # if the region is new we need to start a new record
