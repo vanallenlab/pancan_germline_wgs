@@ -64,7 +64,7 @@ task ShardVcfByRegion {
     String bcftools_docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz") + .sharded
+  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded"
   Int disk_gb = ceil(3 * size(vcf, "GB"))
 
   command <<<
