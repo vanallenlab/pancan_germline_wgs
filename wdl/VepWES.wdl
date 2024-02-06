@@ -66,17 +66,17 @@ workflow Vep {
             variant_buffer = remote_query_buffer
         }
 
-        call Tasks.ShardVcfByRegions {
+        call Tasks.ShardVcfByRegion {
           input:
             vcf = shard_info.left,
             vcf_idx = shard_info.right,
-            scatter_regions = MakeRegions.regions,
+            scatter_regions = SplitRegions.regions,
             bcftools_docker = bcftools_docker
         }
       }
 
-      Array[File] vcf_fine_shards = flatten(ShardVcfByRegions.vcf_shards)
-      Array[File] vcf_fine_shard_idxs = flatten(ShardVcfByRegions.vcf_shard_idxs)
+      Array[File] vcf_fine_shards = flatten(ShardVcfByRegion.vcf_shards)
+      Array[File] vcf_fine_shard_idxs = flatten(ShardVcfByRegion.vcf_shard_idxs)
     }
     
     Array[File] vcf_shards = select_first([vcf_fine_shards, [vcf]])
