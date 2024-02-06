@@ -69,8 +69,8 @@ workflow Vep {
         call Tasks.ShardVcfByRegions {
           input:
             vcf = shard_info.left,
-            vcf_idx = shard_info.right
-            scatter_regions = MakeRegions.regions
+            vcf_idx = shard_info.right,
+            scatter_regions = MakeRegions.regions,
             bcftools_docker = bcftools_docker
         }
       }
