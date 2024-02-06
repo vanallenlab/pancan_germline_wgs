@@ -302,7 +302,8 @@ task SplitRegions {
 
   command <<<
     bcftools view -O v -o ~{out_prefix}.vcf --threads 2 ~{vcf}
-    /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py \
+    
+    python /opt/pancan_germline_wgs/scripts/utilities/split_buffer_regions.py \
       ~{out_prefix}.vcf ~{region_span} ~{variant_buffer}
   >>>
 
