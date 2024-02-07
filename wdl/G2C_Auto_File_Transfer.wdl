@@ -185,12 +185,7 @@ workflow store_in_gcs {
   	String cohort
   	String sample_id
   }
-  
-  call gatk_hc{
-    input:
-      sample_id = sample_id,
-      cohort = cohort
-  }
+
   call gatk_hc_reblocked{
     input:
       sample_id = sample_id,
