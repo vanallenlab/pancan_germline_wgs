@@ -8,28 +8,6 @@
 
 version 1.0
 
-task gatk_hc {
-  input {
-  	#Go into /cohort/gatk-hc/
-    File old_gvcf
-    File old_gvcf_index
-    String sample_id
-    String cohort
-  }
-  Int disk_gb = ceil(1.5 * size(old_gvcf, "GB")) + 10
-  String old_gvcf_pathway = "gs://dfci-g2c-inputs/~{cohort}/gatk-hc/~{sample_id}.g.vcf.gz"
-  String old_gvcf_index_pathway = "gs://dfci-g2c-inputs/~{cohort}/gatk-hc/~{sample_id}.g.vcf.gz.tbi"
-  command <<<
-    gsutil -m cp ~{old_gvcf} ~{old_gvcf_pathway}
-    gsutil -m cp ~{old_gvcf_index} ~{old_gvcf_index_pathway}
-  >>>
-  
-  runtime {
-    docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
-    disks: "local-disk " + disk_gb + " HDD"
-  }
-
-}
 
 task gatk_hc_reblocked{
   input {
