@@ -32,7 +32,7 @@ All sample-level input data is stored in a secure Google Cloud bucket. Note that
 The bucket is organized as follows:
 * One directory per cohort
 * Each cohort has the following subdirectories:
-    * `gatk-hc` : raw GATK-HC gVCFs and indexes  
+    * `gatk-hc/reblocked` : reblocked GATK-HC gVCFs and indexes
     * `gatk-sv` : evidence and metrics files collected by GATK-SV  
         * `gatk-sv/coverage` : coverage counts files  
         * `gatk-sv/metrics` : per-sample metrics generated during GATK-SV module 01  
@@ -41,3 +41,4 @@ The bucket is organized as follows:
     * `melt` : raw MELT VCFs and indexes  
   * `wham` : raw Wham VCFs and indexes  
 
+_Note: all raw gVCFs previously hosted in `gatk-hc/` were deleted on Feb 7, 2024, but the nested directory structure of `gatk-hc/reblocked/` was preserved for legacy code compatability_  

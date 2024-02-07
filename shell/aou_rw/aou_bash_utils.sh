@@ -163,13 +163,21 @@ update_status_table() {
     if ! [ -e $cancer_progress_tsv ]; then
       continue
     fi
-    awk -v cancer=$cancer_sub -v wflow=$wflow \
+    case $cancer_sub in
+      *control*)
+        name_for_table="controls"
+        ;;
+      *)
+        name_for_table=$cancer_sub
+        ;;
+    esac
+    awk -v cancer=$name_for_table -v wflow=$wflow \
       '{ if ($1!=cancer || $2!=wflow) print $0 }' \
       ~/cromshell/progress/gatk.sample_progress.summary.tsv \
     > ~/cromshell/progress/gatk.sample_progress.summary.tsv2
     cut -f2 $cancer_progress_tsv \
     | sort | uniq -c | sort -nrk1,1 \
-    | awk -v cancer=$cancer_sub -v wflow=$wflow -v OFS="\t" \
+    | awk -v cancer=$name_for_table -v wflow=$wflow -v OFS="\t" \
       '{ print cancer, wflow, $2, $1 }' \
     >> ~/cromshell/progress/gatk.sample_progress.summary.tsv2
     mv \

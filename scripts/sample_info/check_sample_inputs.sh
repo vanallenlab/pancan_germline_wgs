@@ -51,7 +51,6 @@ gatksv_coverage$TAB$BUCKET/$COHORT/gatk-sv/coverage/$SAMPLE.counts.tsv.gz
 gatksv_pe$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.pe.txt.gz
 gatksv_sd$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sd.txt.gz
 gatksv_sr$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sr.txt.gz
-gatkhc_gvcf$TAB$BUCKET/$COHORT/gatk-hc/$SAMPLE.g.vcf.gz
 gatkhc_reblocked_gvcf$TAB$BUCKET/$COHORT/gatk-hc/reblocked/$SAMPLE.reblocked.g.vcf.gz
 manta$TAB$BUCKET/$COHORT/manta/$SAMPLE.manta.vcf.gz
 melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz

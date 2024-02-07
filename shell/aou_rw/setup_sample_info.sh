@@ -36,10 +36,12 @@ cns
 bladder
 oral
 other
+male_controls.p1
+male_controls.p2
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
-# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns
+# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns, male_controls.p1
 # Second workspace: colorectal, bladder
 # Third workspace: melanoma, uterus
 # Fourth workspace: prostate, oral
