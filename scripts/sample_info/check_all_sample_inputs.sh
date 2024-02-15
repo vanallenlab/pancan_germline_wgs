@@ -66,8 +66,10 @@ while read COHORT; do
       $COHORT $SAMPLE $BUCKET $WRKDIR/$COHORT.objects_found \
     >> $WRKDIR/$COHORT.sample_status.tsv
   done < <( gsutil cat $BUCKET/sample-lists/$COHORT.samples.list )
+
+  # Localize status to bucket for each cohort once complete
+  gsutil cp $WRKDIR/$COHORT.sample_status.tsv $BUCKET/sample-status/
 done < <( sed '/^$/d' $WRKDIR/cohorts.list )
 
-# Localize status to bucket and remove local copy
-gsutil cp $WRKDIR/*.tsv $BUCKET/sample-status/
+# Clean up
 rm -rf $WRKDIR

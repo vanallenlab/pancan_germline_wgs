@@ -30,8 +30,8 @@ submit_workflows() {
     "gatk-hc")
       wdl=~/code/wdl/gatk-hc/haplotypecaller-gvcf-gatk4.wdl
       inputs_json_prefix=gatk_hc
-      gate_width=75
-      gate_timeout=40m
+      gate_width=60
+      gate_timeout=60m
       workflow_name="GATK-HC"
       sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       ;;
@@ -50,8 +50,8 @@ submit_workflows() {
     "gvcf-pp")
       wdl=~/code/wdl/pancan_germline_wgs/PostprocessGvcf.wdl
       inputs_json_prefix=gvcf_pp
-      gate_width=200
-      gate_timeout=20m
+      gate_width=150
+      gate_timeout=30m
       workflow_name="gVCF postprocessing"
       awk '{ if ($2=="staged") print $1 }' \
         cromshell/progress/$cancer_sub.gatk_hc.sample_progress.tsv \
@@ -145,6 +145,7 @@ check_status() {
         --status-tsv $status_tsv \
         --update-status \
         --unsafe \
+        --metrics-optional \
       2> /dev/null
     done < ~/data/cram_paths/$cancer_sub.cram_paths.tsv
   fi

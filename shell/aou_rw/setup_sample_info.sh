@@ -38,13 +38,15 @@ oral
 other
 male_controls.p1
 male_controls.p2
+female_controls.p1
+female_controls.p2
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
 # Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns, male_controls.p1
-# Second workspace: colorectal, bladder
-# Third workspace: melanoma, uterus
-# Fourth workspace: prostate, oral
+# Second workspace: colorectal, bladder, male_controls.p2
+# Third workspace: melanoma, uterus, female_controls.p1
+# Fourth workspace: prostate, oral, female_controls.p2
 # Fifth workspace: breast, other (TGCT)
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type

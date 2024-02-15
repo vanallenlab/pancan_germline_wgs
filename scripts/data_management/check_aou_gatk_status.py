@@ -7,7 +7,7 @@
 # Distributed under the terms of the GNU GPL v2.0
 
 """
-Check completion status of GATK-HC for a single All of Us sample
+Check completion status of a variant calling workflow for a single All of Us sample
 """
 
 
@@ -67,7 +67,7 @@ sv_fmts = {'cov' : cov_fmts,
            'melt-metrics' : melt_metrics_fmts,
            'wham' : wham_fmts,
            'wham-metrics' : wham_metrics_fmts}
-pp_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gvcf-pp'] + '/{}/call-Step2/{}.reblocked.g.{}',
+pp_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gvcf-pp'] + '/{}/call-Step2/**{}.reblocked.g.{}',
            'dest' : '{}/dfci-g2c-inputs/aou/gatk-hc/reblocked/{}.reblocked.g.vcf.gz'}
 formats = {'gatk-hc' : hc_fmts, 'gatk-sv' : sv_fmts, 'gvcf-pp' : pp_fmts}
 sv_has_index = {'cov' : False,
@@ -83,9 +83,22 @@ sv_has_index = {'cov' : False,
                 'melt-metrics' : False,
                 'wham' : True,
                 'wham-metrics' : False}
+sv_required = {'cov' : True,
+               'cov-metrics' : False,
+               'pe' : True,
+               'pe-metrics' : False,
+               'sr' : True,
+               'sr-metrics' : False,
+               'sd' : True,
+               'manta' : True,
+               'manta-metrics' : False,
+               'melt' : True,
+               'melt-metrics' : False,
+               'wham' : True,
+               'wham-metrics' : False}
 
 
-def check_if_staged(bucket, sid, mode):
+def check_if_staged(bucket, sid, mode, metrics_optional=False):
     """
     Returns true if a sample's outputs are found in the staging bucket
     """
@@ -98,7 +111,12 @@ def check_if_staged(bucket, sid, mode):
 
     elif mode == 'gatk-sv':
         uris = []
-        for key, has_index in sv_has_index.items():
+        if metrics_optional:
+            required_files = {k : v for k, v in sv_has_index.items() \
+                              if sv_required.get(k, False)}
+        else:
+            required_files = sv_has_index
+        for key, has_index in required_files.items():
             uri = formats[mode][key]['dest'].format(bucket, sid)
             uris.append(uri)
             if has_index:
@@ -159,7 +177,7 @@ def find_sv_files(workflow_ids, bucket, sid, uri_fmt):
     return [uri.split('/')[6] for uri in uris_found if uri.startswith('gs://')]
 
 
-def find_complete_wids(workflow_ids, bucket, sid, mode):
+def find_complete_wids(workflow_ids, bucket, sid, mode, metrics_optional=False):
     """
     Find the subset of workflow_ids that have fully complete expected output files
     """
@@ -174,7 +192,12 @@ def find_complete_wids(workflow_ids, bucket, sid, mode):
     
     elif mode == 'gatk-sv':
         surviving_wids = workflow_ids
-        for key in sv_has_index.keys():
+        if metrics_optional:
+            required_files = {k : v for k, v in sv_has_index.items() \
+                              if sv_required.get(k, False)}
+        else:
+            required_files = sv_has_index
+        for key in required_files.keys():
             surviving_wids = find_sv_files(surviving_wids, bucket, sid, 
                                            formats[mode][key]['src'])
         return surviving_wids
@@ -205,8 +228,8 @@ def check_workflow_status(workflow_id, max_retries=20, timeout=5):
         return 'unknown'        
 
 
-def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp',
-                     verbose=False):
+def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, 
+                     action='cp', verbose=False):
     """
     Relocate final output files for a sample to permanent storage location
     """
@@ -240,18 +263,28 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, action='cp'
                                          dest_uri + '.tbi']), shell=True)
 
 
-def collect_trash(workflow_ids, bucket, dumpster_path, mode):
+def collect_trash(workflow_ids, bucket, dumpster_path, mode, sample_id, 
+                  staging_bucket):
     """
     Add all execution files associated with execution of workflow_ids to the list
     of files to be deleted
     """
 
-    # Find list of all files present in execution buckets
+    # Write gsutil-compliant search strings for identifying files to delete
     ex_fmt = '{}/cromwell/execution/{}/{}/**'
     ex_uris = [ex_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
     out_fmt = '{}/cromwell/outputs/{}/{}/**'
     out_uris = [out_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
     all_uris = ex_uris + out_uris
+
+    # For reblocked gVCFs *only*, add staged raw gVCF to dumpster
+    # As of Feb 7, 2024, it was determined that only reblocked gVCFs are necessary
+    if mode == 'gvcf-pp':
+        raw_gvcf_uri = formats['gatk-hc']['dest'].format(staging_bucket, sample_id)
+        all_uris += [raw_gvcf_uri, raw_gvcf_uri + '.tbi']
+
+    # Find list of all files present in execution or output buckets
+    # and mark those files for deletion by writing their URIs to the dumpster
     garbage_raw = subprocess.run('gsutil -m ls ' + ' '.join(all_uris), 
                                  check=False, capture_output=True, 
                                  shell=True, text=True).stdout
@@ -294,6 +327,9 @@ def main():
     parser.add_argument('--always-print-status-to-stdout', default=False, 
                         action='store_true', help='Always print sample status ' +
                         'to stdout even if --update-status is specified')
+    parser.add_argument('--metrics-optional', default=False, action='store_true',
+                        help='Treat output metrics files as optional for ' +
+                        'determining whether a sample is complete.')
     args = parser.parse_args()
 
     # Check to make sure --bucket is set
@@ -331,9 +367,9 @@ def main():
         # If so, nothing more needs to be done
         if status == 'staged':
             break
-        if check_if_staged(staging_bucket, sid, args.mode):
+        if check_if_staged(staging_bucket, sid, args.mode, args.metrics_optional):
             status = 'staged'
-            break
+            break                
 
         # Second, check if sample has any previous workflow submissions
         # If not, sample has not yet been started and can be reported as such
@@ -355,7 +391,8 @@ def main():
             wid_priority = {wid : i + 1 for i, wid in enumerate(wids[::-1])}
         
         # Try to find workflows with full set of complete final outputs
-        complete_wids = find_complete_wids(wids, bucket, sid, args.mode)
+        complete_wids = find_complete_wids(wids, bucket, sid, args.mode, 
+                                           args.metrics_optional)
 
         # If at least one copy of gVCF + index are found, check cromwell status
         # of most recent job ID to confirm job was successful
@@ -372,7 +409,8 @@ def main():
             # files to output bucket and mark all temporary files for deletion
             if workflow_status == 'succeeded':
                 relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
-                collect_trash(wids, bucket, args.dumpster, args.mode)
+                collect_trash(wids, bucket, args.dumpster, args.mode, 
+                              args.sample_id, staging_bucket)
                 status = 'staged'
                 break
 
