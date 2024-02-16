@@ -20,7 +20,7 @@ bar_colors = ['blue', 'red', 'pink', 'purple', 'darkgreen', 'lightgreen', 'yello
 charr_arr = []
 charr_reblocked_arr = []
 charr_dict = dict()
-variable_of_interest = 'CHARR'
+variable_of_interest = 'CHARR' #'INCONSISTENT_AB_HET_RATE' #
 
 def grab_charr_files():
     def list_charr_files(base_path, cohort):
@@ -61,10 +61,11 @@ def process_cohorts():
     charr_files = grab_charr_files()
     cohort_dict = dict()
     cohort_dict['mesa'] = [file for file in charr_files if 'mesa' in file]
+    cohort_dict['ceph'] = [file for file in charr_files if 'ceph' in file]
     cohort_dict['gtex'] = [file for file in charr_files if 'gtex' in file]
     cohort_dict['icgc'] = [file for file in charr_files if 'icgc' in file]
     cohort_dict['lcins'] = [file for file in charr_files if 'lcins' in file]
-    #cohort_dict['hmf'] = [file for file in charr_files if 'hmf' in file]
+    cohort_dict['hmf'] = [file for file in charr_files if 'hmf' in file]
     cohort_dict['ufc'] = [file for file in charr_files if 'ufc' in file]
     cohort_dict['cptac'] = [file for file in charr_files if 'cptac' in file]
     cohort_dict['hgsvc'] = [file for file in charr_files if 'hgsvc' in file]
@@ -86,16 +87,17 @@ def make_figure():
 
 
     box_plot(charr_dict['mesa'],1,"MESA")
-    box_plot(charr_dict['gtex'],2,"GTEX")
-    box_plot(charr_dict['icgc'],3,"ICGC")
-    box_plot(charr_dict['lcins'],4,"LCINS")
-    #box_plot(charr_dict['hmf'],5,"HMF")
-    box_plot(charr_dict['ufc'],6,"UFC")
-    box_plot(charr_dict['cptac'],7,"CPTAC")
-    box_plot(charr_dict['hgsvc'],8,"HGSVC")
-    box_plot(charr_dict['biome'],9,"BIOME")
-    box_plot(charr_dict['proactive-core'],10,"P-CORE")
-    box_plot(charr_dict['proactive-other'],11,"P-OTHER")
+    box_plot(charr_dict['ceph'],2,"CEPH")
+    box_plot(charr_dict['gtex'],3,"GTEX")
+    box_plot(charr_dict['icgc'],4,"ICGC")
+    box_plot(charr_dict['lcins'],5,"LCINS")
+    box_plot(charr_dict['hmf'],6,"HMF")
+    box_plot(charr_dict['ufc'],7,"UFC")
+    box_plot(charr_dict['cptac'],8,"CPTAC")
+    box_plot(charr_dict['hgsvc'],9,"HGSVC")
+    box_plot(charr_dict['biome'],10,"BIOME")
+    box_plot(charr_dict['proactive-core'],11,"P-CORE")
+    box_plot(charr_dict['proactive-other'],12,"P-OTHER")
 
     # Show the plot
     # Add labels and title
@@ -107,6 +109,10 @@ def make_figure():
     if variable_of_interest == "CHARR":
         plt.axhline(y=0.02, linestyle='--', color='gray', label='Subtle Contamination')
         plt.axhline(y=0.03, linestyle='--', color='red', label='Suggestive of Contamination')
+        plt.legend()
+    if variable_of_interest == "INCONSISTENT_AB_HET_RATE":
+        plt.axhline(y=0.1, linestyle='--', color='gray', label='Warning')
+        plt.axhline(y=0.15, linestyle='--', color='red', label='Fail')
         plt.legend()
     # Create a wider figure
     #plt.figure(figsize=(10, 6))  # Adjust width as needed
@@ -150,9 +156,9 @@ def compare_reblocked_raw():
 
 
 if __name__ == '__main__':
-    compare_reblocked_raw()
-    #process_cohorts()
-    #make_figure()
+    #compare_reblocked_raw()
+    process_cohorts()
+    make_figure()
     # main()
 
 

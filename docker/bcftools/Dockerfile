@@ -2,23 +2,15 @@
 # Contact: Noah Fields <Noah_Fields@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Simple Dockerfile for vanallenlab/g2c_pipeline:nf_graf_plink_alpha
+# Simple Dockerfile for vanallenlab/bcftools
 
-FROM ubuntu:latest
-
+#FROM ubuntu:22.04
+#FROM ubuntu:focal-20220531
+FROM continuumio/miniconda3
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
-# Install make, zlib, file, and git
-RUN apt-get clean && \
-    apt-get -qqy update && \
-    apt-get -qqy install --fix-missing \
-      apt-utils \
-      default-libmysqlclient-dev \
-      curl \
-      vim \
-      wget \
-      tar
+
 
 # Install bcftools dependencies
 RUN apt-get update && \
@@ -31,9 +23,12 @@ RUN apt-get update && \
 RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2 && \
     tar -xvf bcftools-1.19.tar.bz2 && \
     cd bcftools-1.19 && \
-    ./configure --prefix=/bin/ && \
+    ./configure --prefix=/ && \
     make && \
     make install
+
+RUN rm -r bcftools-1.19
+RUN rm bcftools-1.19.tar.bz2
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
