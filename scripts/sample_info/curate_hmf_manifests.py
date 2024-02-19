@@ -141,7 +141,7 @@ def main():
                        'primaryTumorType germline_vcf germline_vcf_idx'
     if args.tumor_superclass_table is not None:
         tvcf_keeper_cols += ' g2c_cancer_type'
-        keep_cancers = 'Lung Colorectal Pancreas'.split()
+        keep_cancers = 'Lung Colorectal Pancreas Kidney Prostate Breast'.split()
         keep_rows = (~df.germline_vcf.isna()) & (df.g2c_cancer_type.isin(keep_cancers))
     else:
         keep_rows = ~df.germline_vcf.isna()
