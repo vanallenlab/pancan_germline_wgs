@@ -28,7 +28,7 @@ for blob in blobs:
 # blob.upload_from_string(all_content)
 
 # Ensure the directory exists for the output file
-output_directory = 'data'
+output_directory = '/Users/noah/Desktop/DFCI_Data/gsi/data'
 if not os.path.exists(output_directory):
     os.makedirs(output_directory)
 
