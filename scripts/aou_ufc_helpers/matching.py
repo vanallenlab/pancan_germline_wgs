@@ -40,7 +40,7 @@ for bandwidth in range(1,20):
             control_idx = match.index[0]
             matched_controls[idx] = control_idx #Case is key and control is value            sorted_control = sorted_control.drop(control_idx) #Drops control value from controls df            sorted_case = sorted_case.drop(idx)
 #This is just for race, age, and sex. We exclude ethnicity because that is often tied to race.
-for bandwidth in range(1,20):
+for bandwidth in range(0,20):
     for idx, case_row in sorted_case.iterrows():
         #print(f"Bandwidth: {bandwidth}")
         match = sorted_control[
@@ -55,7 +55,7 @@ for bandwidth in range(1,20):
             sorted_case = sorted_case.drop(idx)
 
 #This is just for race and age. We are putting race ahead of sex for matching.
-for bandwidth in range(1,20):
+for bandwidth in range(0,20):
     for idx, case_row in sorted_case.iterrows():
         match = sorted_control[
             (sorted_control['race'] == case_row['race']) &
@@ -68,7 +68,7 @@ for bandwidth in range(1,20):
             sorted_case = sorted_case.drop(idx)
 
 #This is just for sex and age once race and ethnicity have been used up
-for bandwidth in range(1,20):
+for bandwidth in range(0,20):
     for idx, case_row in sorted_case.iterrows():
         match = sorted_control[
             (sorted_control['sex_at_birth'] == case_row['sex_at_birth']) &
@@ -82,7 +82,7 @@ for bandwidth in range(1,20):
 
 #We are only looking for year of birth as a last resort
 #This is useful for when all of the other fields are missing
-for bandwidth in range(1,20):
+for bandwidth in range(0,20):
     for idx, case_row in sorted_case.iterrows():
         match = sorted_control[(sorted_control['year_of_birth'].between(case_row['year_of_birth'] - bandwidth, case_row['year_of_birth'] +bandwidth))
         ].head(1)
