@@ -5,9 +5,9 @@ library(ggplot2)
 
 
 # Read the TSV file with specified column names
-df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_filtered.tsv', 
+df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_filtered_not_in_cosmic.tsv', 
                  sep = '\t', 
-                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene'),
+                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene','coding','interaction'),
                  stringsAsFactors = FALSE)
 gsc <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.tsv', 
                   sep = '\t', 
@@ -129,7 +129,7 @@ create_volcano_plot <- function(p_values, odds_ratios) {
     labs(
       x = "log2(Odds Ratio)",
       y = "-log10(p-value)",
-      title = "Volcano Plot"
+      title = "Volcano Plot Coding Non-TSG-TSG Convergence"
     ) +
     theme_minimal() +
     scale_x_continuous(limits = c(-5, 15)) +  # Center x-axis at 0 with range -4 to 4
