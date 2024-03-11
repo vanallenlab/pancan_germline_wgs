@@ -5,20 +5,22 @@ library(ggplot2)
 
 
 # Read the TSV file with specified column names
-df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_filtered_not_in_cosmic.tsv', 
+df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_filtered.tsv', 
                  sep = '\t', 
-                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene','coding','interaction'),
+                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene'),
                  stringsAsFactors = FALSE)
-gsc <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.tsv', 
+gsc <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic_not_TSG_TSG.tsv', 
                   sep = '\t', 
-                  stringsAsFactors = FALSE) %>% select('cancer','germline_gene','somatic_gene')
+                  stringsAsFactors = FALSE) %>% 
+                  filter(germline_context == "coding" & somatic_context == "coding") %>% 
+                  select('cancer','germline_gene','somatic_gene')
+
 # Assuming gsc is your dataframe and cancer is the column
 gsc$cancer <- str_to_title(gsc$cancer)
 # Replace 'Renal' with 'Kidney' in gsc$cancer
 gsc$cancer <- gsub("Renal", "Kidney", gsc$cancer)
 
-#cancer_type <- "Colorectal"
-#gene <- "APC"
+
 calculate_fisher_odds <- function(df, cancer_type, germline_gene, somatic_gene) {
   # Filter dataframe by cancer type
   if (!is.na(cancer_type) && cancer_type != "All") {
@@ -102,8 +104,9 @@ for (i in 1:nrow(gsc)) {
     result <- calculate_fisher_odds(df, cancer_type = cancer_type, germline_gene = germline_gene_name, somatic_gene = somatic_gene_name)
     p_value <- c(p_value,result[[1]])
     OR <- c(OR,result[[2]])
-    writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,result[[1]],result[[2]]), file_conn)
-    print(result)
+    #writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,result[[1]],result[[2]],log2(result[[1]]),-log10(result[[2]])),file_conn)
+    writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,log2(result[[2]]),-log10(result[[1]])),file_conn)
+    #print(result)
   }
 }
 close(file_conn)
@@ -129,7 +132,7 @@ create_volcano_plot <- function(p_values, odds_ratios) {
     labs(
       x = "log2(Odds Ratio)",
       y = "-log10(p-value)",
-      title = "Volcano Plot Coding Non-TSG-TSG Convergence"
+      title = "Volcano Plot Coding-Coding TSG-TSG Convergence"
     ) +
     theme_minimal() +
     scale_x_continuous(limits = c(-5, 15)) +  # Center x-axis at 0 with range -4 to 4
