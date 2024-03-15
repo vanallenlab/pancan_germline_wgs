@@ -8,9 +8,7 @@
 
 version 1.0
 
-
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Tasks
-
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/wes_addenda/wdl/Utilities.wdl" as Tasks
 
 workflow Vep {
   input {
@@ -58,6 +56,8 @@ workflow Vep {
           bcftools_docker = bcftools_docker
       }
 
+      # sort glob
+
       scatter ( shard_info in zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs) ) {
         call Tasks.SplitRegions {
           input:
@@ -73,6 +73,8 @@ workflow Vep {
             scatter_regions = SplitRegions.regions,
             bcftools_docker = bcftools_docker
         }
+
+        # sort glob
       }
 
       Array[File] vcf_fine_shards = flatten(ShardVcfByRegion.vcf_shards)
@@ -259,6 +261,7 @@ task SliceRemoteFiles {
     cpu: n_cpu
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
+    maxRetries: 3
     bootDiskSizeGb: 30
   }
 }
