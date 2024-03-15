@@ -298,7 +298,7 @@ task SplitRegions {
 
   # Tentative
   String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?^", "")
-  Int disk_gb = ceil(1.3 * size(vcf, "GB"))
+  Int disk_gb = ceil(2.5 * size(vcf, "GB"))
 
   command <<<
     set -eu -o pipefail
