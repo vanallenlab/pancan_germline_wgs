@@ -297,7 +297,7 @@ task SplitRegions {
   }
 
   # Tentative
-  String out_prefix = sub(basename(remote_vcf_path), "\\.[bv]cf(\\.gz)?^", "")
+  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?^", "")
   Int disk_gb = ceil(1.3 * size(vcf, "GB"))
 
   command <<<
