@@ -17,7 +17,7 @@ task ShardVcf {
     String bcftools_docker
   }
 
-  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?^", "") + ".sharded"
+  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "") + ".sharded"
   Int disk_gb = ceil(3 * size(vcf, "GB"))
 
   command <<<
@@ -64,7 +64,7 @@ task ShardVcfByRegion {
     String bcftools_docker
   }
 
-  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?^", "") + ".sharded"
+  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "") + ".sharded"
   Int disk_gb = ceil(3 * size(vcf, "GB"))
 
   command <<<
@@ -297,7 +297,7 @@ task SplitRegions {
   }
 
   # Tentative
-  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?^", "")
+  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "")
   Int disk_gb = ceil(2.5 * size(vcf, "GB"))
 
   command <<<
