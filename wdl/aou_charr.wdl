@@ -6,7 +6,7 @@ workflow aou_charr {
     input {
         File samples_file
         String vcf_directory
-        String output_directory
+        String cohort
     }
 
     scatter (sample_id in read_lines(samples_file)) {
@@ -19,7 +19,7 @@ workflow aou_charr {
         call cp_file {
             input:
                 input_file = charr.output_file,
-                output_directory = output_directory,
+                cohort = cohort,
                 sample_id = sample_id
         }
     }
@@ -28,12 +28,12 @@ workflow aou_charr {
 task cp_file {
     input {
         File input_file
-        String output_directory
+        String cohort
         String sample_id
     }
 
     command {
-        gsutil -m cp ~{input_file} ~{output_directory}/~{sample_id}.txt
+        gsutil -m cp ~{input_file} gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/dfci-g2c-inputs/aou/~{cohort}/charr/~{sample_id}.txt
     }
     runtime{
         docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
