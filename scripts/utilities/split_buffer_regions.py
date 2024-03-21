@@ -19,6 +19,7 @@ import numpy as np
 
 if len(sys.argv) < 4:
   print("Script requires 3 arguments: input vcf, maximum region span, and buffer size.")
+  sys.exit(1)
 
 in_vcf = sys.argv[1]
 if not in_vcf.endswith('.vcf'):
@@ -33,7 +34,7 @@ pos = np.loadtxt(in_vcf, usecols=(1), dtype=np.int32)
 
 # unfortunately numpy sorts before returning the unique elements,
 #  so we have to unsort (i.e. re-sort the indices into order)
-Xorder = list(xrms[sorted(np.unique(xrms, return_index=True)[1])])
+# Xorder = list(xrms[sorted(np.unique(xrms, return_index=True)[1])])
 
 L, U = np.clip(pos - buffer, 1, None), pos + buffer             # Lower, Upper buffers around each variant
 I = np.nonzero((L[1:] > U[:-1]) | (xrms[1:] != xrms[:-1]))[0]   # where buffer boundaries _dont_ overlap
