@@ -5,11 +5,11 @@ library(ggplot2)
 
 
 # Read the TSV file with specified column names
-df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_filtered.tsv', 
+df <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/gsc_dl.tsv', 
                  sep = '\t', 
-                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene'),
+                 col.names = c('patient', 'cancer', 'chrom', 'loc', 'germline_gene', 'somatic_gene','driver_likelihood'),
                  stringsAsFactors = FALSE)
-gsc <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic_not_TSG_TSG.tsv', 
+gsc <- read.delim('/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic_TSG_TSG.tsv', 
                   sep = '\t', 
                   stringsAsFactors = FALSE) %>% 
                   filter(germline_context == "coding" & somatic_context == "coding") %>% 
@@ -53,6 +53,7 @@ calculate_fisher_odds <- function(df, cancer_type, germline_gene, somatic_gene) 
   
   # Print contingency table if needed
   #print("Contingency Table:")
+  print(cancer_type)
   print(final_cont_table)
   
   # Perform Fisher's exact test
@@ -104,8 +105,7 @@ for (i in 1:nrow(gsc)) {
     result <- calculate_fisher_odds(df, cancer_type = cancer_type, germline_gene = germline_gene_name, somatic_gene = somatic_gene_name)
     p_value <- c(p_value,result[[1]])
     OR <- c(OR,result[[2]])
-    #writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,result[[1]],result[[2]],log2(result[[1]]),-log10(result[[2]])),file_conn)
-    writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,log2(result[[2]]),-log10(result[[1]])),file_conn)
+    #writeLines(paste(cancer_type,germline_gene_name,somatic_gene_name,log2(result[[2]]),-log10(result[[1]])),file_conn)
     #print(result)
   }
 }

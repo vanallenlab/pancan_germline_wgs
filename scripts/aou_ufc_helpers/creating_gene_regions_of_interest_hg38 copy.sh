@@ -26,7 +26,7 @@ zcat MANE.GRCh38.v1.3.ensembl_genomic.subsetted.gtf.gz \
 
 # Copy gene coordinates to your AoU workspace bucket
 # You can find this by running "echo $WORKSPACE_BUCKET" within the AoU workbench terminal
-gsutil cp riaz_genes.coordinates.bed.gz gs://my_workspace_bucket/
+#gsutil cp riaz_genes.coordinates.bed.gz gs://my_workspace_bucket/
 
 # Subset variants to minimal set of interest for our purposes
 # Note that this must be run in the AoU workspace terminal, not on your local machine
