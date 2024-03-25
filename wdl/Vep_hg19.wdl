@@ -53,7 +53,6 @@ workflow Vep {
       vep_assembly = vep_assembly,
       vep_version = vep_version,
       docker = vep_docker
-    }
   }
 
 
