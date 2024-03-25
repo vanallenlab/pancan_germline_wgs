@@ -41,7 +41,7 @@ workflow Vep {
   }
 
   Int n_remote_files = length(select_first([vep_remote_files]))
-  Int n_gnomad_files = 0
+  Int n_gnomad_files = length(select_first([gnomad_vcf_uris]))
   Boolean any_remote = n_remote_files + n_gnomad_files > 0 
 
   scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
@@ -68,6 +68,9 @@ workflow Vep {
           input:
             vcf = vcf,
             vcf_idx = vcf_idx,
+            #gnomad_vcf_uris = gnomad_vcf_uris,
+            #gnomad_vcf_indexes = gnomad_vcf_indexes,
+            #gnomad_infos = gnomad_infos,
             vep_remote_files = vep_remote_files,
             vep_remote_file_indexes = vep_remote_file_indexes,
             query_buffer = remote_query_buffer
@@ -87,7 +90,7 @@ workflow Vep {
           reference_fasta = reference_fasta,
           vep_cache_tarball = vep_cache_tarball,
           other_vep_files = all_other_vep_files,
-          gnomad_infos = select_first([gnomad_infos]),
+          #gnomad_infos = select_first([gnomad_infos]),
           vep_options = vep_options,
           vep_assembly = vep_assembly,
           vep_version = vep_version,
