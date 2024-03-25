@@ -78,9 +78,7 @@ workflow Vep {
       }
 
       Array[File?] all_other_vep_files = flatten(select_all([SliceRemoteFiles.remote_slices, 
-                                                             SliceRemoteFiles.remote_slice_idxs, 
-                                                             [SliceRemoteFiles.gnomad_vcf],
-                                                             [SliceRemoteFiles.gnomad_vcf_idx],
+                                                             SliceRemoteFiles.remote_slice_idxs,
                                                              other_vep_files]))
 
       call RunVep {
@@ -189,47 +187,12 @@ task SliceRemoteFiles {
       done < ~{write_lines(select_first([vep_remote_files]))}
     fi
 
-    if [ ~{n_gnomad_files} -gt 0 ]; then
-      echo -e "\nSLICING GNOMAD VCFs:\n"
-      mkdir gnomad_slices/
-      mv ~{sep=" " select_first([gnomad_vcf_indexes])} ./
-
-      query_fmt="%CHROM\t%POS\t%ID\t%REF\t%ALT\t%QUAL\t%FILTER"
-      query_keys=$( cat ~{write_lines(select_first([gnomad_infos]))} | awk '{ print $1"=%INFO/"$1 }' | paste -s -d\; )
-      query_fmt="$query_fmt\t$query_keys\n"
-      echo "Interpreted gnomAD query format as $query_fmt"
-
-      if [ $n_queries -gt 0 ]; then
-        while read uri; do
-          local_name=$( basename $uri )
-          echo -e "$local_name"
-          tabix -H $uri | cut -f1-8 > "$local_name".header
-          bcftools query \
-            -R query.bed.gz \
-            -f "$query_fmt" \
-            $uri \
-          | cat "$local_name".header - | bgzip -c \
-          > gnomad_slices/"$local_name"
-        done < ~{write_lines(select_first([gnomad_vcf_uris]))}
-
-        echo -e "\nMERGING GNOMAD VCFs:\n"
-        bcftools concat --naive \
-          -O z -o ~{gnomad_outfile_prefix}.vcf.gz \
-          gnomad_slices/*.vcf.*z
-      else
-        tabix -H ~{select_first([gnomad_vcf_uris])[0]} \
-        | bgzip -c > ~{gnomad_outfile_prefix}.vcf.gz
-      fi
-      tabix -p vcf -f ~{gnomad_outfile_prefix}.vcf.gz
-    fi
 
   >>>
 
   output {
     Array[File]? remote_slices = glob("remote_slices/*gz")
     Array[File]? remote_slice_idxs = glob("remote_slices/*gz.tbi")
-    File? gnomad_vcf = "~{gnomad_outfile_prefix}.vcf.gz"
-    File? gnomad_vcf_idx = "~{gnomad_outfile_prefix}.vcf.gz.tbi"
   }
 
   runtime {
