@@ -44,8 +44,8 @@ workflow Vep {
 
   call RunVep {
     input:
-      vcf = shard_info.left,
-      vcf_idx = shard_info.right,
+      vcf = vcfs[0],
+      vcf_idx = vcf_idxs[0],
       reference_fasta = reference_fasta,
       vep_cache_tarball = vep_cache_tarball,
       other_vep_files = all_other_vep_files,
@@ -57,8 +57,8 @@ workflow Vep {
 
 
   output {
-    Array[File] annotated_vcfs = vepped_vcf
-    Array[File] annotated_vcf_idxs = vepped_vcf_idx
+    Array[File] annotated_vcfs = RunVep.annotated_vcf
+    Array[File] annotated_vcf_idxs = RunVep.annotated_vcf_idx
   }
 }
 
