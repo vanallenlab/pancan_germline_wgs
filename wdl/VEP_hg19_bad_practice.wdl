@@ -68,9 +68,6 @@ workflow Vep {
           input:
             vcf = vcf,
             vcf_idx = vcf_idx,
-            gnomad_vcf_uris = gnomad_vcf_uris,
-            gnomad_vcf_indexes = gnomad_vcf_indexes,
-            gnomad_infos = gnomad_infos,
             vep_remote_files = vep_remote_files,
             vep_remote_file_indexes = vep_remote_file_indexes,
             query_buffer = remote_query_buffer
