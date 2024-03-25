@@ -41,7 +41,7 @@ workflow Vep {
   }
 
   Int n_remote_files = length(select_first([vep_remote_files]))
-  Int n_gnomad_files = length(select_first([gnomad_vcf_uris]))
+  Int n_gnomad_files = 0
   Boolean any_remote = n_remote_files + n_gnomad_files > 0 
 
   scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
