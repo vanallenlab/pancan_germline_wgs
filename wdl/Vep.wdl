@@ -27,7 +27,7 @@ workflow Vep {
     Array[File?] other_vep_files # All other files needed for VEP. These will be localized in full to each VM and moved to execution directory.
 
     Array[String] vep_options = [""]
-    String vep_assembly = "GRCh38"
+    String vep_assembly = "GRCh37"
     Int vep_version = 110
 
     Boolean shard_vcfs = true
