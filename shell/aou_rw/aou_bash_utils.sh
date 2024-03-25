@@ -168,6 +168,9 @@ update_status_table() {
       *control*)
         name_for_table="controls"
         ;;
+      pediatric)
+        name_for_table="other"
+        ;;
       *)
         name_for_table=$cancer_sub
         ;;

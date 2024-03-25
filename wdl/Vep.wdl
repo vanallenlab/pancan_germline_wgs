@@ -19,12 +19,12 @@ workflow Vep {
 
     File reference_fasta
     File vep_cache_tarball # VEP cache tarball downloaded from Ensembl
-    Array[String?] gnomad_vcf_uris # URIs for gnomAD sites VCFs stored in Google buckets that can be remotely sliced using tabix for each shard
-    Array[File?] gnomad_vcf_indexes # Indexes corresponding to gnomad_vcf_uris
-    Array[String?] gnomad_infos # INFO keys to annotate from gnomad VCFs
-    Array[String?] vep_remote_files # URIs for files stored in Google buckets that can be remotely sliced using tabix for each shard
-    Array[File?] vep_remote_file_indexes # Indexes corresponding to vep_remote_files
-    Array[File?] other_vep_files # All other files needed for VEP. These will be localized in full to each VM and moved to execution directory.
+    Array[String]? gnomad_vcf_uris # URIs for gnomAD sites VCFs stored in Google buckets that can be remotely sliced using tabix for each shard
+    Array[File]? gnomad_vcf_indexes # Indexes corresponding to gnomad_vcf_uris
+    Array[String]? gnomad_infos # INFO keys to annotate from gnomad VCFs
+    Array[String]? vep_remote_files # URIs for files stored in Google buckets that can be remotely sliced using tabix for each shard
+    Array[File]? vep_remote_file_indexes # Indexes corresponding to vep_remote_files
+    Array[File]? other_vep_files # All other files needed for VEP. These will be localized in full to each VM and moved to execution directory.
 
     Array[String] vep_options = [""]
     String vep_assembly = "GRCh38"
@@ -40,8 +40,8 @@ workflow Vep {
     String vep_docker = "vanallenlab/g2c-vep:latest"
   }
 
-  Int n_remote_files = length(select_all(vep_remote_files))
-  Int n_gnomad_files = length(select_all(gnomad_vcf_uris))
+  Int n_remote_files = length(select_first([vep_remote_files]))
+  Int n_gnomad_files = length(select_first([gnomad_vcf_uris]))
   Boolean any_remote = n_remote_files + n_gnomad_files > 0 
 
   scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
@@ -90,7 +90,7 @@ workflow Vep {
           reference_fasta = reference_fasta,
           vep_cache_tarball = vep_cache_tarball,
           other_vep_files = all_other_vep_files,
-          gnomad_infos = select_all(gnomad_infos),
+          gnomad_infos = select_first([gnomad_infos]),
           vep_options = vep_options,
           vep_assembly = vep_assembly,
           vep_version = vep_version,
@@ -134,11 +134,11 @@ task SliceRemoteFiles {
   input {
     String vcf
     File vcf_idx
-    Array[String?] gnomad_vcf_uris
-    Array[File?] gnomad_vcf_indexes
-    Array[String?] vep_remote_files
-    Array[File?] vep_remote_file_indexes
-    Array[String?] gnomad_infos
+    Array[String]? gnomad_vcf_uris
+    Array[File]? gnomad_vcf_indexes
+    Array[String]? vep_remote_files
+    Array[File]? vep_remote_file_indexes
+    Array[String]? gnomad_infos
 
     Int query_buffer = 1000
     String gnomad_outfile_prefix = "gnomad"
@@ -150,8 +150,8 @@ task SliceRemoteFiles {
     String docker = "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7"
   }
 
-  Int n_remote_files = length(select_all(vep_remote_files))
-  Int n_gnomad_files = length(select_all(gnomad_vcf_uris))
+  Int n_remote_files = length(select_first([vep_remote_files]))
+  Int n_gnomad_files = length(select_first([gnomad_vcf_uris]))
 
   command <<<
     set -eu -o pipefail
@@ -173,7 +173,7 @@ task SliceRemoteFiles {
     if [ ~{n_remote_files} -gt 0 ]; then
       echo -e "\nSLICING REMOTE ANNOTATION FILES:\n"
       mkdir remote_slices
-      mv ~{sep=" " select_all(vep_remote_file_indexes)} ./
+      mv ~{sep=" " select_first([vep_remote_file_indexes])} ./
 
       while read uri; do
         local_name=$( basename $uri )
@@ -186,16 +186,16 @@ task SliceRemoteFiles {
           | bgzip -c > remote_slices/$local_name
         fi
         tabix -s 1 -b 2 -e 2 -f remote_slices/$local_name
-      done < ~{write_lines(select_all(vep_remote_files))}
+      done < ~{write_lines(select_first([vep_remote_files]))}
     fi
 
     if [ ~{n_gnomad_files} -gt 0 ]; then
       echo -e "\nSLICING GNOMAD VCFs:\n"
       mkdir gnomad_slices/
-      mv ~{sep=" " select_all(gnomad_vcf_indexes)} ./
+      mv ~{sep=" " select_first([gnomad_vcf_indexes])} ./
 
       query_fmt="%CHROM\t%POS\t%ID\t%REF\t%ALT\t%QUAL\t%FILTER"
-      query_keys=$( cat ~{write_lines(select_all(gnomad_infos))} | awk '{ print $1"=%INFO/"$1 }' | paste -s -d\; )
+      query_keys=$( cat ~{write_lines(select_first([gnomad_infos]))} | awk '{ print $1"=%INFO/"$1 }' | paste -s -d\; )
       query_fmt="$query_fmt\t$query_keys\n"
       echo "Interpreted gnomAD query format as $query_fmt"
 
@@ -210,14 +210,14 @@ task SliceRemoteFiles {
             $uri \
           | cat "$local_name".header - | bgzip -c \
           > gnomad_slices/"$local_name"
-        done < ~{write_lines(select_all(gnomad_vcf_uris))}
+        done < ~{write_lines(select_first([gnomad_vcf_uris]))}
 
         echo -e "\nMERGING GNOMAD VCFs:\n"
         bcftools concat --naive \
           -O z -o ~{gnomad_outfile_prefix}.vcf.gz \
           gnomad_slices/*.vcf.*z
       else
-        tabix -H ~{select_all(gnomad_vcf_uris)[0]} \
+        tabix -H ~{select_first([gnomad_vcf_uris])[0]} \
         | bgzip -c > ~{gnomad_outfile_prefix}.vcf.gz
       fi
       tabix -p vcf -f ~{gnomad_outfile_prefix}.vcf.gz
@@ -226,8 +226,8 @@ task SliceRemoteFiles {
   >>>
 
   output {
-    Array[File?] remote_slices = glob("remote_slices/*gz")
-    Array[File?] remote_slice_idxs = glob("remote_slices/*gz.tbi")
+    Array[File]? remote_slices = glob("remote_slices/*gz")
+    Array[File]? remote_slice_idxs = glob("remote_slices/*gz.tbi")
     File? gnomad_vcf = "~{gnomad_outfile_prefix}.vcf.gz"
     File? gnomad_vcf_idx = "~{gnomad_outfile_prefix}.vcf.gz.tbi"
   }

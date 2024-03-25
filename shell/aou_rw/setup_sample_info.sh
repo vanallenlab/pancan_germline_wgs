@@ -41,12 +41,15 @@ male_controls.p2
 female_controls.p1
 female_controls.p2
 multiple_sites
+pediatric
+ufc_cases
+ufc_controls
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
-# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns, male_controls.p1
-# Second workspace: colorectal, bladder, male_controls.p2, multiple_sites
-# Third workspace: melanoma, uterus, female_controls.p1
+# Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns, male_controls.p1, pediatric
+# Second workspace: colorectal, bladder, male_controls.p2, multiple_sites, ufc_cases
+# Third workspace: melanoma, uterus, female_controls.p1, ufc_controls
 # Fourth workspace: prostate, oral, female_controls.p2
 # Fifth workspace: breast, other (TGCT)
 
