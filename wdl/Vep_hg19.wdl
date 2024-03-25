@@ -57,8 +57,8 @@ workflow Vep {
 
 
   output {
-    Array[File] annotated_vcfs = RunVep.annotated_vcf
-    Array[File] annotated_vcf_idxs = RunVep.annotated_vcf_idx
+    File annotated_vcfs = RunVep.annotated_vcf
+    File annotated_vcf_idxs = RunVep.annotated_vcf_idx
   }
 }
 
