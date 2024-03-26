@@ -92,13 +92,6 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
 
-    # Relocate other_vep_files to execution directory
-    #if [ ~{defined(other_vep_files)} == "true" ]; then
-    #  while read file; do
-    #    mv "$file" ./
-    #  done < ~{write_lines(select_all(other_vep_files))}
-    #fi
-
 
     vep \
       --input_file ~{vcf} \
