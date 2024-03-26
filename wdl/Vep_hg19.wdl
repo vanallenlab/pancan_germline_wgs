@@ -95,7 +95,7 @@ task RunVep {
     # Relocate other_vep_files to execution directory
     if [ ~{defined(other_vep_files)} == "true" ]; then
       while read file; do
-        mv $file ./
+        mv "$file" ./
       done < ~{write_lines(select_all(other_vep_files))}
     fi
 
