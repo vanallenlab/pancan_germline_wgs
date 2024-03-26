@@ -90,7 +90,7 @@ task RunVep {
 
     # Unpack contents of cache into $VEP_CACHE/
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
-    tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
+    tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE
 
 
     vep \
