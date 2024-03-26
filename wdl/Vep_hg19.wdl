@@ -124,6 +124,7 @@ task RunVep {
       --symbol \
       --canonical \
       --domains \
+      --merged \
       ~{sep=" " vep_options} 
 
     tabix -f ~{out_filename}
