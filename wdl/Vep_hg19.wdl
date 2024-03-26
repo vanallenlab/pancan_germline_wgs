@@ -97,7 +97,7 @@ task RunVep {
     echo $VEP_CACHE
     find $VEP_CACHE/
 
-
+    #Removed '--nearest gene \'
     vep \
       --input_file ~{vcf} \
       --format vcf \
@@ -116,7 +116,6 @@ task RunVep {
       --dir_plugins $VEP_PLUGINS/ \
       --fasta ~{reference_fasta} \
       --minimal \
-      --nearest gene \
       --distance 10000 \
       --numbers \
       --hgvs \
