@@ -92,6 +92,11 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE
 
+    pwd
+    ls -lh ./
+    echo $VEP_CACHE
+    find $VEP_CACHE/
+
 
     vep \
       --input_file ~{vcf} \
