@@ -98,13 +98,13 @@ task RunVep {
     find $VEP_CACHE/
 
     #Removed '--nearest gene \'
+    #Removed '--compress_output bgzip \'
     vep \
       --input_file ~{vcf} \
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
       --verbose \
-      --compress_output bgzip \
       --force_overwrite \
       --species homo_sapiens \
       --assembly ~{vep_assembly} \
