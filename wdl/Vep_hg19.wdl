@@ -92,18 +92,18 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE
 
-    pwd
-    ls -lh ./
-    echo $VEP_CACHE
-    find $VEP_CACHE/
+    pwd > know.txt
+    find / -name 'ClinVar.GRCh37.march15_2024.vcf.gz' >> know.txt
+
+
 
     #Removed '--nearest gene \'
-    #Removed '--compress_output bgzip \'
     vep \
       --input_file ~{vcf} \
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
+      --compress_output bgzip
       --verbose \
       --force_overwrite \
       --species homo_sapiens \
