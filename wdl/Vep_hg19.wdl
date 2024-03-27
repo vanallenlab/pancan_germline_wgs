@@ -98,12 +98,12 @@ task RunVep {
 
 
     #Removed '--nearest gene \'
+    #Removed '--compress_output bgzip'
     vep \
       --input_file ~{vcf} \
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
-      --compress_output bgzip
       --verbose \
       --force_overwrite \
       --species homo_sapiens \
@@ -133,6 +133,7 @@ task RunVep {
   output {
     File annotated_vcf = "~{out_filename}"
     File annotated_vcf_idx = "~{out_filename}.tbi"
+    File curious = "know.txt"
   }
 
   runtime {
