@@ -37,7 +37,7 @@ workflow Vep {
 
 
 
-  Array[File?] all_other_vep_files = flatten(select_all([other_vep_files]))
+  Array[File?] all_other_vep_files = flatten(select_all([vep_remote_files, other_vep_files]))
 
   call RunVep {
     input:
