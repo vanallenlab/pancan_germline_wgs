@@ -37,7 +37,7 @@ workflow Vep {
 
 
 
-  #Array[File] all_other_vep_files = flatten(select_all([vep_remote_files, other_vep_files]))
+  Array[File] all_other_vep_files = flatten(select_all([vep_remote_files, vep_remote_file_indexes]))
 
   call RunVep {
     input:
@@ -45,7 +45,7 @@ workflow Vep {
       vcf_idx = vcf_idxs[0],
       reference_fasta = reference_fasta,
       vep_cache_tarball = vep_cache_tarball,
-      other_vep_files = vep_remote_files,
+      other_vep_files = all_other_vep_files,
       vep_options = vep_options,
       vep_assembly = vep_assembly,
       vep_version = vep_version,
