@@ -139,7 +139,6 @@ task RunVep {
   output {
     File annotated_vcf = "~{out_filename}"
     File annotated_vcf_idx = "~{out_filename}.tbi"
-    File curious = "know.txt"
   }
 
   runtime {
