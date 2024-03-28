@@ -103,12 +103,13 @@ task RunVep {
     fi
 
     #Removed '--nearest gene \'
-    #Removed '--compress_output bgzip'
+    #Removed ''
     vep \
       --input_file ~{vcf} \
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
+      --compress_output bgzip
       --verbose \
       --force_overwrite \
       --species homo_sapiens \
