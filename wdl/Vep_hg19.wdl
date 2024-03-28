@@ -117,7 +117,8 @@ task RunVep {
       --max_sv_size ~{vep_max_sv_size} \
       --offline \
       --cache \
-      --dir_cache $VEP_CACHE/ \
+      #--dir_cache $VEP_CACHE/ \
+      --dir_cache homo_sapiends_merged/ \
       --cache_version ~{vep_version} \
       --dir_plugins $VEP_PLUGINS/ \
       --fasta ~{reference_fasta} \
