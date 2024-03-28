@@ -90,7 +90,7 @@ task RunVep {
 
     # Unpack contents of cache into $VEP_CACHE/
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
-    tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE
+    tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
 
     pwd > know.txt
     find / -name '57000001-58000000_reg.gz' >> know.txt
@@ -109,7 +109,7 @@ task RunVep {
       --format vcf \
       --output_file ~{out_filename} \
       --vcf \
-      --compress_output bgzip
+      --compress_output bgzip \
       --verbose \
       --force_overwrite \
       --species homo_sapiens \
@@ -117,8 +117,7 @@ task RunVep {
       --max_sv_size ~{vep_max_sv_size} \
       --offline \
       --cache \
-      #--dir_cache $VEP_CACHE/ \
-      --dir_cache homo_sapiends_merged/ \
+      --dir_cache $VEP_CACHE/ \
       --cache_version ~{vep_version} \
       --dir_plugins $VEP_PLUGINS/ \
       --fasta ~{reference_fasta} \
