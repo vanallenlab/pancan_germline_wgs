@@ -92,8 +92,8 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE
 
-    #pwd > know.txt
-    #find / -name 'ClinVar.GRCh37.march15_2024.vcf.gz' >> know.txt
+    pwd > know.txt
+    find / -name '57000001-58000000_reg.gz' >> know.txt
 
     # Relocate other_vep_files to execution directory
     if [ ~{defined(other_vep_files)} == "true" ]; then
@@ -139,6 +139,7 @@ task RunVep {
   output {
     File annotated_vcf = "~{out_filename}"
     File annotated_vcf_idx = "~{out_filename}.tbi"
+    File know = "know.txt"
   }
 
   runtime {
