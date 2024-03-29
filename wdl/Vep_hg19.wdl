@@ -130,7 +130,7 @@ task RunVep {
       --canonical \
       --domains \
       --merged \
-      --chr 21
+      --chr 21 \
       ~{sep=" " vep_options} 
 
     tabix -f ~{out_filename}
