@@ -92,9 +92,6 @@ task RunVep {
     # Note that $VEP_CACHE is a default ENV variable set in VEP docker
     tar -xzvf ~{vep_cache_tarball} -C $VEP_CACHE/
 
-    pwd > know.txt
-    find / -name '57000001-58000000_reg.gz' >> know.txt
-
     # Relocate other_vep_files to execution directory
     if [ ~{defined(other_vep_files)} == "true" ]; then
       while read file; do
@@ -130,7 +127,6 @@ task RunVep {
       --canonical \
       --domains \
       --merged \
-      --chr 21 \
       ~{sep=" " vep_options} 
 
     tabix -f ~{out_filename}
@@ -140,7 +136,6 @@ task RunVep {
   output {
     File annotated_vcf = "~{out_filename}"
     File annotated_vcf_idx = "~{out_filename}.tbi"
-    File know = "know.txt"
   }
 
   runtime {
