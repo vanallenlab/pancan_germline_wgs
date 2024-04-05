@@ -44,14 +44,17 @@ multiple_sites
 pediatric
 ufc_cases
 ufc_controls
+prostate_topup
+male_controls.p3
+relatives
 EOF
 # Note: as of 1/8/24, single-sample processing for cancers were divided among 
 # multiple workspaces as follows:
 # Main workspace: pancreas, esophagus, stomach, lung, liver, kidney, ovary, cns, male_controls.p1, pediatric
-# Second workspace: colorectal, bladder, male_controls.p2, multiple_sites, ufc_cases
-# Third workspace: melanoma, uterus, female_controls.p1, ufc_controls
+# Second workspace: colorectal, bladder, male_controls.p2, multiple_sites, ufc_cases, male_controls.p3
+# Third workspace: melanoma, uterus, female_controls.p1, ufc_controls, relatives
 # Fourth workspace: prostate, oral, female_controls.p2
-# Fifth workspace: breast, other (TGCT)
+# Fifth workspace: breast, other (GCT + testicular), prostate_topup
 
 # Make .tsv mapping person_id, cram path, and crai path for each cancer type
 while read cancer; do
