@@ -107,29 +107,12 @@ task get_germline_coding_variants{
 
 task get_somatic_coding_drivers{
   input {
-	Array[String] somatic_tsvs
+	File somatic_tsv
 	File somatic_genes
     String id
   }
   command <<<
-	# Create a directory to store downloaded files
-	mkdir -p downloaded_somatic_tsvs
-
-	# Download each somatic_tsvs file
-	for file in "${somatic_tsvs[@]}"; do
-		gsutil cp "$file" downloaded_somatic_tsvs/
-	done
-
-	touch filtered_genes.txt
-
-	# Iterate over downloaded somatic_tsvs files
-	for file in downloaded_somatic_tsvs/*;
-	do
-		cat $file | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> filtered_genes.txt
-	done
-
-	# Create the final output file with sorted and unique genes
-	cat filtered_genes.txt | sort | uniq > ~{id}.som_driving.txt
+	cat ~{somatic_tsv} | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> ~{id}.som_driving.txt
   >>>
   
   runtime {
@@ -171,10 +154,10 @@ task converge{
   >>>
   
   runtime {
-    docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
+    docker: "ubuntu:latest"
   }
   output{
-  	String patient_info = read_string("~{id}_info.txt")
+  	File patient_info = "~{id}_info.txt"
   }
 }
 
@@ -186,7 +169,7 @@ workflow convergence {
     File germline_somatic_table
     String id
     String cancer_type
-    Array[String] somatic_tsvs
+    File somatic_tsv
   }
   call get_coding_regions{
     input:
@@ -203,7 +186,7 @@ workflow convergence {
   call get_somatic_coding_drivers{
     input:
       somatic_genes = get_coding_regions.somatic_coding_list,
-      somatic_tsvs = somatic_tsvs,
+      somatic_tsv = somatic_tsv,
       id = id
   }
   call converge{
@@ -215,6 +198,6 @@ workflow convergence {
 	  somatic_genes = get_coding_regions.somatic_coding_list
   }
   output{
-  	String convergence = converge.patient_info
+  	File convergence = converge.patient_info
   }
 }
