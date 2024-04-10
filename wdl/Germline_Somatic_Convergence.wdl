@@ -166,7 +166,7 @@ task converge{
     docker: "ubuntu:latest"
   }
   output{
-  	File patient_info = "~{id}_info.txt"
+  	String patient_info = read_string("~{id}_info.txt")
   }
 }
 
@@ -207,6 +207,6 @@ workflow convergence {
 	  somatic_genes = get_coding_regions.somatic_coding_list
   }
   output{
-  	File convergence = converge.patient_info
+  	String convergence = converge.patient_info
   }
 }
