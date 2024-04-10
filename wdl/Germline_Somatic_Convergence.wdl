@@ -107,17 +107,28 @@ task get_germline_coding_variants{
 
 task get_somatic_coding_drivers{
   input {
-	Array[File] somatic_tsvs
+	Array[String] somatic_tsvs
 	File somatic_genes
     String id
   }
   command <<<
+  # Create a directory to store downloaded files
+  mkdir -p downloaded_somatic_tsvs
+
+  # Download each somatic_tsvs file
+  for file in "${somatic_tsvs[@]}"; do
+    gsutil cp "$file" downloaded_somatic_tsvs/
+  done
+
 	touch filtered_genes.txt
 
-	for file in ~{sep=" " somatic_tsvs};
+	# Iterate over downloaded somatic_tsvs files
+	for file in downloaded_somatic_tsvs/*;
 	do
 		cat $file | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> filtered_genes.txt
 	done
+
+	# Create the final output file with sorted and unique genes
 	cat filtered_genes.txt | sort | uniq > ~{id}.som_driving.txt
 	#if [ $( cat "~{id}.som_driving.txt" | awk 'END {print NR}' ) -eq 0 ]; then
 		#echo -e "NO_GENE" > ~{id}.som_driving.txt
@@ -163,7 +174,7 @@ task converge{
   >>>
   
   runtime {
-    docker: "ubuntu:latest"
+    docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
   }
   output{
   	String patient_info = read_string("~{id}_info.txt")
