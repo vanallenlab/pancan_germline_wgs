@@ -40,6 +40,7 @@ task Noncoding_germline_SNPs {
         out="{out}	1"
       else
         out="{out}	0"
+      fi
     done < germline_noncoding.list
     echo "$out" > ~{id}.snps
   >>>
