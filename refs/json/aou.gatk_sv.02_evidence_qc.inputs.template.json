@@ -1,0 +1,13 @@
+{
+	"EvidenceQC.batch": "$BATCH",
+	"EvidenceQC.counts": [$COUNTS],
+	"EvidenceQC.genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
+	"EvidenceQC.run_ploidy": true,
+	"EvidenceQC.run_vcf_qc": false,
+	"EvidenceQC.samples": [$SAMPLES],
+	"EvidenceQC.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7",
+	"EvidenceQC.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/vjalili/sv-base-mini:5994670",
+	"EvidenceQC.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-09-13-v0.28.3-beta-af8362e3",
+	"EvidenceQC.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-09-13-v0.28.3-beta-af8362e3",
+	"EvidenceQC.wgd_scoring_mask": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed"
+}

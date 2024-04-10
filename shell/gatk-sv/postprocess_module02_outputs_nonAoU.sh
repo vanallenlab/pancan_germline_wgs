@@ -79,12 +79,18 @@ while read bid; do
 done < <( sed '1d' $WRKDIR/dfci-g2c-ploidy-estimation.terra_manifest.tsv | cut -f1 )
 
 # Once all batches have been processed, combine the QC tables across all batches
-head -n1 $( find $WRKDIR -name "*.evidence_qc_table.tsv" | head -n1 \
-            | sed 's/^#ID/#cohort\tsample/' ) \
+head -n1 $( find $WRKDIR -name "*.evidence_qc_table.tsv" | head -n1 ) \
+| sed 's/^#ID/#cohort\tsample/' \
 > $WRKDIR/dfci-g2c-ploidy-estimation.merged_qc_table.tsv
 find $WRKDIR -name "*.evidence_qc_table.tsv" \
 | xargs -I {} cat {} | grep -ve '^#' | sed 's/_/\t/' | sort -Vk1,1 -k2,2V \
->> 
+>> $WRKDIR/dfci-g2c-ploidy-estimation.merged_qc_table.tsv
+gzip -f $WRKDIR/dfci-g2c-ploidy-estimation.merged_qc_table.tsv
+
+# Copy QC table to G2C staging bucket
+gsutil -m cp \
+  $WRKDIR/dfci-g2c-ploidy-estimation.merged_qc_table.tsv.gz \
+  gs://dfci-g2c-inputs/intake_qc/
 
 
 # Cleanup
