@@ -176,7 +176,6 @@ workflow convergence {
   input{
     File germline_merged_vep_vcf
     File germline_somatic_table
-    File cosmic_tsg_list
     String id
     String cancer_type
     Array[File] somatic_tsvs
