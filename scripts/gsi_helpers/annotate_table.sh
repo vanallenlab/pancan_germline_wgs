@@ -1,9 +1,13 @@
 #!/bin/bash
+COSMIC_TABLE="/Users/noah/Desktop/DFCI_Data/gsi/data/COSMIC.CGC.10_26_23.tsv"
+CELLCHAT_TABLE="/Users/noah/Desktop/DFCI_Data/gsi/data/cellchat_db_formatted.csv"
+VALab_germline_somatic_table="/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.tsv"
+output_file="/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.annotated.tsv"
 
 # Function to check ONC status from COSMIC.CGC.10_26_23.tsv
 get_onc_status() {
     local gene="$1"
-    local oncogene="$(grep -m 1 "^$gene" COSMIC.CGC.10_26_23.tsv | cut -d $'\t' -f 15)"
+    local oncogene="$(grep -m 1 "^$gene" "$COSMIC_TABLE" | cut -d $'\t' -f 15)"
     
     if grep -q "oncogene" <<< "$oncogene" && grep -q "TSG" <<< "$oncogene"; then
         echo "ONC-TSG"
@@ -22,9 +26,9 @@ get_signaling_scenario() {
     
     local signaling_scenario=""
     
-    if grep -q -F "$gene" <(cut -d ',' -f4 cellchat_db_formatted.csv);then
+    if grep -q -F "$gene" <(cut -d ',' -f4 "$CELLCHAT_TABLE");then
 	signaling_scenario="Ligand"
-    elif grep -q -F "$gene" <(cut -d ',' -f5 cellchat_db_formatted.csv);then
+    elif grep -q -F "$gene" <(cut -d ',' -f5 "$CELLCHAT_TABLE");then
 	signaling_scenario="Receptor"
     else
 	signaling_scenario="UNK"
@@ -33,7 +37,19 @@ get_signaling_scenario() {
     echo "$signaling_scenario"
 }
 
-echo -e "cancer\tgermline_gene\tgermline_context\tgermline_onc_status\tgermline_signaling\tsomatic_gene\tsomatic_context\tsomatic_onc_status\tsomatic_signaling\tcriteria"
+get_mutation_type() {
+    local gene="$1"
+    
+    local mutation_type="$(grep -m 1 "^$gene" "$COSMIC_TABLE" | cut -d $'\t' -f16)"
+
+    if test -z "$mutation_type";then
+        echo "UNK"
+    else
+        echo "$mutation_type"
+    fi
+}
+
+echo -e "cancer\tgermline_gene\tgermline_context\tgermline_onc_status\tgermline_mutations\tgermline_signaling\tsomatic_gene\tsomatic_context\tsomatic_onc_status\tsomatic_mutations\tsomatic_signaling\tcriteria" > "$output_file"
 # Main script
 while IFS=$'\t' read -r cancer germline_gene germline_context somatic_gene somatic_context criteria; do
     # Get ONC status for germline gene
@@ -45,7 +61,12 @@ while IFS=$'\t' read -r cancer germline_gene germline_context somatic_gene somat
     # Get Signaling Scenario
     germline_signaling_scenario=$(get_signaling_scenario "$germline_gene")
     somatic_signaling_scenario=$(get_signaling_scenario "$somatic_gene")
+
+    #Get Mutation Type
+    germline_mutation_type=$(get_mutation_type "$germline_gene")
+    somatic_mutation_type=$(get_mutation_type "$somatic_gene")
+
     # Print the updated line
-    echo -e "$cancer\t$germline_gene\t$germline_context\t$germline_onc_status\t$germline_signaling_scenario\t$somatic_gene\t$somatic_context\t$somatic_onc_status\t$somatic_signaling_scenario\t$criteria"
-done < VALab_germline_somatic.tsv | tail -n +2
+    echo -e "$cancer\t$germline_gene\t$germline_context\t$germline_onc_status\t$germline_mutation_type\t$germline_signaling_scenario\t$somatic_gene\t$somatic_context\t$somatic_onc_status\t$germline_mutation_type\t$somatic_signaling_scenario\t$criteria" >> "$output_file"
+done < "$VALab_germline_somatic_table" | tail -n +2
 
