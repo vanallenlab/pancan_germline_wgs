@@ -189,7 +189,7 @@ workflow convergence {
     File germline_somatic_table
     String id
     String cancer_type
-    Array[File] somatic_tsvs
+    Array[String] somatic_tsvs
   }
   call get_coding_regions{
     input:
