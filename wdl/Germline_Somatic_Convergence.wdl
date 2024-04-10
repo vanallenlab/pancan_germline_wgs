@@ -112,13 +112,13 @@ task get_somatic_coding_drivers{
     String id
   }
   command <<<
-  # Create a directory to store downloaded files
-  mkdir -p downloaded_somatic_tsvs
+	# Create a directory to store downloaded files
+	mkdir -p downloaded_somatic_tsvs
 
-  # Download each somatic_tsvs file
-  for file in "${somatic_tsvs[@]}"; do
-    gsutil cp "$file" downloaded_somatic_tsvs/
-  done
+	# Download each somatic_tsvs file
+	for file in "${somatic_tsvs[@]}"; do
+		gsutil cp "$file" downloaded_somatic_tsvs/
+	done
 
 	touch filtered_genes.txt
 
@@ -130,9 +130,6 @@ task get_somatic_coding_drivers{
 
 	# Create the final output file with sorted and unique genes
 	cat filtered_genes.txt | sort | uniq > ~{id}.som_driving.txt
-	#if [ $( cat "~{id}.som_driving.txt" | awk 'END {print NR}' ) -eq 0 ]; then
-		#echo -e "NO_GENE" > ~{id}.som_driving.txt
-	#fi
   >>>
   
   runtime {
