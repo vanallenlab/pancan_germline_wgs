@@ -42,7 +42,7 @@ task Noncoding_germline_SNPs {
         out="{out}	0"
       fi
     done < germline_noncoding.list
-    "${out#"${out%%[![:space:]]*}"}"  > ~{id}.snps
+    cat "$out" > ~{id}.snps
   >>>
   output {
     File out = "~{id}.snps"
