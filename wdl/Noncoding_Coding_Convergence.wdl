@@ -42,7 +42,7 @@ task Noncoding_germline_SNPs {
         out="${out}	0"
       fi
     done < germline_noncoding.list
-    cat "$out" > ~{id}.snps
+    echo -e "$out" > ~{id}.snps
   >>>
   output {
     File out = "~{id}.snps"
