@@ -10,9 +10,9 @@ task Noncoding_germline_SNPs {
   }
   command <<<
     touch ~{id}.vars.txt
-    cut -f1,2 < ~{noncoding_germline_somatic_table} | tail -n + 2 | grep -i '~{cancer_type}' | cut -f2 | sort | uniq > germline_noncoding.list
+    cut -f1,2 < ~{noncoding_germline_somatic_table} | tail -n +2 | grep -i '~{cancer_type}' | cut -f2 | sort | uniq > germline_noncoding.list
     
-    out="~{id}"
+    out=""
     
     #Extract CHROM, POS, REF,ALT, and GT from vcf from
     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t[%GT]\n' ~{vcfFile} | awk 'BEGIN {FS="\t"; OFS="\t"} {
@@ -42,7 +42,7 @@ task Noncoding_germline_SNPs {
         out="{out}	0"
       fi
     done < germline_noncoding.list
-    echo "$out" > ~{id}.snps
+    "${out#"${out%%[![:space:]]*}"}"  > ~{id}.snps
   >>>
   output {
     File out = "~{id}.snps"
