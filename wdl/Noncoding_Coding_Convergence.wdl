@@ -34,9 +34,9 @@ task Noncoding_germline_SNPs {
     grep -Fwf germline_noncoding.list query.txt > ~{id}.vars.txt
     
     while IFS= read -r snp; do
-      if [ $(grep "$snp	HOM" ~{id}.vars.txt) -gt 0 ];then
+      if [ $(grep "$snp	HOM" ~{id}.vars.txt | awk 'END {print NR}') -gt 0 ];then
         out="{out}	2"
-      elif [ $(grep "$snp	HET" ~{id}.vars.txt) -gt 0 ];then
+      elif [ $(grep "$snp	HET" ~{id}.vars.txt | awk 'END {print NR}') -gt 0 ];then
         out="{out}	1"
       else
         out="{out}	0"
