@@ -39,7 +39,7 @@ task get_germline_coding_variants{
 	bcftools view -s ~{id} ~{germline_merged_vep_vcf} -o sample.vcf
 	bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
 
-	bcftools query -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT' germline_only.vcf | cut -d'|' -f1,2,5,6 | awk '{gsub(/\|/, "\t"); print}' | grep -Fwf ~{germline_genes} > query.tsv
+	bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG' germline_only.vcf | cut -d'|' -f1,2,5,6,39-43 | awk '{gsub(/\|/, "\t"); print}' | cut -d',' -f1 | awk -F'\t' '($9 < 0.02 || $9 == "." || $9 == "") && ($7 < 0.02 || $7 == "." || $7 == "") && ($8 < 0.02 || $8 == "." || $8 == "")' | grep -Fwf ~{germline_genes} > query.tsv
 	cut -f4 query.tsv | sort | uniq > potential_deleterious_germline_genes.list
 	touch c1.list
 	touch c2.list
