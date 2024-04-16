@@ -47,7 +47,7 @@ task get_germline_coding_variants{
 	touch pathogenic_germline_genes.list
 
 	# Condition 1: Denoted P/LP by ClinVar
-	grep -E 'Pathogenic|Likely_pathogenic' query.tsv | cut -f3 | sort | uniq > c1.list
+	grep -E 'Pathogenic|Likely_pathogenic' query.tsv | cut -f4 | sort | uniq > c1.list
 
 	# Condition 2: If includes TSG or Mutation-Type includes D,N,F
 	while IFS= read -r gene; do
