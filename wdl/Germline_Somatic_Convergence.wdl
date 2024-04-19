@@ -91,9 +91,7 @@ task get_germline_coding_variants{
 	done < potential_deleterious_germline_genes.list
 
 	sort pathogenic_germline_genes.list | uniq > ~{id}.txt
-	#if [ $( cat ~{id}.txt | awk 'END {print NR}' ) -eq 0 ]; then
-		#echo -e "NO_GENE" > ~{id}.txt
-	#fi
+
 
   >>>
   

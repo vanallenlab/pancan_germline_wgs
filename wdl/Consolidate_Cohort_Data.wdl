@@ -24,11 +24,30 @@ task get_individuals {
   }
 }
 
+task unzip_ploidy_tsv {
+  input{
+  	String ploidy_location
+  }
+  
+  command <<<
+	gsutil -m cp ~{ploidy_location} ploidy.tsv.gz
+	gunzip ploidy.tsv.gz 
+  >>>
+  
+  runtime {
+	docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
+  }
+  output{
+	File out = "ploidy.tsv"
+  }
+}
+
 
 task get_sample_data{
 	input{
 		String sample
 		String cohort
+        File ploidy_tsv
     }
 	command <<<
 		charr_output=$(gsutil cat gs://dfci-g2c-inputs/~{cohort}/charr/~{sample}.txt | cut -f2-9 | tail -n 1)
@@ -46,7 +65,8 @@ task get_sample_data{
 		manta_BND_count=$(grep 'vcf_BND_count' manta_~{cohort}.tmp | cut -f2)
 		wham_DEL_count=$(grep 'vcf_DEL_count' wham_~{cohort}.tmp | cut -f2)
 		wham_DUP_count=$(grep 'vcf_DUP_count' wham_~{cohort}.tmp | cut -f2)
-		echo -e "~{sample}\t~{cohort}\t${demographics_output}\t${charr_output}\t${rd_median}\t${rd_mean}\t${manta_DEL_count}\t${manta_DUP_count}\t${manta_INS_count}\t${manta_INV_count}\t${manta_BND_count}\t${melt_INS_count}\t${wham_DEL_count}\t${wham_DUP_count}" > ~{sample}.txt
+		ploidy_estimate=$(grep '~{sample}' ~{ploidy_tsv} | cut -f3-26,28-30)
+		echo -e "~{sample}\t~{cohort}\t${demographics_output}\t${charr_output}\t${rd_median}\t${rd_mean}\t${manta_DEL_count}\t${manta_DUP_count}\t${manta_INS_count}\t${manta_INV_count}\t${manta_BND_count}\t${melt_INS_count}\t${wham_DEL_count}\t${wham_DUP_count}\t${ploidy_estimate}" > ~{sample}.txt
 	>>>
 	runtime {
 		docker: "us.gcr.io/google.com/cloudsdktool/google-cloud-cli:latest"
@@ -62,7 +82,7 @@ task write_output {
 		Array[String] data
 	}
     command <<<
-		echo -e "Sample\tCohort\tgrafpop_SNPs\tgrafpop_GD1\tgrafpop_GD2\tgrafpop_GD3\tpct_EUR\tpct_AFR\tpct_ASN\tchrX_count\tchrY_count\tancestry\tHQ_HOM\tHQ_HOM_RATE\tHQ_HET\tHQ_HET_RATE\tCHARR\tMEAN_REF_AB_HOM_ALT\tHETEROZYGOSITY_RATE\tINCONSISTENT_AB_HET_RATE\trd_median\trd_mean\tmanta_DEL_count\tmanta_DUP_count\tmanta_INS_count\tmanta_INV_count\tmanta_BND_count\tmelt_INS_count\twham_DEL_count\twham_DUP_count" > ~{cohort}.consolidated_data.tsv
+		echo -e "Sample\tCohort\tgrafpop_SNPs\tgrafpop_GD1\tgrafpop_GD2\tgrafpop_GD3\tpct_EUR\tpct_AFR\tpct_ASN\tchrX_count\tchrY_count\tancestry\tHQ_HOM\tHQ_HOM_RATE\tHQ_HET\tHQ_HET_RATE\tCHARR\tMEAN_REF_AB_HOM_ALT\tHETEROZYGOSITY_RATE\tINCONSISTENT_AB_HET_RATE\trd_median\trd_mean\tmanta_DEL_count\tmanta_DUP_count\tmanta_INS_count\tmanta_INV_count\tmanta_BND_count\tmelt_INS_count\twham_DEL_count\twham_DUP_count\tchr1_CopyNumber\tchr2_CopyNumber\tchr3_CopyNumber\tchr4_CopyNumber\tchr5_CopyNumber\tchr6_CopyNumber\tchr7_CopyNumber\tchr8_CopyNumber\tchr9_CopyNumber\tchr10_CopyNumber\tchr11_CopyNumber\tchr12_CopyNumber\tchr13_CopyNumber\tchr14_CopyNumber\tchr15_CopyNumber\tchr16_CopyNumber\tchr17_CopyNumber\tchr18_CopyNumber\tchr19_CopyNumber\tchr20_CopyNumber\tchr21_CopyNumber\tchr22_CopyNumber\tchrX_CopyNumber\tchrY_CopyNumber\tmedian_coverage\twgd_score\tnondiploid_bins" > ~{cohort}.consolidated_data.tsv
 		cat ~{write_lines(data)} >> ~{cohort}.consolidated_data.tsv
 		gsutil -m cp ~{cohort}.consolidated_data.tsv gs://fc-secure-826914ff-6f0b-48bd-b6b1-1002dbffd5a3/
     >>>
@@ -77,16 +97,22 @@ task write_output {
 workflow consolidate {
 	input {
 		String cohort
+        String ploidy_location
 	}
     call get_individuals{
 		input:
 			cohort = cohort
     }
+    call unzip_ploidy_tsv{
+    	input:
+        	ploidy_location = ploidy_location
+    }
     scatter(i in get_individuals.out){
 		call get_sample_data{
 			input:
 				sample = i,
-				cohort = cohort
+				cohort = cohort,
+                ploidy_tsv = unzip_ploidy_tsv.out
     	}
     }
     call write_output {
