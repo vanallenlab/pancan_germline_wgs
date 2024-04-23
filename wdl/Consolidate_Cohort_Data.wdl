@@ -65,7 +65,7 @@ task get_sample_data{
 		manta_BND_count=$(grep 'vcf_BND_count' manta_~{cohort}.tmp | cut -f2)
 		wham_DEL_count=$(grep 'vcf_DEL_count' wham_~{cohort}.tmp | cut -f2)
 		wham_DUP_count=$(grep 'vcf_DUP_count' wham_~{cohort}.tmp | cut -f2)
-		ploidy_estimate=$(grep '~{sample}' ~{ploidy_tsv} | cut -f3-26,28-30)
+		ploidy_estimate=$(grep -P '~{sample}\t' ~{ploidy_tsv} | cut -f3-26,28-30)
 		echo -e "~{sample}\t~{cohort}\t${demographics_output}\t${charr_output}\t${rd_median}\t${rd_mean}\t${manta_DEL_count}\t${manta_DUP_count}\t${manta_INS_count}\t${manta_INV_count}\t${manta_BND_count}\t${melt_INS_count}\t${wham_DEL_count}\t${wham_DUP_count}\t${ploidy_estimate}" > ~{sample}.txt
 	>>>
 	runtime {
