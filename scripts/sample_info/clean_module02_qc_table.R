@@ -26,16 +26,48 @@ if(length(drop.rows) > 0){
   df <- df[-drop.rows, ]
 }
 
+# Convert integer sample IDs from float to string
+old.iid.idxs <- grep("[0-9]\\.0$", df[, 1])
+if(length(old.iid.idxs) > 0){
+  df[old.iid.idxs, 1] <- sapply(df[old.iid.idxs, 1], function(id){unlist(strsplit(id, split=".", fixed=T))[1]})
+}
+
+# Find samples missing median coverage and fill with exact duplicates, where available
+dup.ids <- names(which(table(df[, 1]) > 1))
+idxs.to.drop <- c()
+missing.medcov.ids <- df[which(is.na(df$median_coverage)), 1]
+for(base.id in intersect(dup.ids, missing.medcov.ids)){
+  id.idxs <- which(df[, 1] == base.id)
+  prev.nonna.idxs <- intersect(which(!is.na(df$median_coverage)), id.idxs)
+  medcov <- mean(df[id.idxs, "median_coverage"], na.rm=T)
+  df[id.idxs, "median_coverage"] <- medcov
+  idxs.to.drop <- c(idxs.to.drop, prev.nonna.idxs)
+}
+missing.nondip.ids <- df[which(is.na(df$nondiploid_bins)), 1]
+for(base.id in intersect(dup.ids, missing.nondip.ids)){
+  id.idxs <- which(df[, 1] == base.id)
+  prev.nonna.idxs <- intersect(which(!is.na(df$nondiploid_bins)), id.idxs)
+  nondip <- mean(df[id.idxs, "nondiploid_bins"], na.rm=T)
+  df[id.idxs, "nondiploid_bins"] <- nondip
+  idxs.to.drop <- c(idxs.to.drop, prev.nonna.idxs)
+}
+df <- df[-c(idxs.to.drop), ]
+
 # Find samples with missing WGD scores
 bad.wgd.ids <- df[which(df$wgd_score == "NaN" | is.na(df$wgd_score)), 1]
 
 # Correct each sample in serial
 for(correct.sid in bad.wgd.ids){
   idx <- which(df[, 1] == correct.sid)
-  bad.sid <- gsub("-", ".", correct.sid, fixed=T)
-  if(!bad.sid %in% df[, 1]){
+  bad.sid.candidates <- c(gsub("-", ".", correct.sid, fixed=T),
+                          gsub("^", "X", correct.sid))
+  bad.sid.candidates <- setdiff(bad.sid.candidates, correct.sid)
+  bad.sid <- intersect(bad.sid.candidates, df[, 1])
+  if(length(bad.sid) == 0){
     stop(paste("Unable to find duplicate ID (guess: '", bad.sid, 
                "') for sample ", correct.sid, sep=""))
+  }else if(length(bad.sid) > 1){
+    stop(paste("Multiple duplicate IDs found for sample ", correct.sid, sep=""))
   }else{
     bad.idx <- which(df[, 1] == bad.sid)
     df$wgd_score[idx] <- df$wgd_score[bad.idx]

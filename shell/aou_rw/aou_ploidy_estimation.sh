@@ -21,7 +21,7 @@ export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
 for dir in cromshell cromshell/inputs cromshell/job_ids cromshell/progress \
-           data data/batch_lists; do
+           data data/batch_lists data/aou_ploidy_outputs; do
   if ! [ -e $dir ]; then mkdir $dir; fi
 done
 
@@ -57,9 +57,9 @@ gsutil -m -u $GPROJECT cp \
   data/
 
 
-#####################
-# PLOIDY ESTIMATION #
-#####################
+#########################
+# RUN PLOIDY ESTIMATION #
+#########################
 
 # Randomly divide AoU samples into batches of ~500
 code/scripts/evenSplitter.R \
@@ -95,14 +95,15 @@ while read bid; do
      cromshell/progress/aou.ploidy_estimation.batch_status.tsv
 
   # Only submit if status is not_started or failed
-  if [ $status == "not_started" ] || [ $status == "failed" ]; then
+  if [ $status == "not_started" ] || [ $status == "failed" ] || [ $status == "aborted" ]; then
 
     echo -e "Submitting ploidy estimation workflow for batch $bid"
 
     # Format input .json
     export BATCH=$bid
     export SAMPLES=$( awk -v ORS=", " '{ print "\""$1"\"" }' data/batch_lists/$bid | sed 's/, $//' )
-    export COUNTS=$( awk -v ORS=", " -v uri_base="$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-sv/coverage/" '{ print "\""uri_base$1".counts.tsv.gz\"" }' data/batch_lists/$bid | sed 's/, $//' )
+    export COUNTS=$( awk -v ORS=", " -v uri_base="$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/aou/gatk-sv/coverage/" \
+                         '{ print "\""uri_base$1".counts.tsv.gz\"" }' data/batch_lists/$bid | sed 's/, $//' )
     ~/code/scripts/envsubst.py \
       -i code/refs/json/aou.gatk_sv.02_evidence_qc.inputs.template.json \
     | sed 's/\t//g' | paste -s -d\ \
@@ -116,13 +117,78 @@ while read bid; do
     cmd="$cmd cromshell/inputs/$bid.ploidy_estimation.inputs.json"
     eval $cmd | jq .id | tr -d '"' \
     >> cromshell/job_ids/$bid.ploidy_estimation.job_ids.list
-
   fi
-
 done < data/ploidy_batches.list
 
 
+#################
+# STAGE OUTPUTS #
+#################
 
+# Write list of batches to stage
+# (Note that this needs to be done outside the while loop so input does not change)
+awk '{ if ($2=="succeeded") print $1 }' \
+  cromshell/progress/aou.ploidy_estimation.batch_status.tsv \
+> cromshell/progress/aou.ploidy_estimation.batches_to_stage.list
 
+# Stage each batch in serial
+while read bid; do
 
+  # Make directory
+  if ! [ -e data/aou_ploidy_outputs/$bid ]; then
+    mkdir data/aou_ploidy_outputs/$bid
+  fi
+    
+  # For convenience, write list of samples from batch to batch directory
+  sort -V data/batch_lists/$bid | awk -v OFS="\t" '{ print $1, "aou" }' \
+  | cat <( echo -e "#sample\tcohort" ) - \
+  > data/aou_ploidy_outputs/$bid/$bid.sample_info.tsv
+
+  # Process each output in serial
+  while read descrip uri; do
+
+    # Process only the outputs we want to save
+    case $descrip in
+
+      # Download median coverage, WGD plot, and WGD .tsv for permanent local storage
+      EvidenceQC.WGD_scores|EvidenceQC.WGD_dist|EvidenceQC.bincov_median)
+        gsutil -m cp $uri data/aou_ploidy_outputs/$bid/
+        ;;
+
+      # Download & clean QC table
+      EvidenceQC.qc_table)
+        gsutil -m cp $uri data/aou_ploidy_outputs/$bid/$bid.evidence_qc_table.tsv
+        code/scripts/clean_module02_qc_table.R \
+          data/aou_ploidy_outputs/$bid/$bid.evidence_qc_table.tsv
+        ;;
+
+      # Download & process ploidy plots tarball (don't need to save everything)
+      EvidenceQC.ploidy_plots)
+        gsutil -m cp $uri ./
+        tar -xzvf ./$( basename $uri ) --directory ./
+        find ./ploidy_est/*png | xargs -I {} mv {} data/aou_ploidy_outputs/$bid/
+        mv ./ploidy_est/sample_sex_assignments.txt.gz data/aou_ploidy_outputs/$bid/
+        rm -rf ./ploidy_est ./$( basename $uri )
+        ;;
+    esac
+    
+  done < <( cromshell -t 120 --no_turtle -mc list-outputs \
+              $( tail -n1 cromshell/job_ids/$bid.ploidy_estimation.job_ids.list ) \
+            | sed 's/: /\t/g' )
+  
+done < cromshell/progress/aou.ploidy_estimation.batches_to_stage.list
+
+# Once all batches have been processed, combine the QC tables across all batches
+head -n1 $( find data/aou_ploidy_outputs/ -name "*.evidence_qc_table.tsv" | head -n1 ) \
+| sed 's/^#ID/#cohort\tsample/' \
+> data/aou_ploidy_outputs/dfci-g2c-ploidy-estimation.aou.merged_qc_table.tsv
+find data/aou_ploidy_outputs/ -name "*.evidence_qc_table.tsv" \
+| xargs -I {} cat {} | grep -ve '^#' | awk -v OFS="\t" '{ print "aou", $0 }' | sort -Vk1,1 -k2,2V \
+>> data/aou_ploidy_outputs/dfci-g2c-ploidy-estimation.aou.merged_qc_table.tsv
+gzip -f data/aou_ploidy_outputs/dfci-g2c-ploidy-estimation.aou.merged_qc_table.tsv
+
+# Copy processed data to G2C staging bucket
+gsutil -m cp -r \
+  data/aou_ploidy_outputs \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/
 
