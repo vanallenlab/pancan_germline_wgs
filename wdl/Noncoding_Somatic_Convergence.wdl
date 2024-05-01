@@ -9,14 +9,20 @@ task Noncoding_Somatic_Regions {
     
   }
   command <<<
-    grep -i '~{cancer_type}' ~{noncoding_regions_bed} > noncoding_somatic_regions.bed
+    grep -i '~{cancer_type}' ~{noncoding_regions_bed} | sort > noncoding_somatic_regions.bed
     
-    while IFS= read -r $CHROM $START $END $TISSUE $GENE; then
-      som_mut=$(bcftools view -H -r "$CHROM:$START-$END" ~{somatic_noncoding_vcfFile} | wc -l)
-      echo "$GENE\t$som_mut" >> somatic_mutations.txt
+    somatic_nc_str="~{id}"
+    while IFS= read -r CHROM START END TISSUE GENE; do
+      som_mut_count=$(bcftools view -H -r "$CHROM:$START-$END" ~{somatic_noncoding_vcfFile} | wc -l)
+      if [ -z "$somatic_nc_str" ]; then
+        somatic_nc_str="$som_mut_count"
+      else
+        somatic_nc_str="$somatic_nc_str\t$som_mut_count"
+      fi
     done < noncoding_somatic_regions.bed
-
+    echo "$somatic_nc_str" > somatic_mutations.txt
   >>>
+  
   output {
     File out = "somatic_mutations.txt"
   }
