@@ -14,15 +14,11 @@ task Noncoding_Somatic_Regions {
     somatic_nc_str="~{id}"
     while IFS= read -r CHROM START END TISSUE GENE; do
       som_mut_count=$(bcftools view -H -r "$CHROM:$START-$END" ~{somatic_noncoding_vcfFile} | wc -l)
-      if [ -z "$somatic_nc_str" ]; then
-        somatic_nc_str="$som_mut_count"
-      else
-        somatic_nc_str="$somatic_nc_str\t$som_mut_count"
-      fi
+      somatic_nc_str="$somatic_nc_str\t$som_mut_count"
     done < noncoding_somatic_regions.bed
     echo "$somatic_nc_str" > somatic_mutations.txt
   >>>
-  
+
   output {
     File out = "somatic_mutations.txt"
   }
