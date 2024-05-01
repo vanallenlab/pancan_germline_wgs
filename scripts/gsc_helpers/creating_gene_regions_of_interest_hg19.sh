@@ -5,10 +5,12 @@
 
 # Download MANE GTF:
 wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_45/GRCh37_mapping/gencode.v45lift37.annotation.gtf.gz
+gsc_table="/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.tsv"
+cut -f2,3 "$gsc_table" | grep -v 'noncoding' | cut -f1 | sort | uniq > coding_genes.list
 
 # Subset MANE to genes of interest
 zcat gencode.v45lift37.annotation.gtf.gz \
-| fgrep -wf all_genes.list \
+| fgrep -wf coding_genes.list \
 | bgzip -c \
 > gencode.v45lift37.annotation.subsetted.gtf.gz
 
@@ -18,5 +20,7 @@ zcat gencode.v45lift37.annotation.subsetted.gtf.gz \
 | sort -Vk1,1 -k2,2n -k3,3n \
 | bedtools merge -i - \
 | bgzip -c \
-> all_genes.coordinates.bed.gz
+> coding_genes.coordinates.bed.gz
+
+rm coding_genes.list
 
