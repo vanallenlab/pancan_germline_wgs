@@ -3,12 +3,13 @@
 # Contact: Noah Fields <Noah_Fieldss@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# This code will gather germline and somatic convergence.
-
-
 version 1.0
 
-task get_coding_regions{
+# Analysis of germline variants and somatic drivers in coding regions
+# This workflow identifies pathogenic and high-impact variants in germline data, as well as somatic driver mutations in coding regions.
+
+# Task to extract coding regions from a somatic table
+task Extract_Coding_Regions {
   input {
     File germline_somatic_table
     String cancer_type
@@ -27,29 +28,34 @@ task get_coding_regions{
   }
 }
 
-task get_germline_coding_variants{
+# Task to extract pathogenic and high-impact germline variants
+task Extract_Germline_Variants {
   input {
     File germline_merged_vep_vcf
     File germline_somatic_table
     File germline_genes
-    String id
+    String patient_id
   }
   
   command <<<
-	bcftools view -s ~{id} ~{germline_merged_vep_vcf} -o sample.vcf
+  # Extract variants present only in the germline data
+	bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -o sample.vcf
 	bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
 
+	# Split VEP annotations and filter for relevant information
 	bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG' germline_only.vcf | cut -d'|' -f1,2,5,6,39-43 | awk '{gsub(/\|/, "\t"); print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_Benign' | grep -Fwf ~{germline_genes} > query.tsv
+
+	# Extract potential deleterious germline genes
 	cut -f4 query.tsv | sort | uniq > potential_deleterious_germline_genes.list
 	touch c1.list
 	touch c2.list
 	touch c3.list
 	touch pathogenic_germline_genes.list
 
-	# Condition 1: Denoted P/LP by ClinVar
+	# Condition 1: Pathogenic or Likely pathogenic by ClinVar
 	grep -E 'Pathogenic|Likely_pathogenic' query.tsv | cut -f4 | sort | uniq > c1.list
 
-	# Condition 2: If includes TSG or Mutation-Type includes D,N,F
+	# Condition 2: Tumor suppressor gene (TSG) or Mutation-Type includes D,N,F
 	while IFS= read -r gene; do
 		TSG=$(cut -f2-5 ~{germline_somatic_table} | grep "$gene" | grep 'TSG' | awk 'END {print NR}')
 		MT=$(cut -f2-5 ~{germline_somatic_table} | grep "$gene" | cut -f5 | grep -E 'D|N|F' | awk 'END {print NR}')
@@ -58,7 +64,7 @@ task get_germline_coding_variants{
 		fi
 	done < potential_deleterious_germline_genes.list
 
-	# Condition 3: If includes ONC or Mutation-Type includes Mis
+	# Condition 3: Oncogene (ONC) or Mutation-Type includes Mis
 	while IFS= read -r gene; do
 		ONC=$(cut -f2-5 ~{germline_somatic_table} | grep "$gene" | grep 'ONC' | awk 'END {print NR}')
 		MIS=$(cut -f2-5 ~{germline_somatic_table} | grep "$gene" | cut -f5 | grep 'Mis' | awk 'END {print NR}')
@@ -67,7 +73,7 @@ task get_germline_coding_variants{
 		fi
 	done < potential_deleterious_germline_genes.list
 
-	# Deciding which genes are pathogenic
+	# Determine pathogenic germline genes based on conditions
 	while IFS= read -r gene; do
 		# If condition 1 is met
 		if [ $(grep "$gene" c1.list | awk 'END {print NR}') -gt 0 ];then
@@ -90,7 +96,7 @@ task get_germline_coding_variants{
 		fi   	
 	done < potential_deleterious_germline_genes.list
 
-	sort pathogenic_germline_genes.list | uniq > ~{id}.txt
+	sort pathogenic_germline_genes.list | uniq > ~{patient_id}.txt
 
 
   >>>
@@ -99,40 +105,45 @@ task get_germline_coding_variants{
     docker: "vanallenlab/bcftools"
   }
   output{
-  	File variants = "~{id}.txt"
+  	File out = "~{patient_id}.txt"
   }
 }
 
-task get_somatic_coding_drivers{
+# Extract somatic driver mutations based on somatic genes
+task Extract_Somatic_Drivers {
   input {
 	File somatic_tsv
 	File somatic_genes
-    String id
+  String patient_id
   }
   command <<<
-	cat ~{somatic_tsv} | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> ~{id}.som_driving.txt
+  # Extract somatic driver mutations based on somatic genes
+	cat ~{somatic_tsv} | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> ~{patient_id}.somatic_drivers.txt
   >>>
   
   runtime {
     docker: "ubuntu:latest"
   }
   output{
-  	File drivers = "~{id}.som_driving.txt"
+  	File out = "~{patient_id}.somatic_drivers.txt"
   }
 
 }
 
-task converge{
+task Output_Mutations {
   input {
     File germline_variants
     File somatic_drivers
-    String id
+    String patient_id
     File germline_genes
     File somatic_genes
   }
   
   command <<<
-	output="~{id}"
+  # Initialize output string with patient ID
+	output="~{patient_id}"
+
+	# Check each germline gene for pathogenic variants
 	while IFS=$'\t' read -r germline_gene; do
 		if [ $(grep -F "$germline_gene" ~{germline_variants} | awk 'END {print NR}' ) -gt 0 ]; then
 			output="${output}	1"
@@ -141,6 +152,7 @@ task converge{
 		fi
 	done < ~{germline_genes}
 
+	# Check each somatic gene for driver mutations
 	while IFS=$'\t' read -r somatic_gene; do
 		if [ $(grep -F "$somatic_gene" ~{somatic_drivers} | awk 'END {print NR}' ) -gt 0 ]; then
 			output="${output}	1"
@@ -148,14 +160,16 @@ task converge{
 			output="${output}	0"
 		fi
 	done < ~{somatic_genes}
-	echo "$output" > ~{id}_info.txt
+
+	# Write output string to file
+	echo "$output" > ~{patient_id}_info.txt
   >>>
   
   runtime {
     docker: "ubuntu:latest"
   }
   output{
-  	File patient_info = "~{id}_info.txt"
+  	File out = "~{patient_id}_info.txt"
   }
 }
 
@@ -163,39 +177,39 @@ task converge{
 # Define workflow
 workflow convergence {
   input{
-    File germline_merged_vep_vcf
-    File germline_somatic_table
-    String id
-    String cancer_type
-    File somatic_tsv
+    File germline_merged_vep_vcf # Merged VCF file annotated with VEP
+    File germline_somatic_table # Germline-Somatic table file containing convergence pairs
+    File somatic_tsv # Somatic TSV file containing mutation information
+    String patient_id # Unique identifier for the patient
+    String cancer_type # Type of cancer being analyzed
   }
-  call get_coding_regions{
+  call Extract_Coding_Regions {
     input:
       germline_somatic_table = germline_somatic_table,
       cancer_type = cancer_type
   }
-  call get_germline_coding_variants{
+  call Extract_Germline_Variants {
     input:
       germline_merged_vep_vcf = germline_merged_vep_vcf,
-      germline_genes = get_coding_regions.germline_coding_list,
+      germline_genes = Extract_Coding_Regions.germline_coding_list,
       germline_somatic_table = germline_somatic_table,
-      id = id
+      patient_id = patient_id
   }
-  call get_somatic_coding_drivers{
+  call Extract_Somatic_Drivers {
     input:
-      somatic_genes = get_coding_regions.somatic_coding_list,
+      somatic_genes = Extract_Coding_Regions.somatic_coding_list,
       somatic_tsv = somatic_tsv,
-      id = id
+      patient_id = patient_id
   }
-  call converge{
+  call Output_Mutations {
 	input:
-      id = id,
-      somatic_drivers = get_somatic_coding_drivers.drivers,
-      germline_variants = get_germline_coding_variants.variants,
-      germline_genes = get_coding_regions.germline_coding_list,
-	  somatic_genes = get_coding_regions.somatic_coding_list
+      patient_id = patient_id,
+      somatic_drivers = Extract_Somatic_Drivers.out,
+      germline_variants = Extract_Germline_Variants.out,
+      germline_genes = Extract_Coding_Regions.germline_coding_list,
+	    somatic_genes = Extract_Coding_Regions.somatic_coding_list
   }
   output{
-  	File convergence = converge.patient_info
+  	File convergence = Output_Mutations.out
   }
 }
