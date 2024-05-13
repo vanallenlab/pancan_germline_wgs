@@ -38,7 +38,7 @@ task Extract_Germline_Variants {
   }
   
   command <<<
-  # Extract variants present only in the germline data
+	# Extract variants present only in the germline data
 	bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -o sample.vcf
 	bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
 
@@ -117,7 +117,7 @@ task Extract_Somatic_Drivers {
   String patient_id
   }
   command <<<
-  # Extract somatic driver mutations based on somatic genes
+	# Extract somatic driver mutations based on somatic genes
 	cat ~{somatic_tsv} | cut -f3 | grep -Fwf ~{somatic_genes} | sort | uniq >> ~{patient_id}.somatic_drivers.txt
   >>>
   
@@ -140,7 +140,7 @@ task Output_Mutations {
   }
   
   command <<<
-  # Initialize output string with patient ID
+	# Initialize output string with patient ID
 	output="~{patient_id}"
 
 	# Check each germline gene for pathogenic variants
