@@ -43,9 +43,7 @@ task Extract_Germline_Variants {
 	bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
 
 	# Split VEP annotations and filter for relevant information
-	bcftools +split-vep germline_only.vcf -f '%CHROM\t%POS\t%SYMBOL\t%IMPACT\t%gnomAD_AF_nfe\t%gnomAD_AF_popmax\t%gnomAD_controls_AF_popmax\t%ClinVar_external_CLNSIG' -d \
-	| awk -F'\t' '($8 == "Pathogenic" || $8 == "Likely_pathogenic" || $5 < 0.02 || $5 == "." || $5 == "") && ($8 == "Pathogenic" || $8 == "Likely_pathogenic" || $6 < 0.02 || $6 == "." || $6 == "") && ($8 == "Pathogenic" || $8 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "")' \
-	| grep -Ev 'Benign|Likely_benign|MODIFIER|LOW' | grep -Fwf ~{germline_genes} > query.tsv
+	bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG' germline_only.vcf | cut -d'|' -f1,2,5,6,39-43 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
 
 	# Extract potential deleterious germline genes
 	cut -f4 query.tsv | sort | uniq > potential_deleterious_germline_genes.list
