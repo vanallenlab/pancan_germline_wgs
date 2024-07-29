@@ -1,6 +1,8 @@
 # noqa: D100
+#Adopted From Broad Institute: https://broadinstitute.github.io/gnomad_methods/_modules/index.html
 
 import json
+import os
 import logging
 import pprint
 from pprint import pformat
@@ -16,7 +18,7 @@ from pyspark.ml.functions import vector_to_array
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col  # pylint: disable=no-name-in-module
 
-from gnomad.utils.file_utils import file_exists
+#from gnomad.utils.file_utils import file_exists
 
 logging.basicConfig(format="%(levelname)s (%(name)s %(lineno)s): %(message)s")
 logger = logging.getLogger(__name__)
@@ -607,3 +609,32 @@ def pretty_print_runs(
                 index=label_col, columns=prediction_col_name, values="n"
             )
             logger.info("Testing results:\n%s", pformat(res_pd))
+
+
+def file_exists(fname: str) -> bool:
+    """
+    Check whether a file exists.
+
+    Supports either local or Google cloud (gs://) paths.
+    If the file is a Hail file (.ht, .mt, .bm, .parquet, .he, and .vds extensions), it
+    checks that _SUCCESS is present.
+
+    :param fname: File name.
+    :return: Whether the file exists.
+    """
+    fext = os.path.splitext(fname)[1]
+    if fext in {".ht", ".mt", ".bm", ".parquet", ".he"}:
+        paths = [f"{fname}/_SUCCESS"]
+    elif fext == ".vds":
+        paths = [f"{fname}/reference_data/_SUCCESS", f"{fname}/variant_data/_SUCCESS"]
+    else:
+        paths = [fname]
+
+    if fname.startswith("gs://"):
+        exists_func = hl.hadoop_exists
+    else:
+        exists_func = os.path.isfile
+
+    exists = all([exists_func(p) for p in paths])
+
+    return exist
