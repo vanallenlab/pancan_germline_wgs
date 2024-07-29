@@ -28,8 +28,10 @@ load.intake.tsv <- function(tsv.in){
   df <- read.table(tsv.in, sep="\t", check.names=F, comment.char="", header=T)
 
   # Drop unnecessary columns
-  cidx.to.drop <- union(grep("^[manta|melt|wham]", colnames(df)),
-                        which(colnames(df) %in% c("chrX_count", "chrY_count")))
+  cidx.to.drop <- unique(c(grep("^manta", colnames(df)),
+                           grep("^melt", colnames(df)),
+                           grep("^wham", colnames(df)),
+                           which(colnames(df) %in% c("chrX_count", "chrY_count", "rd_median"))))
   if(length(cidx.to.drop) > 0){
     df <- df[, -cidx.to.drop]
   }
@@ -41,16 +43,26 @@ load.intake.tsv <- function(tsv.in){
     df <- df[-ridx.to.drop, ]
   }
 
+  # Convert GrafPop percentages to actual pcts
+  grafpop.pct.cidxs <- grep("^pct_[EUR|AFR|ASN]", colnames(df))
+  df[, grafpop.pct.cidxs] <- df[, grafpop.pct.cidxs] / 100
+
   return(df)
 }
 
-
 # Merge QC data.frames from AoU and non-AoU samples
-merge.qc.dfs <- function(aou.df, other.df, id.prefix="G2C", suffix.length=6){
+merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL,
+                         id.prefix="G2C", suffix.length=6){
   # Merge, sort, and deduplicate data
   df <- rbind(aou.df, other.df)
   df <- df[with(df, order(Cohort, Sample)), ]
   df <- df[!duplicated(df), ]
+
+  # Restrict to samples in pass_tsv, if provided
+  if(!is.null(pass_tsv)){
+    pass.ids <- read.table(pass_tsv, header=F)[, 1]
+    df <- df[which(df$Sample %in% pass.ids), ]
+  }
 
   # Add G2C IDs
   df$G2C_id <- paste(id.prefix, formatC(1:nrow(df), width=suffix.length, flag="0"), sep="")
@@ -58,6 +70,15 @@ merge.qc.dfs <- function(aou.df, other.df, id.prefix="G2C", suffix.length=6){
   return(df)
 }
 
+# Simplify cohort assignment for plotting purposes
+simplify.cohorts <- function(df, min.n=400, other.label="other"){
+  n.per.cohort <- table(df$Cohort)
+  sc.map <- names(n.per.cohort)
+  sc.map[which(n.per.cohort < min.n)] <- other.label
+  sc.map[grep("proactive", sc.map)] <- "proactive"
+  names(sc.map) <- names(n.per.cohort)
+  sc.map[df$Cohort]
+}
 
 # Infer sex from X/Y ploidy estimates
 infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
@@ -84,7 +105,6 @@ infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
 
   return(df)
 }
-
 
 # Assign provisional ancestries based on KNN clustering vs. HGSV samples
 assign.ancestry <- function(df, hgsv.labels.tsv){
@@ -116,13 +136,13 @@ assign.ancestry <- function(df, hgsv.labels.tsv){
   return(df)
 }
 
-
 # Clean output data.frame
-clean.output <- function(df){
+clean.output <- function(df, n.ploidy.bins=2711){
   # Rename columns
   cols.to.rename <- list("Sample" = "original_id",
                          "Cohort" = "cohort",
                          "grafpop_SNPs" = "n_grafpop_snps",
+                         "ancestry" = "grafpop_ancestry",
                          "rd_median" = "median_coverage",
                          "rd_mean" = "mean_coverage")
   for(old.name in names(cols.to.rename)){
@@ -134,6 +154,13 @@ clean.output <- function(df){
   to.lower.idx <- which(colnames(df) %in% cols.to.lower)
   colnames(df)[to.lower.idx] <- tolower(colnames(df)[to.lower.idx])
   colnames(df) <- gsub("_CopyNumber$", "_ploidy", colnames(df))
+
+  # Normalize nondiploid_bins
+  if("nondiploid_bins" %in% colnames(df)){
+    max.nondip.bins <- max(c(n.ploidy.bins, df$nondiploid_bins), na.rm=T)
+    df$pct_genome_nondiploid <- df$nondiploid_bins / max.nondip.bins
+    df$nondiploid_bins <- NULL
+  }
 
   # Return columns in a specific order
   cols.first <- c("G2C_id", "original_id", "cohort", "inferred_sex", "intake_qc_pop")
@@ -155,6 +182,8 @@ parser$add_argument("--aou-tsv", metavar=".tsv", type="character", required=TRUE
                     help="Intake QC .tsv for AoU samples")
 parser$add_argument("--non-aou-tsv", metavar=".tsv", type="character",
                     required=TRUE, help="Intake QC .tsv for non-AoU samples")
+parser$add_argument("--include-samples", metavar=".txt", type="character",
+                    help="Optional list of sample IDs to include (i.e., exclude all others)")
 parser$add_argument("--hgsv-pop-assignments", metavar=".tsv", type="character",
                     help=paste(".tsv mapping HGSV sample IDs to their ground-",
                                "truth populations. If supplied, all samples ",
@@ -163,7 +192,7 @@ parser$add_argument("--hgsv-pop-assignments", metavar=".tsv", type="character",
                                "distances", sep=""))
 parser$add_argument("--id-prefix", metavar="string", type="character",
                     default="G2C", help="String prefix for G2C IDs")
-parser$add_argument(c("-n", "--suffix-length"), metavar="integer", type="numeric",
+parser$add_argument("-n", "--suffix-length", metavar="integer", type="numeric",
                     default=6, help="Length of integer suffixes for G2C IDs")
 parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE,
                     help="Path to output .tsv")
@@ -172,6 +201,7 @@ args <- parser$parse_args()
 # # DEV:
 # args <- list("aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
 #              "non_aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
+#              "include_samples" = NULL,
 #              "hgsv_pop_assignments" = "~/scratch/HGSV.ByrskaBishop.sample_populations.tsv",
 #              "id_prefix" = "G2C",
 #              "suffix_length" = 6,
@@ -182,7 +212,11 @@ aou.df <- load.intake.tsv(args$aou_tsv)
 other.df <- load.intake.tsv(args$non_aou_tsv)
 
 # Merge .tsvs, sort by cohort/ID, and assign G2C IDs
-qc.df <- merge.qc.dfs(aou.df, other.df)
+qc.df <- merge.qc.dfs(aou.df, other.df, args$include_samples,
+                      args$id_prefix, args$suffix_length)
+
+# Simplify cohort assignment
+qc.df$simple_cohort <- simplify.cohorts(qc.df)
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)

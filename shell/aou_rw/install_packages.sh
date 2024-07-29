@@ -9,5 +9,26 @@
 
 # Note that this code is designed to be run inside the AoU Researcher Workbench
 
-# Install R libraries
-Rscript -e "install.packages('optparse', repos='https://cloud.r-project.org')"
+# Any positional arguments given to this script will be used to specify which
+# subsets of libraries (i.e., which languages) should be installed
+if [ $# -eq 0 ]; then
+  echo -e "Error: at least one positional argument must be supplied to install_packages.sh"
+  echo -e "Current options include: R"
+  exit 1
+fi
+
+
+# Install all packages as optioned
+for lang in "$@"; do
+
+  case $lang in
+
+    # Install R libraries
+    R)
+      for lib in argparse caret; do
+        Rscript -e "if(!require('$lib')){install.packages('$lib', repos='https://cloud.r-project.org')}"
+      done
+      ;;
+
+  esac
+done
