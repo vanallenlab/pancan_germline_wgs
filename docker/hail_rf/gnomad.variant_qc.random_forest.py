@@ -428,7 +428,7 @@ def save_model(
 
 
 
-[docs]def load_model(input_path: str) -> pyspark.ml.PipelineModel:
+def load_model(input_path: str) -> pyspark.ml.PipelineModel:
     """
     Load a Random Forest pipeline model.
 
