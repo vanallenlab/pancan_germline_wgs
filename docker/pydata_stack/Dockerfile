@@ -10,7 +10,8 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install bcftools dependencies
 RUN apt-get update && \
-    apt-get install -y python3-pip && \
+    apt-get install -y python3-numpy python3-pandas \
+                       python3-scipy && \
 
     apt-get clean
 
