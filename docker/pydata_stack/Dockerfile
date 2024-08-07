@@ -2,14 +2,17 @@
 # Contact: Noah Fields <Noah_Fields@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Simple Dockerfile for vanallenlab/hail_rf
+# Simple Dockerfile for python3 w/ pandas
 
-
-FROM hailgenetics/hail:0.2.127.post1-py3.11
+FROM ubuntu:latest
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
-COPY apply_rf_model.py /opt/
+# Install bcftools dependencies
+RUN apt-get update && \
+    apt-get install -y python3-pip && \
+
+    apt-get clean
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
