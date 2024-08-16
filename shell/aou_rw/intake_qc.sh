@@ -34,7 +34,7 @@ done
 . code/refs/aou_bash_utils.sh
 
 # Install necessary packages
-. code/refs/install_packages.sh
+. code/refs/install_packages.sh R
 
 # Localize intake QC data and references
 gsutil -m -u $GPROJECT cp \
@@ -80,7 +80,7 @@ code/scripts/plot_intake_qc.R \
 tar -czvf data/tarballs/dfci-g2c.phase1.raw_intake_qc.plots.tar.gz plots/raw_intake_qc
 gsutil -m cp \
   data/tarballs/dfci-g2c.phase1.raw_intake_qc.plots.tar.gz \
-  gs://dfci-g2c-results/intake_qc/
+  $MAIN_WORKSPACE_BUCKET/results/intake_qc/
 
 # Run batching & QC procedure
 # TODO: implement this

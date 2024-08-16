@@ -25,9 +25,15 @@ for lang in "$@"; do
 
     # Install R libraries
     R)
-      for lib in argparse caret; do
-        Rscript -e "if(!require('$lib')){install.packages('$lib', repos='https://cloud.r-project.org')}"
+      for lib in argparse beeswarm bedr caret EQL vioplot; do
+        Rscript -e "if(require('$lib') == FALSE){install.packages('$lib', repos='https://cloud.r-project.org')}"
       done
+
+      export rlctools_version=0.1
+      Rscript -e "if(require('RLCtools') == FALSE){install.packages('~/code/src/RLCtools_$rlctools_version.tar.gz', repos=NULL, type='source')}"
+
+      export g2c_version=0.1.0
+      Rscript -e "if(require('G2C') == FALSE){install.packages('~/code/src/G2C_$g2c_version.tar.gz', repos=NULL, type='source')}"
       ;;
 
   esac
