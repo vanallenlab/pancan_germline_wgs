@@ -304,7 +304,23 @@ load.constants <- function(subset, envir=.GlobalEnv){
                    "OTH" = "Other SV"),
     "csq.names.short" = c("synonymous" = "Syn.",
                           "missense" = "Mis.",
-                          "lof" = "LoF")
+                          "lof" = "LoF"),
+    "cancer.names" = c("prostate" = "Prostate",
+                       "breast" = "Breast",
+                       "lung" = "Lung",
+                       "colorectal" = "Colorectal",
+                       "melanoma" = "Melanoma",
+                       "uterus" = "Uterine",
+                       "kidney" = "Renal",
+                       "bladder" = "Bladder",
+                       "oral_cavity" = "Oral cavity",
+                       "ovary" = "Ovarian",
+                       "cns" = "CNS",
+                       "pancreas" = "Pancreas",
+                       "esophagus" = "Esophagus",
+                       "liver" = "Liver",
+                       "stomach" = "Stomach",
+                       "other" = "Other")
   )
 
   # Assign constants to global environment
