@@ -9,18 +9,20 @@
 
 COHORT=$1
 SAMPLE=$2
-GZ_LIST=$3 # Optional pre-computed list of GCP URIs to query
+BUCKET=$3  # Optional base bucket to query
+GZ_LIST=$4 # Optional pre-computed list of GCP URIs to query
 
 usage() {
 cat << EOF
 
-USAGE: ./check_sample_inputs.sh cohort sample_id [uri_list]
+USAGE: ./check_sample_inputs.sh cohort sample_id [bucket] [uri_list]
 
        Checks google cloud storage bucket for complete input data for a single sample ID
 
-       Can optionally provide a pre-computed list of GCP URIs as a third 
-       positional argument, which will be referenced directly instead of 
-       querying bucket on-the-fly
+       Can optionally provide:
+       - Custom bucket URI
+       - Pre-computed list of GCP URIs, which will be referenced directly 
+         instead of querying bucket on-the-fly
 
 EOF
 }
@@ -31,7 +33,16 @@ if [ $# -lt 2 ]; then
   exit
 fi
 
-BUCKET="gs://dfci-g2c-inputs"
+if [ -z $BUCKET ]; then
+  BUCKET="gs://dfci-g2c-inputs"
+fi
+
+if [ -z $TMPDIR ]; then
+  TMPDIR=`mtemp -d`
+  RM_TMPDIR="true"
+else
+  RM_TMPDIR="false"
+fi
 
 # Build list of files that are expected to exist for each sample
 export TAB=$'\t'
@@ -40,11 +51,12 @@ gatksv_coverage$TAB$BUCKET/$COHORT/gatk-sv/coverage/$SAMPLE.counts.tsv.gz
 gatksv_pe$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.pe.txt.gz
 gatksv_sd$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sd.txt.gz
 gatksv_sr$TAB$BUCKET/$COHORT/gatk-sv/pesr/$SAMPLE.sr.txt.gz
-gatkhc_gvcf$TAB$BUCKET/$COHORT/gatk-hc/$SAMPLE.g.vcf.gz
 gatkhc_reblocked_gvcf$TAB$BUCKET/$COHORT/gatk-hc/reblocked/$SAMPLE.reblocked.g.vcf.gz
 manta$TAB$BUCKET/$COHORT/manta/$SAMPLE.manta.vcf.gz
 melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz
 wham$TAB$BUCKET/$COHORT/wham/$SAMPLE.wham.vcf.gz
+demographics$TAB$BUCKET/$COHORT/demographics/$SAMPLE.txt
+charr$TAB$BUCKET/$COHORT/charr/$SAMPLE.txt
 EOF
 
 # Check which files are present in gs://
@@ -68,3 +80,5 @@ echo -e "$SAMPLE\t$missing"
 
 # Clean up
 rm $TMPDIR/$COHORT.$SAMPLE.paths $TMPDIR/$COHORT.$SAMPLE.objects_found
+if [ $RM_TMPDIR == "true" ]; then rm -rf $TMPDIR; fi
+  
