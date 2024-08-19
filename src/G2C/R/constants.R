@@ -13,7 +13,7 @@
 # Project-wide constants
 
 
-#' Load Study Constants
+#' Load study constants
 #'
 #' Load a subset of constants used throughout G2C
 #'

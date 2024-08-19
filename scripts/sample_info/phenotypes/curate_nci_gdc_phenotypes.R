@@ -106,6 +106,51 @@ simplify.origin <- function(vals){
   })
 }
 
+# "Squash" rows in a data frame
+squash.duplicates <- function(dup.df){
+  # Start by handling all columns in a generic manner
+  dedup.vals <- apply(dup.df, 2, function(vals){
+    vals <- unlist(vals)
+    if(all(is.na(vals))){
+      NA
+    }else{
+      vals <- unique(vals[which(!is.na(vals))])
+      if(length(vals) == 1){
+        vals[1]
+      }else{
+        if(all(!is.na(as.numeric(vals)))){
+          median(as.numeric(vals))
+        }else{
+          paste(sort(vals), collapse=";")
+        }
+      }
+    }
+  })
+
+  # Update select columns with more nuanced logic
+  min.cols <- c("age_at_diagnosis", "year_of_birth", "days_to_birth")
+  max.cols <- c("days_to_death", "days_to_last_follow_up")
+  for(col in c(min.cols, max.cols)){
+    cv <- as.numeric(unlist(dup.df[, col]))
+    if(all(is.na(cv))){
+      NA
+    }else{
+      if(col %in% min.cols){
+        dedup.vals[col] <- min(cv, na.rm=T)
+      }else{
+        dedup.vals[col] <- max(cv, na.rm=T)
+      }
+    }
+  }
+  vital <- as.character(unlist(dup.df$vital_status))
+  if(any(!is.na(vital))){
+    vital <- vital[which(!is.na(vital))]
+    dedup.vals$vital_status <- if("Dead" %in% vital){"Dead"}else{"Alive"}
+  }
+
+  as.data.frame(t(dedup.vals))
+}
+
 # Load & curate clinical.tsv from NCI GDC
 load.clinical.data <- function(tsv.in){
   # Read data
@@ -128,8 +173,37 @@ load.clinical.data <- function(tsv.in){
   # Fill missing values with NAs
   df <- as.data.frame(t(apply(df, 1, function(v){v[which(v == "'--")] <- NA; return(v)})))
 
+  # Check for duplicate sample IDs, and deduplicate further if needed
+  dup.ids <- unique(df$case_submitter_id[which(duplicated(df$case_submitter_id))])
+  if(length(dup.ids) > 0){
+    for(id in dup.ids){
+      # Extract original rows for duplicate ID from main data frame
+      dup.ridx <- which(df$case_submitter_id == id)
+      dup.df <- df[dup.ridx, ]
+      df <- df[-dup.ridx, ]
+
+      # Integrate information across multiple duplicate rows
+      dedup.df <- squash.duplicates(dup.df)
+      df <- as.data.frame(rbind(df, dedup.df))
+    }
+  }
+
+  # Enforce column types prior to parsing
+  # This is necessary because sometimes the deduplication process
+  # causes columns to be converted to lists
+  str.cols <- c("case_submitter_id", "gender", "race", "ethnicity",
+                "vital_status", "tissue_or_organ_of_origin", "primary_diagnosis",
+                "icd_10_code", "ajcc_pathologic_stage", "ajcc_clinical_stage",
+                "ajcc_pathologic_t", "gleason_grade_group", "tumor_grade",
+                "site_of_resection_or_biopsy", "primary_disease",
+                "metastasis_at_diagnosis", "metastasis_at_diagnosis_site")
+  df[, str.cols] <- apply(df[, str.cols], 2, function(v){as.character(unlist(v))})
+  num.cols <- c("age_at_diagnosis", "year_of_birth", "days_to_birth",
+                "days_to_death", "days_to_last_follow_up")
+  df[, num.cols] <- apply(df[, num.cols], 2, function(v){as.numeric(unlist(v))})
+
   # Reassign simple columns requiring little-to-no transformation
-  df$original_id <- df$case_submitter_id
+  df$Sample <- df$case_submitter_id
   df$reported_sex <- tolower(df$gender)
   df$birth_year <- as.numeric(df$year_of_birth)
   df$vital_status <- as.numeric(remap(df$vital_status, vital.map))
@@ -170,15 +244,20 @@ load.clinical.data <- function(tsv.in){
                "primary_disease", "ajcc_pathologic_stage")
   df[, setdiff(dx.cols, "ajcc_pathologic_stage")] <-
     apply(df[, setdiff(dx.cols, "ajcc_pathologic_stage")], 2, function(v){
-      gsub("_$", "", gsub("[,| ]+", "_", gsub(" nos$", "", tolower(v))))
+      gsub("_$", "", gsub("[,| ]+", "_", gsub(", nos;", ";", gsub(", nos$", "", tolower(v)))))
     })
-  df$cancer <- simplify.origin(df$tissue_or_organ_of_origin)
+  simple_origin <- sapply(df$tissue_or_organ_of_origin, function(v){
+    paste(setdiff(unlist(strsplit(v, split=";")), c("unknown", "not_reported")),
+          collapse=";")
+  })
+  df$cancer <- simplify.origin(simple_origin)
   primary.dx.remap <- df$primary_diagnosis %in% names(dx.override.map)
   if(any(primary.dx.remap)){
     p.dx.idx <- which(primary.dx.remap)
     df$cancer[p.dx.idx] <- remap(df$primary_diagnosis[p.dx.idx], dx.override.map)
   }
-  missing.dx <- apply(df[, dx.cols], 1, function(v){all(is.na(v))})
+  missing.dx <- as.logical(as.numeric(apply(df[, dx.cols], 1, function(v){all(is.na(v))}))
+                           + as.numeric(df$cancer == ""))
   if(any(missing.dx)){
     df$cancer[which(missing.dx)] <- "other"
   }
@@ -210,7 +289,7 @@ load.clinical.data <- function(tsv.in){
   df$grade <- remap(gsub("^G", "", df$tumor_grade), grade.map)
 
   # Return formatted columns
-  df[, c("original_id", "reported_sex", "reported_race_or_ethnicity", "age",
+  df[, c("Sample", "reported_sex", "reported_race_or_ethnicity", "age",
          "birth_year", "vital_status", "age_at_last_contact",
          "days_from_dx_to_last_contact", "cancer", "stage", "metastatic",
          "grade", "cancer_icd10", "original_dx")]
@@ -238,7 +317,7 @@ load.exposure.data <- function(tsv.in){
   df <- as.data.frame(t(apply(df, 1, function(v){v[which(v == "'--")] <- NA; return(v)})))
 
   # Reassign case ID
-  df$original_id <- df$case_submitter_id
+  df$Sample <- df$case_submitter_id
 
   # Infer smoking history
   smoke.cols <- c("cigarettes_per_day", "pack_years_smoked",
@@ -261,7 +340,7 @@ load.exposure.data <- function(tsv.in){
   }
 
   # Return exposure data
-  df[, c("original_id", "height", "weight", "bmi", "smoking_history")]
+  df[, c("Sample", "height", "weight", "bmi", "smoking_history")]
 }
 
 
@@ -282,8 +361,8 @@ parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("clinical_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/eagle/clinical.cases_selection.2024-03-29/clinical.tsv",
-#              "exposure_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/eagle/clinical.cases_selection.2024-03-29/exposure.tsv",
+# args <- list("clinical_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/hcmi/clinical.cases_selection.2024-03-26/clinical.tsv",
+#              "exposure_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/hcmi/clinical.cases_selection.2024-03-26/exposure.tsv",
 #              "cohort" = "eagle",
 #              "out_tsv" = "~/scratch/eagle.pheno.dev.tsv")
 
@@ -295,17 +374,18 @@ exp.df <- load.exposure.data(args$exposure_tsv)
 
 # Merge dataframes and write to --out-tsv
 if(!is.null(exp.df)){
-  out.df <- merge(clin.df, exp.df, by="original_id", all.x=T, all.y=F, sort=F)
+  out.df <- merge(clin.df, exp.df, by="Sample", all.x=T, all.y=F, sort=F)
 }else{
   out.df <- clin.df
+  out.df[, c("height", "weight", "bmi", "smoking_history")] <- NA
 }
 if(!is.null(args$cohort)){
-  out.df$cohort <- args$cohort
+  out.df$Cohort <- args$cohort
 }
-out.cols <- c("original_id", "cohort", "reported_sex", "reported_race_or_ethnicity",
+out.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
               "age", "birth_year", "vital_status", "age_at_last_contact",
               "days_from_dx_to_last_contact", "height", "weight", "bmi", "cancer",
               "stage", "metastatic", "grade", "smoking_history", "cancer_icd10",
               "original_dx")
-write.table(out.df[, intersect(out.cols, colnames(out.df))],
+write.table(out.df[order(out.df$Sample), intersect(out.cols, colnames(out.df))],
             args$out_tsv, sep="\t", col.names=T, row.names=F, quote=F)

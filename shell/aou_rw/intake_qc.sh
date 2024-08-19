@@ -40,6 +40,7 @@ done
 gsutil -m -u $GPROJECT cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/dfci-g2c.intake_qc.aou.tsv.gz \
   gs://dfci-g2c-inputs/intake_qc/dfci-g2c.intake_qc.non_aou.tsv.gz \
+  gs://dfci-g2c-inputs/phenotypes/dfci-g2c.non_aou.phenos.tsv.gz \
   gs://dfci-g2c-refs/hgsv/HGSV.ByrskaBishop.sample_populations.tsv \
   data/
 gsutil -m -u $GPROJECT cat \
@@ -52,19 +53,25 @@ gsutil -m -u $GPROJECT cat \
 # INTAKE QC & BATCHING #
 ########################
 
+# Add minimal necessary phenotype data to non-AoU and AoU samples for QC + batching
+for subset in non_aou aou; do
+  code/scripts/join_qc_and_phenotypes.R \
+    --qc-tsv data/dfci-g2c.intake_qc.$subset.tsv.gz \
+    --phenos-tsv data/dfci-g2c.$subset.phenos.tsv.gz \
+    --out-tsv data/dfci-g2c.intake_qc_with_phenos.$subset.tsv
+  gzip -f data/dfci-g2c.intake_qc_with_phenos.$subset.tsv
+done
+
 # Merge AoU and non-AoU manifests
 code/scripts/merge_intake_qc_manifests.R \
-  --aou-tsv data/dfci-g2c.intake_qc.aou.tsv.gz \
-  --non-aou-tsv data/dfci-g2c.intake_qc.non_aou.tsv.gz \
+  --aou-tsv data/dfci-g2c.intake_qc_with_phenos.aou.tsv.gz \
+  --non-aou-tsv data/dfci-g2c.intake_qc_with_phenos.non_aou.tsv.gz \
   --include-samples data/all_g2c.phase1.intake_qc.samples.list \
   --hgsv-pop-assignments data/HGSV.ByrskaBishop.sample_populations.tsv \
   --id-prefix G2C \
   --suffix-length 6 \
   --out-tsv data/dfci-g2c.intake_qc.all.tsv
 gzip -f data/dfci-g2c.intake_qc.all.tsv
-
-# Append basic phenotypes required for QC/batching (reported sex, case/control)
-# TODO: implement this
 
 # Copy merged manifest to main workspace bucket
 gsutil -m cp \

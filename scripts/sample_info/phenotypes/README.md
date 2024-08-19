@@ -14,7 +14,7 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 2. `reported_race_or_ethnicity` : participant race and/or ethnicity, if either are reported. Note that this will frequently differ from WGS-inferred genetic ancestry.  
 
-3. `age` : individual age in years, if known. Ideally this reflects age at diagnosis, if reported separately.  
+3. `age` : individual age in years, if known. Ideally this reflects age at diagnosis, if reported separately, otherwise should reflect age at recruitment.  
 
 4. `birth_year` : year of birth, if known.  
 
@@ -22,13 +22,13 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 6. `age_at_last_contact` : age in years at time of last contact or death. If no follow-up was conducted or reported, this value will match `age`.  
 
-7. `days_from_dx_to_last_contact` : number of days from diagnosis to last contact or death, if reported; `NA` if unknown, not reported, or not relevant (e.g., for cancer-free controls).   
+7. `days_from_dx_to_last_contact` : number of days from diagnosis to last contact or death, if reported; `NA` if unknown, not reported, or not relevant (e.g., for cancer-free controls).  
 
-8. `height` : participant height in centimeters, if reported.  
+8. `height` : participant height in centimeters, if reported, presumably at time of recruitment.  
 
-9. `weight` : participant height in kilograms, if reported.  
+9. `weight` : participant height in kilograms, if reported, presumably at time of recruitment.  
 
-10. `bmi` : participant BMI, if reported or if both `height` and `weight` are available.  
+10. `bmi` : participant BMI, if reported or if both `height` and `weight` are available, presumably at time of recruitment.  
 
 11. `cancer` : primary cancer diagnos(es) for each patient. Metastatic/secondary sites are excluded from consideration in these fields where clinical records are sufficiently detailed to allow disambiguation. This field can have one or more values delimited with a semicolon; note that in most cases there will be a single reported primary cancer diagnosis for a patient. Diagnoses were collapsed into the following 16 domains: `prostate`, `breast`, `lung`, `colorectal`, `melanoma`, `uterus`, `kidney`, `bladder`, `oral_cavity`, `ovary`, `cns`, `pancreas`, `esophagus`, `liver`, `stomach`, `other`. Cancer-free controls have `control` in this field.  
 
@@ -40,7 +40,7 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 15. `smoking_history` : one-hot indicator for patient smoking history, if known. Eligible values include `0` for reported never smoker, `1` for positive history of smoking, and `NA` for unreported or missing data.  
 
-16. `cancer_icd10` : ICD-10 codes for this patient's cancer diagnoses, if reported. `NA` if missing and for cancer-free controls.  
+16. `cancer_icd10` : semicolon-delimited ICD-10 codes for this patient's cancer diagnoses, if reported. `NA` if missing and for cancer-free controls.  
 
 17. `original_dx` : free text field to record original specific cancer diagnosis, which is not standardized across cohorts. `NA` for missing values and cancer-free controls.  
 

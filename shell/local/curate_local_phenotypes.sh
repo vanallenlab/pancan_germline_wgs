@@ -20,7 +20,6 @@
 
 # Set up local environment
 export GPROJECT="vanallen-pancan-germline-wgs"
-export MAIN_AOU_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 export WRKDIR=`mktemp -d`
 export BASEDIR="/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs"
 export CODEDIR="$BASEDIR/pancan_germline_wgs"
@@ -69,4 +68,68 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --exposure-tsv $WCDTDIR/exposure.tsv \
   --cohort wcdt \
   --out-tsv $WRKDIR/wcdt.phenos.tsv
+
+
+#########
+# dbGaP #
+#########
+
+# BioMe
+# TODO: add this
+
+# CEPH
+# TODO: add this
+
+# GTEx
+# TODO: add this
+
+# MESA
+# TODO: add this
+
+# LCINS
+# TODO: add this
+
+
+#################
+# OTHER|BESPOKE #
+#################
+
+# HGSVC
+# TODO: add this
+
+# HMF
+# TODO: add this
+
+# ICGC
+# TODO: add this
+
+# Proactive
+# TODO: add this
+
+# UFC
+# TODO: add this
+
+
+###################
+# STAGE & CLEANUP #
+###################
+
+# Pool all phenotype data
+head -n1 $( find $WRKDIR/ -name "*.phenos.tsv" | head -n1 ) \
+> $WRKDIR/dfci-g2c.non_aou.phenos.tsv
+find $WRKDIR/ -name "*.phenos.tsv" \
+| xargs -I {} sed '1d' {} \
+| sort -Vk2,2 -k1,1V \
+>> $WRKDIR/dfci-g2c.non_aou.phenos.tsv
+
+# Compress all phenotype data
+find $WRKDIR/ -name "*.phenos.tsv" | xargs -I {} gzip -f {}
+
+# Copy all per-cohort phenotype files to main (non-AoU) project bucket for storage
+gsutil -m cp \
+  $WRKDIR/*.phenos.tsv.gz \
+  gs://dfci-g2c-inputs/phenotypes/
+
+# Clean up working directory
+rm -rf $WRKDIR
 

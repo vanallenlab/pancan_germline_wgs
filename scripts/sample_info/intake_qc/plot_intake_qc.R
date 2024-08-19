@@ -121,7 +121,7 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv.gz",
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
