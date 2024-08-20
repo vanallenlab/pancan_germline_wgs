@@ -5,7 +5,7 @@
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Plot cohort-wide intake QC metrics
+# Curate sample-level phenotype data for cohorts downloaded from NIH/NCI GDC
 
 
 #########
@@ -77,13 +77,19 @@ grade.map <- c("Not Reported" = "unknown",
                "High Grade" = "4",
                "Unknown" = "unknown",
                "NA" = "unknown")
+specimen.map <- c("Blood Derived Normal" = "blood",
+                  "Buccal Cell Normal" = "buccal_cells",
+                  "Solid Tissue Normal" = "solid_tissue")
 
 
 ##################
 # Data Functions #
 ##################
 # Fault-tolerant partial remapping of string vectors
-remap <- function(x, map){
+remap <- function(x, map, default.value=NULL){
+  if(!is.null(default.value)){
+    x[which(!(x %in% c("NA", names(map))))] <- default.value
+  }
   for(key in names(map)){
     x[which(x == key)] <- map[key]
   }
@@ -154,7 +160,8 @@ squash.duplicates <- function(dup.df){
 # Load & curate clinical.tsv from NCI GDC
 load.clinical.data <- function(tsv.in){
   # Read data
-  df <- read.table(tsv.in, sep="\t", comment.char="", quote="", header=T)
+  df <- read.table(tsv.in, sep="\t", comment.char="", quote="", header=T,
+                   na.strings="'--")
 
   # Only keep relevant columns
   keep.cols <- c("case_submitter_id", "gender", "race", "ethnicity",
@@ -169,9 +176,6 @@ load.clinical.data <- function(tsv.in){
 
   # Deduplicate based on columns above
   df <- df[!duplicated(df), ]
-
-  # Fill missing values with NAs
-  df <- as.data.frame(t(apply(df, 1, function(v){v[which(v == "'--")] <- NA; return(v)})))
 
   # Check for duplicate sample IDs, and deduplicate further if needed
   dup.ids <- unique(df$case_submitter_id[which(duplicated(df$case_submitter_id))])
@@ -295,10 +299,47 @@ load.clinical.data <- function(tsv.in){
          "grade", "cancer_icd10", "original_dx")]
 }
 
+# Assign WGS tissue to each sample, where possible
+get.wgs.tissue <- function(df, sample.tsv){
+  # Update tissue labels if --biospecimen-tsv is provided
+  if(!is.null(sample.tsv)){
+    # Load specimen information, subset to normals, and deduplicate
+    s.df <- read.table(sample.tsv, header=T, sep="\t", comment.char="", quote="",
+                       na.strings="'--")
+    keep.cols <- c("case_submitter_id", "preservation_method", "sample_type",
+                   "specimen_type", "tissue_type")
+    norm.idx <- union(grep("normal", s.df$sample_type, ignore.case=TRUE),
+                      grep("normal", s.df$tissue_type, ignore.case=TRUE))
+    keep.rows <- intersect(norm.idx, which(s.df$case_submitter_id %in% df$Sample))
+    s.df <- s.df[keep.rows, keep.cols]
+    s.df <- s.df[c(which(s.df$preservation_method != "Unknown"),
+                   which(s.df$preservation_method == "Unknown")), ]
+    s.df <- s.df[c(grep("blood", s.df$sample_type, ignore.case=TRUE),
+                   grep("blood", s.df$sample_type, ignore.case=TRUE, invert=TRUE)), ]
+    s.df <- s.df[which(!duplicated(s.df$case_submitter_id)), ]
+    rownames(s.df) <- s.df$case_submitter_id
+
+    # Clean columns & build DNA source map
+    s.df$preservation_method <- gsub("[ ]+", "_", tolower(s.df$preservation_method))
+    s.df$preservation_method[which(s.df$preservation_method == "unknown")] <- NA
+    s.df$sample_type <- remap(s.df$sample_type, specimen.map)
+    dna.map <- apply(s.df[, c("preservation_method", "sample_type")], 1, paste, collapse="_")
+    dna.map <- gsub("^NA_", "", dna.map[which(!is.na(dna.map))])
+  }else{
+    dna.map <- c()
+  }
+
+  # Map DNA source where possible
+  df$wgs_tissue <- remap(df$Sample, dna.map, default.value="unknown")
+
+  return(df)
+}
+
 # Load & curate exposure/biometric data
 load.exposure.data <- function(tsv.in){
   # Read data
-  df <- read.table(tsv.in, sep="\t", comment.char="", quote="", header=T)
+  df <- read.table(tsv.in, sep="\t", comment.char="", quote="", header=T,
+                   na.strings="'--")
   if(nrow(df) == 0){
     return(NULL)
   }
@@ -312,9 +353,6 @@ load.exposure.data <- function(tsv.in){
 
   # Deduplicate based on columns above
   df <- df[!duplicated(df), ]
-
-  # Fill missing values with NAs
-  df <- as.data.frame(t(apply(df, 1, function(v){v[which(v == "'--")] <- NA; return(v)})))
 
   # Reassign case ID
   df$Sample <- df$case_submitter_id
@@ -353,6 +391,8 @@ parser$add_argument("--clinical-tsv", metavar=".tsv", type="character",
                     required=TRUE, help="clinical.tsv downloaded from NCI GDC")
 parser$add_argument("--exposure-tsv", metavar=".tsv", type="character",
                     help="exposure.tsv downloaded from NCI GDC")
+parser$add_argument("--biospecimen-tsv", metavar=".tsv", type="character",
+                    help="sample.tsv downloaded from NCI GDC")
 parser$add_argument("--cohort", metavar="string", type="character",
                     help=paste("Optional cohort specifier; will be added as a",
                                "column to --out-tsv"))
@@ -361,13 +401,17 @@ parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("clinical_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/hcmi/clinical.cases_selection.2024-03-26/clinical.tsv",
-#              "exposure_tsv" = "/Users/ryan/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/hcmi/clinical.cases_selection.2024-03-26/exposure.tsv",
-#              "cohort" = "eagle",
-#              "out_tsv" = "~/scratch/eagle.pheno.dev.tsv")
+# args <- list("clinical_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/clinical.cases_selection.2024-03-27/clinical.tsv",
+#              "exposure_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/clinical.cases_selection.2024-03-27/exposure.tsv",
+#              "biospecimen_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/biospecimen.project-cptac-3.2024-08-20/sample.tsv",
+#              "cohort" = "cptac",
+#              "out_tsv" = "~/scratch/cptac.pheno.dev.tsv")
 
 # Load and clean clinical data
 clin.df <- load.clinical.data(args$clinical_tsv)
+
+# Add DNA source, if available
+clin.df <- get.wgs.tissue(clin.df, args$biospecimen_tsv)
 
 # Load and clean exposure data
 exp.df <- load.exposure.data(args$exposure_tsv)
@@ -386,6 +430,6 @@ out.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
               "age", "birth_year", "vital_status", "age_at_last_contact",
               "days_from_dx_to_last_contact", "height", "weight", "bmi", "cancer",
               "stage", "metastatic", "grade", "smoking_history", "cancer_icd10",
-              "original_dx")
+              "original_dx", "wgs_tissue")
 write.table(out.df[order(out.df$Sample), intersect(out.cols, colnames(out.df))],
             args$out_tsv, sep="\t", col.names=T, row.names=F, quote=F)

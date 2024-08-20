@@ -34,6 +34,7 @@ export APOLLODIR="$BASEDIR/data_and_cohorts/apollo/clinical.cases_selection.2024
 $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --clinical-tsv $APOLLODIR/clinical.tsv \
   --exposure-tsv $APOLLODIR/exposure.tsv \
+  --biospecimen-tsv $APOLLODIR/../biospecimen.cases_selection.2024-03-26/sample.tsv \
   --cohort apollo \
   --out-tsv $WRKDIR/apollo.phenos.tsv
 
@@ -42,6 +43,7 @@ export CPTACDIR="$BASEDIR/data_and_cohorts/cptac/clinical.cases_selection.2024-0
 $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --clinical-tsv $CPTACDIR/clinical.tsv \
   --exposure-tsv $CPTACDIR/exposure.tsv \
+  --biospecimen-tsv $CPTACDIR/../biospecimen.project-cptac-3.2024-08-20/sample.tsv \
   --cohort cptac \
   --out-tsv $WRKDIR/cptac.phenos.tsv
 
@@ -50,6 +52,7 @@ export EAGLEDIR="$BASEDIR/data_and_cohorts/eagle/clinical.cases_selection.2024-0
 $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --clinical-tsv $EAGLEDIR/clinical.tsv \
   --exposure-tsv $EAGLEDIR/exposure.tsv \
+  --biospecimen-tsv $EAGLEDIR/../biospecimen.cases_selection.2024-03-29/sample.tsv \
   --cohort eagle \
   --out-tsv $WRKDIR/eagle.phenos.tsv
 
@@ -58,6 +61,7 @@ export HCMIDIR="$BASEDIR/data_and_cohorts/hcmi/clinical.cases_selection.2024-03-
 $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --clinical-tsv $HCMIDIR/clinical.tsv \
   --exposure-tsv $HCMIDIR/exposure.tsv \
+  --biospecimen-tsv $HCMIDIR/../biospecimen.cases_selection.2024-03-26/sample.tsv \
   --cohort hcmi \
   --out-tsv $WRKDIR/hcmi.phenos.tsv
 
@@ -66,6 +70,7 @@ export WCDTDIR="$BASEDIR/data_and_cohorts/wcdt/clinical.cases_selection.2024-03-
 $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --clinical-tsv $WCDTDIR/clinical.tsv \
   --exposure-tsv $WCDTDIR/exposure.tsv \
+  --biospecimen-tsv $WCDTDIR/..//biospecimen.cases_selection.2024-03-26/sample.tsv \
   --cohort wcdt \
   --out-tsv $WRKDIR/wcdt.phenos.tsv
 

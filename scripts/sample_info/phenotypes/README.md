@@ -44,6 +44,8 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 17. `original_dx` : free text field to record original specific cancer diagnosis, which is not standardized across cohorts. `NA` for missing values and cancer-free controls.  
 
+18. `wgs_tissue` : DNA source (i.e., tissue or biospecimen) used for germline whole-genome sequencing. `unknown` if not reported.  
+
 ---  
 
 Note that access to individual level phenotype data records are protected by agreements and consents from various entities (e.g., dbGaP, NIH All of Us, Hartwig Medical Foundation), so no blanket access can be provided. The above data descriptors and scripts contained in this subdirectory are sufficient to recreate the phenotype data used in all analyses, however.  

@@ -2,7 +2,7 @@
 % Please edit documentation in R/constants.R
 \name{load.constants}
 \alias{load.constants}
-\title{Load Study Constants}
+\title{Load study constants}
 \usage{
 load.constants(subset, envir = .GlobalEnv)
 }

@@ -121,7 +121,7 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv.gz",
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv",
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
@@ -206,8 +206,30 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
 }
 
 
+# Set shared barplot parameters
+bar.parmar <- c(0.5, 4, 2.5, 2.75)
+bar.pdf.dims <- c(5, 3)
+
+
 # Barplot of samples per cancer, colored by cohort
+pdf(paste(args$out_prefix, "cohort_contributions_per_cancer", "pdf", sep="."),
+    height=bar.pdf.dims[1], width=bar.pdf.dims[2])
+stacked.barplot(cancer.names[qc.df$cancer],
+                cohort.names.short[qc.df$simple_cohort],
+                x.title="Samples", annotate.counts=TRUE,
+                parmar=bar.parmar)
+dev.off()
 
 
 # Barplot of samples by cohort, colored by cancer
+pdf(paste(args$out_prefix, "cancers_per_cohort", "pdf", sep="."),
+    height=bar.pdf.dims[1], width=bar.pdf.dims[2])
+minor.colors <- cancer.colors
+names(minor.colors) <- cancer.names[names(cancer.colors)]
+stacked.barplot(cohort.names.short[qc.df$simple_cohort],
+                cancer.names[qc.df$cancer],
+                minor.colors=minor.colors, x.title="Samples",
+                annotate.counts=TRUE, orient="left", legend.xadj=-0.3,
+                parmar=bar.parmar[c(3, 4, 1, 2)])
+dev.off()
 
