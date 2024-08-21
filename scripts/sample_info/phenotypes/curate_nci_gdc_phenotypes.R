@@ -85,20 +85,6 @@ specimen.map <- c("Blood Derived Normal" = "blood",
 ##################
 # Data Functions #
 ##################
-# Fault-tolerant partial remapping of string vectors
-remap <- function(x, map, default.value=NULL){
-  if(!is.null(default.value)){
-    x[which(!(x %in% c("NA", names(map))))] <- default.value
-  }
-  for(key in names(map)){
-    x[which(x == key)] <- map[key]
-  }
-  if("NA" %in% names(map) & any(is.na(x))){
-    x[which(is.na(x))] <- map["NA"]
-  }
-  return(x)
-}
-
 # Simplify tissue or organ of origin
 simplify.origin <- function(vals){
   vals <- remap(vals, origin.map)
@@ -211,7 +197,7 @@ load.clinical.data <- function(tsv.in){
   df$reported_sex <- tolower(df$gender)
   df$birth_year <- as.numeric(df$year_of_birth)
   df$vital_status <- as.numeric(remap(df$vital_status, vital.map))
-  df$days_from_dx_to_last_contact <- as.numeric(df$days_to_last_follow_up)
+  df$years_to_last_contact <- as.numeric(df$days_to_last_follow_up) / 365
   df$cancer_icd10 <- df$icd_10_code
 
   # Parse age with variable units
@@ -295,7 +281,7 @@ load.clinical.data <- function(tsv.in){
   # Return formatted columns
   df[, c("Sample", "reported_sex", "reported_race_or_ethnicity", "age",
          "birth_year", "vital_status", "age_at_last_contact",
-         "days_from_dx_to_last_contact", "cancer", "stage", "metastatic",
+         "years_to_last_contact", "cancer", "stage", "metastatic",
          "grade", "cancer_icd10", "original_dx")]
 }
 
@@ -428,7 +414,7 @@ if(!is.null(args$cohort)){
 }
 out.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
               "age", "birth_year", "vital_status", "age_at_last_contact",
-              "days_from_dx_to_last_contact", "height", "weight", "bmi", "cancer",
+              "years_to_last_contact", "height", "weight", "bmi", "cancer",
               "stage", "metastatic", "grade", "smoking_history", "cancer_icd10",
               "original_dx", "wgs_tissue")
 write.table(out.df[order(out.df$Sample), intersect(out.cols, colnames(out.df))],

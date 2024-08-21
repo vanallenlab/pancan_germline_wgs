@@ -1,6 +1,6 @@
 # DFCI G2C Database
 
-Copyright (c) 2023-Present, [Ryan L. Collins](mailto:Ryan_Collins@dfci.harvard.edu), [Noah Fields](mailto:noah_fields@dfci.harvard.edu), and the Van Allen, Gusev, and Haigis laboratories at Dana-Farber Cancer Institute.  
+Copyright (c) 2023-Present, [Ryan L. Collins](mailto:Ryan_Collins@dfci.harvard.edu) and the Van Allen, Gusev, and Haigis laboratories at Dana-Farber Cancer Institute.  
 Distributed under terms of the [GNU GPL v2.0 License](/LICENSE) (see `LICENSE`).  
 
 
@@ -12,17 +12,17 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 1. `reported_sex` : reported sex of participant, if known. Eligible values are `male`, `female`, or `other`. Note that this is not necessarily consistent with inferred sex from WGS ploidy.  
 
-2. `reported_race_or_ethnicity` : participant race and/or ethnicity, if either are reported. Note that this will frequently differ from WGS-inferred genetic ancestry.  
+2. `reported_race_or_ethnicity` : participant race and/or ethnicity, if either are reported. Note that this will frequently differ from WGS-inferred genetic ancestry. In some cases (e.g., certain TOPMed cohorts, 1000 Genomes Project), genetic ancestry inference had been previously performed, in which case these values superceded self-reported race and/or ethnicity.  
 
-3. `age` : individual age in years, if known. Ideally this reflects age at diagnosis, if reported separately, otherwise should reflect age at recruitment.  
+3. `age` : individual age in years, if known. Ideally this reflects age at diagnosis, if reported separately, otherwise should reflect age at the time of sample acquisition for sequencing (e.g., time at blood draw used for WGS). `NA` if unknown.    
 
-4. `birth_year` : year of birth, if known.  
+4. `birth_year` : year of birth; `NA` if unknown.  
 
-5. `vital_status` : one-hot indicator for participant vital status, if known. Eligible values are `0` if individual is known to be deceased, `1` if individual is known to be alive at last contact, or `NA` if vital status is unknown or not reported.  
+5. `vital_status` : one-hot indicator for participant vital status, if known. Eligible values are `0` if individual is known to have deceased since recruitment or diagnosis, `1` if individual is known to be alive at last contact, or `NA` if no follow-up was conducted, vital status is unknown, or otherwise not reported.  
 
 6. `age_at_last_contact` : age in years at time of last contact or death. If no follow-up was conducted or reported, this value will match `age`.  
 
-7. `days_from_dx_to_last_contact` : number of days from diagnosis to last contact or death, if reported; `NA` if unknown, not reported, or not relevant (e.g., for cancer-free controls).  
+7. `years_to_last_contact` : time elapsed from intake to last contact or death, if reported. Ideally, this value should reflect time from initial cancer diagnosis, otherwise it should reflect follow-up time from initial participant recruitment into the study. `NA` if unknown or not reported.  
 
 8. `height` : participant height in centimeters, if reported, presumably at time of recruitment.  
 
@@ -38,7 +38,7 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 14. `grade` : Grade of primary tumor, if reported. Ideally reported at time of diagnosis. Eligible values are `1`, `2`, `3`, `4`, `unknown` if not reported, and `NA` for cancer-free controls. Borderline grade tumors (`GB`) were treated as grade `1`.  
 
-15. `smoking_history` : one-hot indicator for patient smoking history, if known. Eligible values include `0` for reported never smoker, `1` for positive history of smoking, and `NA` for unreported or missing data.  
+15. `smoking_history` : one-hot indicator for patient smoking history, if known. Eligible values include `0` for reported never smoker, `1` for positive history of smoking, and `NA` for unreported or missing data. For cohorts with reported COPD diagnoses but no reported smoking history (e.g., BioMe), COPD diagnoses were treated as an imperfect but highly correlated proxy for positive smoking history, whereas patients lacking COPD diagnoses were marked as `NA`.  
 
 16. `cancer_icd10` : semicolon-delimited ICD-10 codes for this patient's cancer diagnoses, if reported. `NA` if missing and for cancer-free controls.  
 

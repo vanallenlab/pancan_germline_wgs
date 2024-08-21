@@ -80,7 +80,9 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
 #########
 
 # BioMe
-# TODO: add this
+$CODEDIR/scripts/sample_info/phenotypes/curate_biome_phenotypes.R \
+  --in-tsv ~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/topmed/biome/phs001644.v2.pht009946.v2.p2.c1.TOPMed_CCDG_BioME_Subject_Phenotypes.HMB-NPU.txt \
+  --out-tsv $WRKDIR/biome.phenos.tsv
 
 # CEPH
 # TODO: add this
@@ -89,7 +91,15 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
 # TODO: add this
 
 # MESA
-# TODO: add this
+export MESADIR="$BASEDIR/data_and_cohorts/mesa/mesa_phenotypes/MESA_tsvs"
+$CODEDIR/scripts/sample_info/phenotypes/curate_mesa_phenotypes.R \
+  --first-exam-tsv $MESADIR/phs000209.v13.pht001116.v10.p3.c1.MESA_Exam1Main.HMB.txt.gz \
+  --followup-tsv $MESADIR/phs000209.v13.pht001118.v8.p3.c1.MESA_Exam2Main.HMB.txt.gz \
+  --followup-tsv $MESADIR/phs000209.v13.pht001119.v8.p3.c1.MESA_Exam3Main.HMB.txt.gz \
+  --followup-tsv $MESADIR/phs000209.v13.pht001120.v10.p3.c1.MESA_Exam4Main.HMB.txt.gz \
+  --followup-tsv $MESADIR/phs000209.v13.pht003091.v3.p3.c1.MESA_Exam5Main.HMB.txt.gz \
+  --family-exam-tsv $MESADIR/../../PhenotypeFiles/phs000209.v13.phenotypes/phs000209.v13.pht001121.v3.p3.c1.MESA_FamilyExamMain.HMB.txt.gz \
+  --out-tsv $WRKDIR/mesa.phenos.tsv
 
 # LCINS
 # TODO: add this
