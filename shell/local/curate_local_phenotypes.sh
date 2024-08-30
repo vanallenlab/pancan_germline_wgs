@@ -88,10 +88,14 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_biome_phenotypes.R \
 # TODO: add this
 
 # GTEx
-# TODO: add this
+export GTEXDIR=$BASEDIR/data_and_cohorts/gtex
+$CODEDIR/scripts/sample_info/phenotypes/curate_gtex_phenotypes.R \
+  --phenotypes-tsv $GTEXDIR/dbgap_phenotypes/phs000424.v9.pht002742.v9.p2.c1.GTEx_Subject_Phenotypes.GRU.txt.gz \
+  --sample-attributes-tsv $GTEXDIR/GTEx_Analysis_2021-02-11_v9_Annotations_SampleAttributesDS.txt \
+  --out-tsv $WRKDIR/gtex.phenos.tsv
 
 # MESA
-export MESADIR="$BASEDIR/data_and_cohorts/mesa/mesa_phenotypes/MESA_tsvs"
+export MESADIR=$BASEDIR/data_and_cohorts/mesa/mesa_phenotypes/MESA_tsvs
 $CODEDIR/scripts/sample_info/phenotypes/curate_mesa_phenotypes.R \
   --first-exam-tsv $MESADIR/phs000209.v13.pht001116.v10.p3.c1.MESA_Exam1Main.HMB.txt.gz \
   --followup-tsv $MESADIR/phs000209.v13.pht001118.v8.p3.c1.MESA_Exam2Main.HMB.txt.gz \
@@ -102,7 +106,12 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_mesa_phenotypes.R \
   --out-tsv $WRKDIR/mesa.phenos.tsv
 
 # LCINS
-# TODO: add this
+export LCINSDIR=$BASEDIR/data_and_cohorts/lcins/NatGenet_LCINS_phenotypes
+$CODEDIR/scripts/sample_info/phenotypes/curate_lcins_phenotypes.R \
+  --supp-table-1-tsv $LCINSDIR/LCINS.supp_table1.tsv \
+  --subject-phenotypes-tsv $LCINSDIR/phs001697.v1.pht010578.v1.p1.c3.EAGLE_Never_Smokers_Subject_Phenotypes.GRU.txt.gz \
+  --out-tsv $WRKDIR/lcins.phenos.tsv
+
 
 
 #################

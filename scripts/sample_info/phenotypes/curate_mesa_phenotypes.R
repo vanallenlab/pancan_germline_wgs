@@ -72,6 +72,10 @@ load.intake.exam <- function(tsv.in, col.suffix="1"){
   cstr.hits <- which(df$cstr != "")
   df$cancer <- remap(df[, paste("cancer", col.suffix, sep="")], cancer.map)
   df$cancer[cstr.hits] <- df$cstr[cstr.hits]
+  any.cancer <- which(df$cancer != "control" & !is.na(df$cancer))
+  df$stage[any.cancer] <- "unknown"
+  df$metastatic[any.cancer] <- "unknown"
+  df$grade[any.cancer] <- "unknown"
 
   # Only return relevant columns
   keep.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",

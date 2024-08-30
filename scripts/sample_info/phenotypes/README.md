@@ -10,7 +10,7 @@ This subdirectly contains code to curate participant- and sample-level metadata 
 
 Given the highly heterogeneous nature of the cohorts included in G2C, we have mapped all available phenotype information onto a simplified data dictionary as follows:  
 
-1. `reported_sex` : reported sex of participant, if known. Eligible values are `male`, `female`, or `other`. Note that this is not necessarily consistent with inferred sex from WGS ploidy.  
+1. `reported_sex` : reported sex of participant, if known. Eligible values are `male`, `female`, `other`, or `NA` if not reported. Note that this is not necessarily consistent with inferred sex from WGS ploidy.  
 
 2. `reported_race_or_ethnicity` : participant race and/or ethnicity, if either are reported. Note that this will frequently differ from WGS-inferred genetic ancestry. In some cases (e.g., certain TOPMed cohorts, 1000 Genomes Project), genetic ancestry inference had been previously performed, in which case these values superceded self-reported race and/or ethnicity.  
 
@@ -22,13 +22,13 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 6. `age_at_last_contact` : age in years at time of last contact or death. If no follow-up was conducted or reported, this value will match `age`.  
 
-7. `years_to_last_contact` : time elapsed from intake to last contact or death, if reported. Ideally, this value should reflect time from initial cancer diagnosis, otherwise it should reflect follow-up time from initial participant recruitment into the study. `NA` if unknown or not reported.  
+7. `years_to_last_contact` : time elapsed from intake to last contact or death, if reported. Ideally, this value should reflect time from initial cancer diagnosis, otherwise it should reflect follow-up time from initial participant recruitment into the study. `NA` if no follow-up was conducted or value is otherwise unknown or not reported.  
 
-8. `height` : participant height in centimeters, if reported, presumably at time of recruitment.  
+8. `height` : participant height in centimeters, if reported, presumably at time of recruitment. `NA` if not reported.  
 
-9. `weight` : participant height in kilograms, if reported, presumably at time of recruitment.  
+9. `weight` : participant height in kilograms, if reported, presumably at time of recruitment. `NA` if not reported.  
 
-10. `bmi` : participant BMI, if reported or if both `height` and `weight` are available, presumably at time of recruitment.  
+10. `bmi` : participant BMI, if reported or if both `height` and `weight` are available, presumably at time of recruitment. `NA` if not reported or not able to be computed.  
 
 11. `cancer` : primary cancer diagnos(es) for each patient. Metastatic/secondary sites are excluded from consideration in these fields where clinical records are sufficiently detailed to allow disambiguation. This field can have one or more values delimited with a semicolon; note that in most cases there will be a single reported primary cancer diagnosis for a patient. Diagnoses were collapsed into the following 16 domains: `prostate`, `breast`, `lung`, `colorectal`, `melanoma`, `uterus`, `kidney`, `bladder`, `oral_cavity`, `ovary`, `cns`, `pancreas`, `esophagus`, `liver`, `stomach`, `other`. Cancer-free controls have `control` in this field.  
 
