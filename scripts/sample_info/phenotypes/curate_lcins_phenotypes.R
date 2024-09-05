@@ -91,7 +91,10 @@ load.st1 <- function(tsv.in){
 
 # Update sample race/ancestry annotations from dbGaP, where available
 add.dbgap.phenos <- function(df, tsv.in){
+  # Read dbGaP data
   pheno.df <- read.table(tsv.in, header=T, blank.lines.skip=TRUE, sep="\t")
+
+  # Map onto existing dataframe
   race.v <- remap(pheno.df$RACE, race.map)
   names(race.v) <- pheno.df$SUBJECT_ID
   ovr.idxs <- which(df$Sample %in% names(race.v))

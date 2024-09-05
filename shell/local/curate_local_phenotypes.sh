@@ -85,7 +85,17 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_biome_phenotypes.R \
   --out-tsv $WRKDIR/biome.phenos.tsv
 
 # CEPH
-# TODO: add this
+# Note: working on getting complete phenotype data access for CEPH
+# For now, just using the minimal data available online
+# We can udpate this later if/when we get access to detailed health history info
+export CEPHDIR=$BASEDIR/data_and_cohorts/ceph/phenotypes
+gsutil -m cp gs://dfci-g2c-inputs/sample-lists/ceph.samples.list $WRKDIR/
+$CODEDIR/scripts/sample_info/phenotypes/curate_ceph_phenotypes.R \
+  --sample-ids $WRKDIR/ceph.samples.list \
+  --pedigree-tsv $CEPHDIR/phs001872.v1.pht009364.v1.p1.CEPH_Utah_Pedigree.MULTI.txt.gz \
+  --subject-info-tsv $CEPHDIR/phs001872.v1.pht009363.v1.p1.CEPH_Utah_Subject.MULTI.txt.gz \
+  --out-tsv $WRKDIR/ceph.phenos.tsv
+
 
 # GTEx
 export GTEXDIR=$BASEDIR/data_and_cohorts/gtex
@@ -122,10 +132,21 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_lcins_phenotypes.R \
 # TODO: add this
 
 # HMF
-# TODO: add this
+export HMFDIR=$BASEDIR/data_and_cohorts/hmf/hmf-dr-355
+$CODEDIR/scripts/sample_info/phenotypes/curate_hmf_phenotypes.R \
+  --preprocessed-tsv $HMFDIR/HMF.combined_metadata_and_manifest.unique_patients.tsv.gz \
+  --cancer-classification-tsv $HMFDIR/hmf-dr-355.g2c_classification_scheme.tsv \
+  --out-tsv $WRKDIR/hmf.phenos.tsv
+
 
 # ICGC
-# TODO: add this
+export ICGCDIR=$BASEDIR/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023
+$CODEDIR/scripts/sample_info/phenotypes/curate_icgc_phenotypes.R \
+  --donors-tsv $ICGCDIR/donor.all_projects.tsv.gz \
+  --project-cancer-map $BASEDIR/data_and_cohorts/icgc/icgc_project_to_g2c_map.tsv \
+  --specimen-tsv $ICGCDIR/specimen.all_projects.tsv.gz \
+  --exposure-tsv $ICGCDIR/donor_exposure.all_projects.tsv.gz \
+  --out-tsv $WRKDIR/icgc.phenos.tsv
 
 # Proactive
 # TODO: add this

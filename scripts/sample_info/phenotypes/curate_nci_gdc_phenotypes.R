@@ -76,7 +76,8 @@ grade.map <- c("Not Reported" = "unknown",
                "B" = "1",
                "High Grade" = "4",
                "Unknown" = "unknown",
-               "NA" = "unknown")
+               "NA" = "unknown",
+               "3;GX" = "3")
 specimen.map <- c("Blood Derived Normal" = "blood",
                   "Buccal Cell Normal" = "buccal_cells",
                   "Solid Tissue Normal" = "solid_tissue")
@@ -195,9 +196,12 @@ load.clinical.data <- function(tsv.in){
   # Reassign simple columns requiring little-to-no transformation
   df$Sample <- df$case_submitter_id
   df$reported_sex <- tolower(df$gender)
+  na.sex.idx <- which(df$reported_sex %in% c("male", "female", "other"))
+  df$reported_sex[na.sex.idx] <- NA
   df$birth_year <- as.numeric(df$year_of_birth)
   df$vital_status <- as.numeric(remap(df$vital_status, vital.map))
   df$years_to_last_contact <- as.numeric(df$days_to_last_follow_up) / 365
+  df$years_to_last_contact[which(df$years_to_last_contact < 0)] <- 0
   df$cancer_icd10 <- df$icd_10_code
 
   # Parse age with variable units
