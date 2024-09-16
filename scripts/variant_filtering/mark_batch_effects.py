@@ -118,6 +118,19 @@ def check_batch_effects(bfx_info, min_n, lower_freq, upper_freq):
     return any_bfx, low_groups, high_groups
 
 
+def pool_freqs(bfx_info, groups):
+    """
+    Pool frequencies for one or more groups
+    """
+
+    total, nonref = 0, 0
+    for gid in groups:
+        total += bfx_info[gid]['total']
+        nonref += bfx_info[gid]['nonref']
+    
+    return {'total' : total, 'nonref' : nonref, 'frac' : nonref / total}
+
+
 def mask_gts(record, group_members, groups_to_mask):
     """
     Mask all genotypes for samples from one or more specified groups_to_mask
@@ -224,7 +237,7 @@ def main():
             continue
 
         bfx_info = collect_batch_effect_info(record, group_map)
-        any_bfx, high_groups, low_groups = \
+        any_bfx, low_groups, high_groups = \
             check_batch_effects(bfx_info, args.min_samples, 
                                 args.lower_freq, args.upper_freq)
 
@@ -233,8 +246,19 @@ def main():
             outvcf.write(record)
             continue
 
-        # Mask GTs from batches with unusually high rates of non-ref GTs
-        record = mask_gts(record, group_members, high_groups)
+        # Mask GTs from batches with the most aberrant non-ref GT rates
+        # Note that the "correct" set of groups is determined based on average
+        # distance to the full sample frequency
+        all_frac = pool_freqs(bfx_info, bfx_info.keys())['frac']
+        low_frac = pool_freqs(bfx_info, low_groups)['frac']
+        high_frac = pool_freqs(bfx_info, high_groups)['frac']
+        low_dist = abs(all_frac - low_frac)
+        high_dist = abs(all_frac - high_frac)
+        if low_dist > high_dist:
+            bad_groups = low_groups
+        else:
+            bad_groups = high_groups
+        record = mask_gts(record, group_members, bad_groups)
 
         # Add non-PASS FILTER if executed in --strict mode
         if args.strict:
