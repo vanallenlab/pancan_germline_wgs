@@ -131,7 +131,7 @@ def pool_freqs(bfx_info, groups):
     return {'total' : total, 'nonref' : nonref, 'frac' : nonref / total}
 
 
-def mask_gts(record, group_members, groups_to_mask):
+def mask_gts(record, group_members, groups_to_mask, iflag):
     """
     Mask all genotypes for samples from one or more specified groups_to_mask
     """
@@ -140,6 +140,8 @@ def mask_gts(record, group_members, groups_to_mask):
         for sid in group_members[gid]:
             gt = record.samples[sid]['GT']
             record.samples[sid]['GT'] = tuple([None] * len(gt))
+
+    record.info[iflag] = True
     
     return record
 
@@ -170,6 +172,10 @@ def main():
                         help='Custom VCF FILTER description to use when ' +
                         'tagging records with inter-group differences. Only ' +
                         'used with --strict.')
+    parser.add_argument('--info-flag-id', type=str, metavar='String',
+                        help='Custom VCF INFO ID to use when flagging records ' +
+                        'with GTs masked due to inter-group differences.',
+                        default='GROUPWISE_MASKED_GENOTYPES', dest='iflag')
     parser.add_argument('-M', '--min-samples', default=10, type=int, 
                         help='Minimum number of samples per group to be ' +
                         'included in comparisons [default: 10]', metavar='Int')
@@ -202,11 +208,11 @@ def main():
 
     # Modify output VCF header to have necessary tags depending on mode
     out_header = invcf.header
-    i_line = '##INFO=<ID=GROUPWISE_MASKED_GENOTYPES,Number=0,Type=Flag,' + \
+    i_line = '##INFO=<ID={},Number=0,Type=Flag,' + \
              'Description="A subset of GTs for this record have been ' + \
              'masked by post hoc application of mark_batch_effects.py">'
-    if 'GROUPWISE_MASKED_GENOTYPES' not in out_header.info.keys():
-        out_header.add_line(i_line)
+    if args.iflag not in out_header.info.keys():
+        out_header.add_line(i_line.format(args.iflag))
     if args.strict:
         filter_id = 'NONUNIFORM_GENOTYPES'
         filter_descrip = 'Variant exhibits excessive differences in ' + \
@@ -258,7 +264,7 @@ def main():
             bad_groups = low_groups
         else:
             bad_groups = high_groups
-        record = mask_gts(record, group_members, bad_groups)
+        record = mask_gts(record, group_members, bad_groups, args.iflag)
 
         # Add non-PASS FILTER if executed in --strict mode
         if args.strict:
