@@ -11,11 +11,11 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 # Install python packages dependencies
 RUN apt-get update && \
     apt-get install -y python3-numpy python3-pandas \
-                       python3-scipy python3-pip python3-seaborn && \
+                       python3-scipy python3-pipx python3-seaborn && \
     apt-get clean
 
-RUN python3 -m ensurepip
-RUN pip3 install firthlogist
+#RUN python3 -m ensurepip
+#RUN pip3 install firthlogist
 #RUN pip3 install seaborn
 
 # Launch bash at runtime
