@@ -175,7 +175,7 @@ def main():
     parser.add_argument('--info-flag-id', type=str, metavar='String',
                         help='Custom VCF INFO ID to use when flagging records ' +
                         'with GTs masked due to inter-group differences.',
-                        default='GROUPWISE_MASKED_GENOTYPES', dest='iflag')
+                        default='GROUPWISE_MASKED_GENOTYPES')
     parser.add_argument('-M', '--min-samples', default=10, type=int, 
                         help='Minimum number of samples per group to be ' +
                         'included in comparisons [default: 10]', metavar='Int')
@@ -211,8 +211,8 @@ def main():
     i_line = '##INFO=<ID={},Number=0,Type=Flag,' + \
              'Description="A subset of GTs for this record have been ' + \
              'masked by post hoc application of mark_batch_effects.py">'
-    if args.iflag not in out_header.info.keys():
-        out_header.add_line(i_line.format(args.iflag))
+    if args.info_flag_id not in out_header.info.keys():
+        out_header.add_line(i_line.format(args.info_flag_id))
     if args.strict:
         filter_id = 'NONUNIFORM_GENOTYPES'
         filter_descrip = 'Variant exhibits excessive differences in ' + \
@@ -224,7 +224,7 @@ def main():
             filter_descrip = args.filter_description
         f_line = '##FILTER=<ID={},Description="{}">'
         if filter_id not in out_header.filters.keys():
-            out_header.add_line(i_line)
+            out_header.add_line(f_line)
         out_header.add_line(f_line.format(filter_id, filter_descrip))
 
     # Open connection to output VCF
@@ -264,7 +264,7 @@ def main():
             bad_groups = low_groups
         else:
             bad_groups = high_groups
-        record = mask_gts(record, group_members, bad_groups, args.iflag)
+        record = mask_gts(record, group_members, bad_groups, args.info_flag_id)
 
         # Add non-PASS FILTER if executed in --strict mode
         if args.strict:

@@ -95,7 +95,7 @@ load.manifest <- function(tsv.in){
     v <- tolower(as.character(v))
     loc <- remap(if(is.na(v[2])){v[1]}else{v[2]}, loc.map)
     type <- remap(if(grepl("cancer|carcinoma", v[4])){v[4]}else{v[3]}, type.map)
-    paste(loc, type)
+    gsub("[ ]+", "_", paste(loc, type))
   })
 
   return(df)

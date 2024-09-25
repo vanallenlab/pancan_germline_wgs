@@ -19,4 +19,6 @@ RoxygenNote: 7.2.3
 Imports:
     RLCtools
 Suggests:
-    caret
+    argparse,
+    caret,
+    readxl

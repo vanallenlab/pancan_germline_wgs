@@ -30,7 +30,7 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 10. `bmi` : participant BMI, if reported or if both `height` and `weight` are available, presumably at time of recruitment. `NA` if not reported or not able to be computed.  
 
-11. `cancer` : primary cancer diagnos(es) for each patient. Metastatic/secondary sites are excluded from consideration in these fields where clinical records are sufficiently detailed to allow disambiguation. This field can have one or more values delimited with a semicolon; note that in most cases there will be a single reported primary cancer diagnosis for a patient. Diagnoses were collapsed into the following 16 domains: `prostate`, `breast`, `lung`, `colorectal`, `melanoma`, `uterus`, `kidney`, `bladder`, `oral_cavity`, `ovary`, `cns`, `pancreas`, `esophagus`, `liver`, `stomach`, `other`. Cancer-free controls have `control` in this field; note that some phenotyping error is expected and permitted in this definition, but by-and-large we expect `control` samples to have rates of cancer at or below the overall rates in the general population. Samples with inadequate information to determine their (likely/plausible) cancer status will have `NA` in this field, but wherever possible another label (e.g., `control`) is preferred.  
+11. `cancer` : primary cancer diagnos(es) for each patient. Metastatic/secondary sites are excluded from consideration in these fields where clinical records are sufficiently detailed to allow disambiguation. This field can have one or more values delimited with a semicolon; note that in most cases there will be a single reported primary cancer diagnosis for a patient. Diagnoses were collapsed into the following 16 domains: `prostate`, `breast`, `lung`, `colorectal`, `melanoma`, `uterus`, `kidney`, `bladder`, `oral_cavity`, `ovary`, `cns`, `pancreas`, `esophagus`, `liver`, `stomach`, `other`. Note that `other` is a catch-all category for either (i) a known cancer diagnosis that does not map onto any of the 15 primary cancer domains or (ii) the individual is known to have a cancer diagnosis but the nature of the cancer is not reported. Cancer-free controls have `control` in this field; note that some phenotyping error is expected and permitted in this definition, but by-and-large we expect `control` samples to have rates of cancer at or below the overall rates in the general population. Samples with inadequate information to determine their (likely/plausible) cancer status will have `NA` in this field, but wherever possible another label (e.g., `control` or `other`) is preferred.  
 
 12. `stage` : AJCC disease stage for first primary cancer, if reported. Ideally recorded at time of diagnosis. Pathology staging preferred, followed by clinical staging, followed by pathology-reported T category. Eligible values are `0`, `I`, `II`, `III`, `IV`, `unknown` if not reported, and `NA` for cancer-free controls.  
 
@@ -44,7 +44,7 @@ Given the highly heterogeneous nature of the cohorts included in G2C, we have ma
 
 17. `original_dx` : free text field to record original specific cancer diagnosis, which is not standardized across cohorts. `NA` for missing values and cancer-free controls.  
 
-18. `wgs_tissue` : DNA source (i.e., tissue or biospecimen) used for germline whole-genome sequencing. `unknown` if not reported.  
+18. `wgs_tissue` : DNA source (i.e., tissue or biospecimen) used for germline whole-genome sequencing. `unknown` if not reported; `NA` not allowed.  
 
 ---  
 

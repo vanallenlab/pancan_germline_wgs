@@ -25,6 +25,7 @@ workflow MarkBatchEffects {
     Boolean flag_failing_records = false  # Should records with observed batch effects have a non-PASS FILTER assigned?
     String? custom_filter_id
     String? custom_filter_description
+    String? custom_info_flag_id
 
     # Other options
     File? vcf_idx                         # Recommended but not strictly required
@@ -75,6 +76,7 @@ workflow MarkBatchEffects {
         strict = flag_failing_records,
         custom_filter_id = custom_filter_id,
         custom_filter_description = custom_filter_description,
+        custom_info_flag_id = custom_info_flag_id,
         mem_gb = mark_batch_effects_mem_gb,
         cpu_cores = mark_batch_effects_cpu_cores,
         disk_gb = mark_batch_effects_disk_gb,
@@ -115,6 +117,7 @@ task MarkBatchEffectsSingleContig {
     Boolean strict
     String? custom_filter_id
     String? custom_filter_description
+    String? custom_info_flag_id
 
     Float mem_gb = 3.5
     Int cpu_cores = 2
@@ -146,6 +149,7 @@ task MarkBatchEffectsSingleContig {
       ~{if (strict) then "--strict" else ""} \
       ~{if defined(custom_filter_id) then "--filter-id \"~{custom_filter_id}\"" else ""} \
       ~{if defined(custom_filter_description) then "--filter-description \"~{custom_filter_description}\"" else ""} \
+      ~{if defined(custom_info_flag_id) then "--info-flag-id \"~{custom_info_flag_id}\"" else ""} \
       --min-samples ~{min_n} \
       --lower-freq ~{lower_freq} \
       --upper-freq ~{upper_freq} \

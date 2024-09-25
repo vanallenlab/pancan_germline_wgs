@@ -60,7 +60,7 @@ load.st1 <- function(tsv.in){
   # Curate cancer diagnosis information
   df$stage <- sub("[A-B]$", "", df$stage)
   df$stage[which(df$stage == "")] <- "unknown"
-  df$original_dx <- sub("s$", "", paste("lung", remap(tolower(df$Histology), histology.map)))
+  df$original_dx <- gsub("[ ]+", "_", sub("s$", "", paste("lung", remap(tolower(df$Histology), histology.map))))
 
   # Curate smoking data
   df$passive_smoking[which(df$passive_smoking == "")] <- "NA"

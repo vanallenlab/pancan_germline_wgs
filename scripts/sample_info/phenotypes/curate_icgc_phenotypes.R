@@ -67,7 +67,6 @@ tissue.supp.map <- c("Non-tumor liver" = "liver",
                      "bone" = "bone")
 
 
-
 ##################
 # Data Functions #
 ##################
@@ -165,7 +164,6 @@ load.donors <- function(tsv.in){
     c(stage, met)
   }))
 
-
   return(df)
 }
 
@@ -178,7 +176,7 @@ annotate.cancers <- function(df, tsv.in){
   # Read cancer map
   c.map <- read.table(tsv.in, header=T, sep="\t")
   colnames(c.map)[2] <- "original_dx"
-  c.map$original_dx <- tolower(c.map$original_dx)
+  c.map$original_dx <- gsub("[ ]+", "_", tolower(c.map$original_dx))
 
   # Left outer join to map cancers to project IDs
   merge(df, c.map, all.x=T, all.y=F, sort=F)

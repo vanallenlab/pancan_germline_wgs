@@ -129,7 +129,10 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_lcins_phenotypes.R \
 #################
 
 # HGSVC
-# TODO: add this
+export HGSVCDIR=$BASEDIR/data_and_cohorts/hgsvc
+$CODEDIR/scripts/sample_info/phenotypes/curate_hgsvc_phenotypes.R \
+  --metadata-tsv $HGSVCDIR/HGSV_metadata.DFCI_G2C_selected.tsv \
+  --out-tsv $WRKDIR/hgsvc.phenos.tsv
 
 # HMF
 export HMFDIR=$BASEDIR/data_and_cohorts/hmf/hmf-dr-355
@@ -137,7 +140,6 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_hmf_phenotypes.R \
   --preprocessed-tsv $HMFDIR/HMF.combined_metadata_and_manifest.unique_patients.tsv.gz \
   --cancer-classification-tsv $HMFDIR/hmf-dr-355.g2c_classification_scheme.tsv \
   --out-tsv $WRKDIR/hmf.phenos.tsv
-
 
 # ICGC
 export ICGCDIR=$BASEDIR/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023
@@ -149,7 +151,22 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_icgc_phenotypes.R \
   --out-tsv $WRKDIR/icgc.phenos.tsv
 
 # Proactive
-# TODO: add this
+gsutil -m cat gs://dfci-g2c-inputs/sample-lists/proactive-*.samples.list \
+| sort | uniq > $WRKDIR/proactive.samples.list
+export PROCADIR="~/Partners HealthCare Dropbox/Ryan Collins/PROCA_DATA"
+export PROCATERRA="$BASEDIR/data_and_cohorts/proactive/GARBER-PROACTIVE_WGS_terra_metadata_sept24_2024"
+$CODEDIR/scripts/sample_info/phenotypes/curate_proactive_phenotypes.R \
+  --meta-xlsx "$PROCADIR/PROCA IDs for PROACTIVE Data_15Mar24.xlsx" \
+  --meta-xlsx "$PROCADIR/TOP PROACTIVE Cohort_PROCA IDs_4June24.xlsx" \
+  --meta-xlsx "$PROCADIR/PROCA IDs for PROACTIVE Data_8Feb24.xlsx" \
+  --meta-xlsx "$PROCADIR/PROCA IDs for PROACTIVE Data_7Nov23.xlsx" \
+  --meta-xlsx "$PROCADIR/PROCA IDs for PROACTIVE Data_21Nov23.xlsx" \
+  --meta-xlsx "$PROCADIR/PROACTIVE All Consented 15Aug23_for Jackie.xlsx" \
+  --participant-tsv "$PROCATERRA/participant.tsv" \
+  --sample-tsv "$PROCATERRA/sample.tsv" \
+  --processed-samples $WRKDIR/proactive.samples.list \
+  --young-lung-meta $BASEDIR/../jackie_younglung/younglung_metadata/combined_data_ALL.tsv \
+  --out-dir $WRKDIR
 
 # UFC
 # TODO: add this
