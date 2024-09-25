@@ -2,7 +2,7 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import fisher_exact
 import numpy as np
-from firthlogist import FirthLogisticRegression
+#from firthlogist import FirthLogisticRegression
 
 def perform_logistic_regression(df, combination, results_array):
     germline_gene, somatic_gene = combination
