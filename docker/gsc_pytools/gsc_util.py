@@ -100,7 +100,9 @@ def get_unique_combinations_nc_c(tsv_file,germline_context,somatic_context):
     return unique_combinations
 
 
-def fishers_exact(df, germline_gene,somatic_gene):
+def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
+    if cancer_type != "pancancer":
+        df = df[df['cancer_type'] == cancer_type]
     germline_gene_full_name = germline_gene + '-g'
     somatic_gene_full_name = somatic_gene + '-s'
 
