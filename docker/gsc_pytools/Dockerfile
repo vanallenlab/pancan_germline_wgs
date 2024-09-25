@@ -14,7 +14,8 @@ RUN apt-get update && \
                        python3-scipy python3-pip python3-seaborn && \
     apt-get clean
 
-RUN pip install firthlogist
+RUN python3 -m ensurepip
+RUN pip3 install firthlogist
 #RUN pip3 install seaborn
 
 # Launch bash at runtime
