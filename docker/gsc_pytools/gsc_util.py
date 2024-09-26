@@ -7,6 +7,9 @@ from firthlogist import FirthLogisticRegression
 def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
+
+    df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4', 'stage'])
+
     # Check if both columns exist in the DataFrame
     if germline_event not in df.columns:
         print(f"germline_gene {germline_event} not found in DataFrame columns")
@@ -162,7 +165,8 @@ def find_mutation_frequency(df, cancer_type, column_name):
     # Check if the column exists in the DataFrame
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
-        
+    df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4', 'stage'])
+    
     if column_name not in df.columns:
         raise ValueError(f"Column '{column_name}' not found in DataFrame.")
     
