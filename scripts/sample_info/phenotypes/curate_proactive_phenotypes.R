@@ -79,6 +79,10 @@ yl.hist.map <- c("lcne" = "large_cell_neuroendocrine_tumor",
                  "scc" = "squamous_cell_carcinoma",
                  "sclc" = "small_cell_cancer",
                  "unknown" = "cancer")
+yl.stage.map <- c("1" = "I",
+                  "2" = "II",
+                  "3" = "III",
+                  "4" = "IV")
 
 
 ##################
@@ -218,7 +222,7 @@ curate.main.meta <- function(df){
   df$cancer[which(is.na(df$cancer))] <- "other"
   df$original_dx <- apply(df[, grep("Diagnosis", colnames(df))], 1, function(v){
     v <- as.character(v[which(!is.na(v))])
-    if(length(v) == 0){NA}else{gsub("[ ]+", "_", tolower(paste(v, collapse="_")))}
+    if(length(v) == 0){NA}else{gsub("'", "", gsub("[ ]+", "_", tolower(paste(v, collapse="_"))))}
   })
 
   return(df)
@@ -265,7 +269,7 @@ update.yl.meta <- function(df, tsv.in){
   df$cancer[main.yl.idx] <- "lung"
   yl.df$stage <- as.numeric(yl.df$stage_dx_whole)
   yl.df$stage[is.na(yl.df$stage)] <- "unknown"
-  df$stage[main.yl.idx] <- yl.df$stage
+  df$stage[main.yl.idx] <- remap(as.character(yl.df$stage), yl.stage.map)
   yl.df$met <- as.numeric(yl.df$stage == 4)
   yl.df$met[which(yl.df$stage == "unknown")] <- "unknown"
   df$metastatic[main.yl.idx] <- yl.df$met

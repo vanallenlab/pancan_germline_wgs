@@ -22,8 +22,9 @@ require(G2C, quietly=TRUE)
 ##################
 # Load phenotype data and subset only to columns needed for QC and batching
 load.pheno.df <- function(tsv.in){
-  df <- read.table(tsv.in, header=T, sep="\t")
-  keep.cols <- c("Sample", "Cohort", "reported_sex", "cancer")
+  df <- read.table(tsv.in, header=T, sep="\t", quote="")
+  keep.cols <- c("Sample", "Cohort", "reported_sex", "cancer", "age",
+                 "years_to_last_contact", "vital_status", "stage")
   df[, keep.cols]
 }
 

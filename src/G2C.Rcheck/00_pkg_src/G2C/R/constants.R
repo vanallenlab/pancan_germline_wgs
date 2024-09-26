@@ -13,80 +13,6 @@
 # Project-wide constants
 
 
-#' Generate cancer colors
-#'
-#' Automatically generate colors and palettes for all cancer types in G2C
-#'
-#' @param cancers Character vector of cancers, in order to be mapped onto rainbow
-#' @param n.shades Number of shades (and highlights) appended to each cancer
-#' type-specific palette \[default: 2\]
-#' @param saturation.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.35, 0.85)\]
-#' @param value.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.3, 1)\]
-#' @param period Value passed to [RLCtools::categorical.rainbow()] \[default: `length(cancers) / 3`\]
-#' @param plot.colors Should a cancer color diagnostic plot be generated? \[default: FALSE\]
-#' @param plot.palettes Should a cancer palette diagnostic plot be generated? \[default: FALSE\]
-#'
-#' @details A value for "control" should not be provided in `cancers`;
-#' this is automatically appended with preset color values
-#'
-#' @returns two-element list, containing `cancer.colors` and `cancer.palettes`
-#'
-#' @seealso [RLCtools::hsv.palette()], [RLCtools::categorical.rainbow()]
-#'
-#' @export create.cancer.colors
-#' @export
-create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0.85),
-                                 value.range=c(0.4, 1), period=NULL,
-                                 plot.colors=FALSE, plot.palettes=FALSE){
-  require(RLCtools, quietly=TRUE)
-
-  # Get required parameters
-  n.cancers <- length(cancers)
-  if(is.null(period)){
-    period <- n.cancers / 3
-  }
-
-  # Generate main cancer color palette
-  cancer.colors <- categorical.rainbow(n.cancers, saturation.range=saturation.range,
-                                       value.range=value.range, period=period)
-  names(cancer.colors) <- cancers
-  cancer.colors["oral_cavity"] <- cancer.colors["oral"]
-  cancer.colors["control"] <- "#D6D6D6"
-  cancer.colors["multiple"] <- cancer.colors["other"]
-  cancer.colors[c("unknown", "not_specified", "NA")] <- "gray85"
-
-  # Visualize cancer colors to screen, if optioned
-  if(plot.colors){
-    plot(rep(1, length(cancer.colors)), 1:length(cancer.colors), pch=18, cex=4,
-         col=cancer.colors, xlim=c(0, 4), xaxt="n", xlab="", yaxt="n", ylab="")
-    text(x=rep(1, length(cancer.colors)), y=1:length(cancer.colors), pos=4,
-         labels=names(cancer.colors))
-  }
-
-  # Generate one palette for each cancer type
-  cancer.palettes <- lapply(cancer.colors, function(color){
-    pal.w.buffers <- colorRampPalette(c("black", color, "white"))((2*n.shades)+3)
-    pal.w.buffers[-c(1, length(pal.w.buffers))]
-  })
-
-  # Visualize palettes to screen, if optioned
-  if(plot.palettes){
-    RLCtools::prep.plot.area(xlims=c(0, length(cancer.palettes[[1]])+1),
-                             ylims=c(0, length(cancer.palettes)),
-                             parmar=c(0, 7, 0, 0))
-    sapply(1:length(cancer.palettes), function(r){
-      points(x=1:length(cancer.palettes[[r]]), y=rep(r, length(cancer.palettes[[r]])),
-             pch=19, cex=5, col=cancer.palettes[[r]])
-    })
-    axis(2, at=(1:length(cancer.palettes))-0.5, las=2, labels=names(cancer.palettes))
-  }
-
-  return(list("cancer.colors" = cancer.colors,
-              "cancer.palettes" = cancer.palettes))
-}
-
-
-
 #' Load study constants
 #'
 #' Load a subset of constants used throughout G2C
@@ -113,10 +39,97 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0
 #' @export
 load.constants <- function(subset, envir=.GlobalEnv){
   # Define colors
-  cancer.color.order <- c("pancan", "cns", "melanoma", "esophagus", "lung", "liver",
-                          "kidney", "bladder", "oral", "stomach", "colorectal",
-                          "prostate", "pancreas", "uterus", "breast", "ovary", "other")
-  cancer.color.set <- create.cancer.colors(cancer.color.order)
+  pancan.colors <- c("dark2" = "#610F11",
+                     "dark1" = "#92161A",
+                     "main" = "#C21D22",
+                     "light1" = "#CE4A4E",
+                     "light2" = "#DA777A")
+  cns.colors <- c("dark2" = "#803E10",
+                  "dark1" = "#BF5D17",
+                  "main" = "#FF7C1F",
+                  "light1" = "#FF964C",
+                  "light2" = "#FFB079")
+  breast.colors <- c("dark2" = "#75315B",
+                     "dark1" = "#AF4A88",
+                     "main" = "#E962B5",
+                     "light1" = "#ED81C4",
+                     "light2" = "#F2A1D3")
+  ovary.colors <- c("dark2" = "#411429",
+                    "dark1" = "#621E3D",
+                    "main" = "#822851",
+                    "light1" = "#9B5374",
+                    "light2" = "#B47E97")
+  uterus.colors <- c("dark2" = "#803D3D",
+                     "dark1" = "#BF5C5C",
+                     "main" = "#FF7A7A",
+                     "light1" = "#FF9595",
+                     "light2" = "#FFAFAF")
+  prostate.colors <- c("dark2" = "#335D74",
+                       "dark1" = "#4D8BAE",
+                       "main" = "#66B9E8",
+                       "light1" = "#85C7ED",
+                       "light2" = "#A3D5F1")
+  kidney.colors <- c("dark2" = "#092F18",
+                     "dark1" = "#0D4723",
+                     "main" = "#115E2F",
+                     "light1" = "#417E59",
+                     "light2" = "#709E82")
+  liver.colors <- c("dark2" = "#1E5A1A",
+                    "dark1" = "#2D8626",
+                    "main" = "#3CB333",
+                    "light1" = "#63C25C",
+                    "light2" = "#8AD185")
+  melanoma.colors <- c("dark2" = "#806240",
+                       "dark1" = "#BF9360",
+                       "main" = "#FFC480",
+                       "light1" = "#FFD099",
+                       "light2" = "#FFDCB3")
+  oral.colors <- c("dark2" = "#6B3528",
+                   "dark1" = "#A1503B",
+                   "main" = "#D66A4F",
+                   "light1" = "#DE8872",
+                   "light2" = "#E6A695")
+  oral_cavity.colors <- oral.colors
+  esophagus.colors <- c("dark2" = "#4F4623",
+                        "dark1" = "#776935",
+                        "main" = "#9E8C46",
+                        "light1" = "#B1A36B",
+                        "light2" = "#C5BA90")
+  lung.colors <- c("dark2" = "#432518",
+                   "dark1" = "#643723",
+                   "main" = "#85492F",
+                   "light1" = "#9D6D59",
+                   "light2" = "#B69282")
+  stomach.colors <- c("dark2" = "#5D396B",
+                      "dark1" = "#8B55A1",
+                      "main" = "#BA71D6",
+                      "light1" = "#C88DDE",
+                      "light2" = "#D6AAE6")
+  pancreas.colors <- c("dark2" = "#2F1751",
+                       "dark1" = "#472379",
+                       "main" = "#5E2EA1",
+                       "light1" = "#7E58B4",
+                       "light2" = "#9E82C7")
+  colorectal.colors <- c("dark2" = "#071F46",
+                         "dark1" = "#0B2F69",
+                         "main" = "#0E3E8C",
+                         "light1" = "#3E65A3",
+                         "light2" = "#6E8BBA")
+  bladder.colors <- c("dark2" = "#095857",
+                      "dark1" = "#0E8482",
+                      "main" = "#12B0AD",
+                      "light1" = "#41C0BD",
+                      "light2" = "#71D0CE")
+  other.colors <- c("dark2" = "#2C4431",
+                    "dark1" = "#426549",
+                    "main" = "#588761",
+                    "light1" = "#799F81",
+                    "light2" = "#9BB7A0")
+  control.colors <- c("dark2" = "#6B6B6B",
+                      "dark1" = "#A1A1A1",
+                      "main" = "#D6D6D6",
+                      "light1" = "#DEDEDE",
+                      "light2" = "#E6E6E6")
   male.colors <- c("dark2" = "#2A5869",
                    "dark1" = "#3F839D",
                    "main" = "#54AFD1",
@@ -199,8 +212,51 @@ load.constants <- function(subset, envir=.GlobalEnv){
                    "paleblue" = "#D4EEFF",
                    "yellow" = "#F89820")
   colors <- list(
-    "cancer.colors" = cancer.color.set$cancer.colors,
-    "cancer.palettes" = cancer.color.set$cancer.palettes,
+    "cancer.colors" = c("pancan" = pancan.colors[["main"]],
+                        "all" = pancan.colors[["main"]],
+                        "prostate" = prostate.colors[["main"]],
+                        "breast" = breast.colors[["main"]],
+                        "lung" = lung.colors[["main"]],
+                        "colorectal" = colorectal.colors[["main"]],
+                        "melanoma" = melanoma.colors[["main"]],
+                        "uterus" = uterus.colors[["main"]],
+                        "kidney" = kidney.colors[["main"]],
+                        "bladder" = bladder.colors[["main"]],
+                        "oral_cavity" = oral.colors[["main"]],
+                        "oral" = oral.colors[["main"]],
+                        "ovary" = ovary.colors[["main"]],
+                        "cns" = cns.colors[["main"]],
+                        "pancreas" = pancreas.colors[["main"]],
+                        "esophagus" = esophagus.colors[["main"]],
+                        "liver" = liver.colors[["main"]],
+                        "stomach" = stomach.colors[["main"]],
+                        "other" = other.colors[["main"]],
+                        "multiple" = other.colors[["main"]],
+                        "control" = control.colors[["main"]],
+                        "unknown" = "gray85",
+                        "not_specified" = "gray85",
+                        "NA" = "gray85"),
+    "cancer.palettes" = c("pancan" = pancan.colors,
+                          "all" = pancan.colors,
+                          "prostate" = prostate.colors,
+                          "breast" = breast.colors,
+                          "lung" = lung.colors,
+                          "colorectal" = colorectal.colors,
+                          "melanoma" = melanoma.colors,
+                          "uterus" = uterus.colors,
+                          "kidney" = kidney.colors,
+                          "bladder" = bladder.colors,
+                          "oral_cavity" = oral.colors,
+                          "oral" = oral.colors,
+                          "ovary" = ovary.colors,
+                          "cns" = cns.colors,
+                          "pancreas" = pancreas.colors,
+                          "esophagus" = esophagus.colors,
+                          "liver" = liver.colors,
+                          "stomach" = stomach.colors,
+                          "other" = other.colors,
+                          "multiple" = other.colors,
+                          "control" = control.colors),
     "pop.colors" = c("AFR" = AFR.colors[["main"]],
                      "AMR" = AMR.colors[["main"]],
                      "EAS" = EAS.colors[["main"]],
@@ -288,8 +344,7 @@ load.constants <- function(subset, envir=.GlobalEnv){
                        "I" = "#F8FAA7",
                        "II" = "#FFCC66",
                        "III" = "#FE8002",
-                       "IV" = "#ED3823",
-                       "unknown" = "gray85"),
+                       "IV" = "#ED3823"),
     "relative.colors" = c("duplicates" = "#9D1309",
                           "parent-child" = "#FF6103",
                           "siblings" = "#FFB14D",
@@ -363,16 +418,11 @@ load.constants <- function(subset, envir=.GlobalEnv){
     "sex.names" = c("MALE" = "Male",
                     "FEMALE" = "Female",
                     "OTHER" = "Other"),
-    "stage.names" = c("I" = "I",
-                      "II" = "II",
-                      "III" = "III",
-                      "IV" = "IV",
-                      "unknown" = "Unknown"),
-    "stage.names.long" = c("I" = "Stage I",
-                           "II" = "Stage II",
-                           "III" = "Stage III",
-                           "IV" = "Stage IV",
-                           "unknown" = "Unknown"),
+    "stage.names" = c("0" = "",
+                      "1" = "I",
+                      "2" = "II",
+                      "3" = "III",
+                      "4" = "IV"),
     "relative.names" = c("duplicates" = "Identical",
                          "parent-child" = "Parent-child",
                          "siblings" = "Siblings",

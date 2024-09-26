@@ -23,7 +23,12 @@ require(caret, quietly=TRUE)
 # Data Functions #
 ##################
 # Read & clean input .tsv
-load.intake.tsv <- function(tsv.in){
+load.intake.tsv <- function(tsv.in=NULL){
+  # If no tsv is specified, return empty data frame
+  if(is.null(tsv.in)){
+    return(data.frame())
+  }
+
   # Read data.frame
   df <- read.table(tsv.in, sep="\t", check.names=F, comment.char="", header=T)
 
@@ -178,10 +183,10 @@ clean.output <- function(df, n.ploidy.bins=2711){
 ###########
 # Parse command line arguments and options
 parser <- ArgumentParser(description="Merge intake QC manifests")
-parser$add_argument("--aou-tsv", metavar=".tsv", type="character", required=TRUE,
+parser$add_argument("--aou-tsv", metavar=".tsv", type="character",
                     help="Intake QC .tsv for AoU samples")
 parser$add_argument("--non-aou-tsv", metavar=".tsv", type="character",
-                    required=TRUE, help="Intake QC .tsv for non-AoU samples")
+                    help="Intake QC .tsv for non-AoU samples")
 parser$add_argument("--include-samples", metavar=".txt", type="character",
                     help="Optional list of sample IDs to include (i.e., exclude all others)")
 parser$add_argument("--hgsv-pop-assignments", metavar=".tsv", type="character",
@@ -199,8 +204,8 @@ parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
-#              "non_aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
+# args <- list("aou_tsv" = NULL,
+#              "non_aou_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv",
 #              "include_samples" = NULL,
 #              "hgsv_pop_assignments" = "~/scratch/HGSV.ByrskaBishop.sample_populations.tsv",
 #              "id_prefix" = "G2C",

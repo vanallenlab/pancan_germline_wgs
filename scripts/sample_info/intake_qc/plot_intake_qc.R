@@ -15,6 +15,7 @@
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
 require(G2C, quietly=TRUE)
+require(survival, quietly=TRUE)
 require(vioplot, quietly=TRUE)
 G2C::load.constants("all")
 
@@ -121,14 +122,11 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv",
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
 qc.df <- load.qc.df(args$qc_tsv)
-# #DEV:
-# qc.df$pct_genome_nondiploid <- qc.df$nondiploid_bins / max(qc.df$nondiploid_bins, na.rm=T)
-# qc.df$nondiploid_bins <- NULL
 
 # Grafpop coordinates by ancestry
 apply(t(combn(1:3, 2)), 1, function(gd.idxs){
@@ -182,7 +180,8 @@ plot.autosomal.ploidy(qc.df)
 dev.off()
 
 
-# Numeric QC metrics with no special coloring
+# Numeric metrics with no special coloring
+hist.pdf.dims <- c(1.7, 2.3)
 for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
                         c("hq_hom_rate", "High-qual. hom. GT rate", "percent"),
                         c("hq_het", "High-qual. het. GTs", "count"),
@@ -194,11 +193,14 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
                         c("mean_coverage", "Mean coverage", "other"),
                         c("median_coverage", "Median coverage", "other"),
                         c("wgd_score", "Dosage bias", "other"),
-                        c("pct_genome_nondiploid", "Nondiploid genome frac.", "percent"))){
+                        c("pct_genome_nondiploid", "Nondiploid genome frac.", "percent"),
+                        c("age", "Age at intake", "count"),
+                        c("years_to_last_contact", "Years of follow-up", "count"))){
   vals <- as.numeric(qc.df[, metric.info[1]])
+  vals <- vals[which(!is.na(vals) & !is.infinite(vals))]
   title <- as.character(metric.info[2])
   pdf(paste(args$out_prefix, metric.info[1], "pdf", sep="."),
-      height=1.7, width=2.3)
+      height=hist.pdf.dims[1], width=hist.pdf.dims[2])
   density.w.outliers(vals, title=title, x.label.units=metric.info[3],
                      bw.adj=2, style="hist", col=DFCI.colors[["paleblue"]],
                      outlier.lwd=0.5, parmar=c(1.1, 2.5, 1, 1))
@@ -207,16 +209,22 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
 
 
 # Set shared barplot parameters
-bar.parmar <- c(0.5, 4, 2.5, 2.75)
-bar.pdf.dims <- c(5, 3)
-
+bar.parmar <- c(1.5, 4.25, 1.5, 2.75)
+bar.pdf.dims <- c(3.5, 3)
+cancer.key.cols <- cancer.colors
+names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
+cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+cohort.key.cols <- greyscale.palette(length(cohort.k))
+names(cohort.key.cols) <- cohort.names.short[names(cohort.k)]
 
 # Barplot of samples per cancer, colored by cohort
 pdf(paste(args$out_prefix, "cohort_contributions_per_cancer", "pdf", sep="."),
     height=bar.pdf.dims[1], width=bar.pdf.dims[2])
 stacked.barplot(cancer.names[qc.df$cancer],
                 cohort.names.short[qc.df$simple_cohort],
-                x.title="Samples", annotate.counts=TRUE,
+                colors=cohort.key.cols,
+                x.title="", annotate.counts=TRUE, add.legend=FALSE,
+                major.legend=TRUE, major.legend.colors=cancer.key.cols,
                 parmar=bar.parmar)
 dev.off()
 
@@ -224,12 +232,43 @@ dev.off()
 # Barplot of samples by cohort, colored by cancer
 pdf(paste(args$out_prefix, "cancers_per_cohort", "pdf", sep="."),
     height=bar.pdf.dims[1], width=bar.pdf.dims[2])
-minor.colors <- cancer.colors
-names(minor.colors) <- cancer.names[names(cancer.colors)]
 stacked.barplot(cohort.names.short[qc.df$simple_cohort],
                 cancer.names[qc.df$cancer],
-                minor.colors=minor.colors, x.title="Samples",
-                annotate.counts=TRUE, orient="left", legend.xadj=-0.3,
-                parmar=bar.parmar[c(3, 4, 1, 2)])
+                colors=cancer.key.cols, x.title="",
+                annotate.counts=TRUE, orient="left", add.legend=FALSE,
+                major.legend=TRUE, major.legend.colors=cohort.key.cols,
+                parmar=bar.parmar[c(1, 4, 3, 2)])
+dev.off()
+
+
+# Barplot of stage for cancer cases
+# Note: uses hist.pdf.dims (this is intentional)
+pdf(paste(args$out_prefix, "cancer_stages", "pdf", sep="."),
+    height=hist.pdf.dims[1], width=hist.pdf.dims[2]-0.3)
+stacked.barplot(stage.names[qc.df$stage], colors=stage.colors,
+                x.title="Stage at Dx",
+                add.legend=F, custom.order=stage.names,
+                x.label.line=-0.8, x.title.line=0.1)
+dev.off()
+
+
+# Kaplan-Meier curves for all cases versus all controls
+surv.models <- lapply(c("IV", "III", "II", "I"), function(stage){
+  summary(survfit(Surv(years_to_last_contact, abs(vital_status-1)) ~ 1,
+                  data=qc.df[which(qc.df$stage == stage), ]))
+})
+names(surv.models) <- c("IV", "III", "II", "I")
+surv.models[["control"]] <- summary(survfit(Surv(years_to_last_contact, vital_status) ~ 1,
+                              data=qc.df[which(qc.df$cancer == "control"), ]))
+# Note: uses hist.pdf.dims (this is intentional)
+pdf(paste(args$out_prefix, "km_surv_by_stage", "pdf", sep="."),
+    height=hist.pdf.dims[1], width=hist.pdf.dims[2]+0.3)
+km.curve(surv.models,
+         colors=c(stage.colors[c("IV", "III", "II", "I")], cancer.colors["control"]),
+         ci.alpha=0, title="Overall survival", y.title="", time.is.days=FALSE,
+         legend.label.spacing=0.15, legend.label.cex=5/6,
+         legend.names=c(stage.names.long[names(surv.models)[1:4]], "Controls"),
+         xlim=c(0, 8), x.tck=-0.025, x.label.line=-1, x.title.line=-0.25,
+         km.lwd=4, parmar=c(1.75, 1.25, 1, 5))
 dev.off()
 

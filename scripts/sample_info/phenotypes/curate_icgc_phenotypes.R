@@ -96,7 +96,7 @@ load.donors <- function(tsv.in){
     return(vals)
   })
   df$age <- apply(df[, age.cols], 1, min, na.rm=T)
-  df$age[which(df$age <= 0)] <- NA
+  df$age[which(df$age <= 0 | is.infinite(df$age))] <- NA
   df$fu_age_interval <- (df$donor_age_at_last_followup - df$age) * 365
   fu.t.cols <- grepl("_interval|_time", colnames(df))
   df$max_fu <- apply(df[, fu.t.cols], 1, max, na.rm=T)

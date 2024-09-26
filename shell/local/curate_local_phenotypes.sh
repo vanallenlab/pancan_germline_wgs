@@ -96,7 +96,6 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_ceph_phenotypes.R \
   --subject-info-tsv $CEPHDIR/phs001872.v1.pht009363.v1.p1.CEPH_Utah_Subject.MULTI.txt.gz \
   --out-tsv $WRKDIR/ceph.phenos.tsv
 
-
 # GTEx
 export GTEXDIR=$BASEDIR/data_and_cohorts/gtex
 $CODEDIR/scripts/sample_info/phenotypes/curate_gtex_phenotypes.R \

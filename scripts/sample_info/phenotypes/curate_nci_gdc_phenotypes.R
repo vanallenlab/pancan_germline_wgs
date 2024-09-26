@@ -63,6 +63,7 @@ stage.map <- c("Unknown" = "unknown",
                "NA" = "unknown",
                "Not R" = "unknown",
                "X" = "unknown",
+               "0" = "0",
                "1" = "I",
                "2" = "II",
                "3" = "III",
@@ -196,7 +197,7 @@ load.clinical.data <- function(tsv.in){
   # Reassign simple columns requiring little-to-no transformation
   df$Sample <- df$case_submitter_id
   df$reported_sex <- tolower(df$gender)
-  na.sex.idx <- which(df$reported_sex %in% c("male", "female", "other"))
+  na.sex.idx <- which(!df$reported_sex %in% c("male", "female", "other"))
   df$reported_sex[na.sex.idx] <- NA
   df$birth_year <- as.numeric(df$year_of_birth)
   df$vital_status <- as.numeric(remap(df$vital_status, vital.map))
@@ -270,7 +271,7 @@ load.clinical.data <- function(tsv.in){
     df$stage[which(na.stage)] <-
       gsub("^T", "", gsub("[a-z]*$", "", df$ajcc_pathologic_t[which(na.stage)]))
   }
-  df$stage <- remap(df$stage, stage.map)
+  df$stage <- remap(as.character(df$stage), stage.map)
 
   # Add metastatic indicator
   df$metastatic <- apply(df[, dx.cols], 1, function(v){any(grepl("metastat", v))})

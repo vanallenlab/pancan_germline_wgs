@@ -74,6 +74,7 @@ load.manifest <- function(tsv.in){
   df$d.b <- as.Date(paste(df$birthYear, "01-01", sep="-"))
   df$d.dx <- as.Date(apply(df[, date.cols], 1, function(d){min(as.Date(d), na.rm=T)}))
   df$age <- as.numeric((df$d.dx - df$d.b) / 365)
+  df$age[which(is.infinite(df$age))] <- NA
 
   # Infer survival info
   has.fu.idx <- which(apply(df[, date.cols], 1, function(d){any(!is.na(d))}))
