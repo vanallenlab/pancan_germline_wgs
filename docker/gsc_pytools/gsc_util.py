@@ -27,7 +27,7 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df[[germline_event,'male','pca_1','pca_2','pca_3','pca_4','stage']]
+        X = df[[germline_event,'male','pca_1']]#,'pca_2','pca_3','pca_4','stage']]
         y = df[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
@@ -37,7 +37,7 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
         X = sm.add_constant(X)
 
         # Fit Logistic Regression Model
-        model = FirthLogisticRegression()
+        model = FirthLogisticRegression(max_iter=500)
         model.fit(X,y)
         
         # Extract p-value and odds ratio for the germline_gene predictor
