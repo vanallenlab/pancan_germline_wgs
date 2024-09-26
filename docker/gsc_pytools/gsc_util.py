@@ -176,7 +176,7 @@ def find_allele_frequency(df, column_name):
     
     return allele_frequency,column_values.sum(),(len(column_values) * 2)
 
-def find_mutation_frequency(df, column_name):
+def find_mutation_frequency(df, cancer_type, column_name):
     """
     Calculate the allele frequency for a specified column in a DataFrame.
     
@@ -188,6 +188,9 @@ def find_mutation_frequency(df, column_name):
     float: The calculated allele frequency.
     """
     # Check if the column exists in the DataFrame
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
+        
     if column_name not in df.columns:
         raise ValueError(f"Column '{column_name}' not found in DataFrame.")
     
