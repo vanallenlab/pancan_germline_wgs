@@ -4,30 +4,26 @@ from scipy.stats import fisher_exact
 import numpy as np
 #from firthlogist import FirthLogisticRegression
 
-def perform_logistic_regression(df, combination, results_array):
-    germline_gene, somatic_gene = combination
+def perform_firth_logistic_regression(df, cancer_type, germline_risk_snp, somatic_gene):
     
     # Check if both columns exist in the DataFrame
-    if germline_gene not in df.columns:
-        print(f"germline_gene {germline_gene} not found in DataFrame columns")
+    if germline_risk_snp not in df.columns:
+        print(f"germline_gene {germline_risk_snp} not found in DataFrame columns")
         return
     if somatic_gene not in df.columns:
         print(f"somatic_gene {somatic_gene} not found in DataFrame columns")
         return
 
     # Filter out rows with NA values in germline or somatic gene columns
-    df_filtered = df.dropna(subset=[germline_gene, somatic_gene])
+    df_filtered = df.dropna(subset=[germline_risk_snp, somatic_gene])
     
-    if df_filtered[germline_gene].sum() == 0:
+    if df_filtered[germline_risk_snp].sum() == 0 or df_filtered[somatic_gene].sum() == 0:
         #print(f"No germline_gene: {germline_gene}")
-        return
-    if df_filtered[somatic_gene].sum() == 0:
-        #print(f"No somatic_gene: {somatic_gene}")
         return
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df_filtered[[germline_gene]]
+        X = df_filtered[[germline_risk_snp,male,pca_1,pca_2,pca_3,pca_4,stage]]
         y = df_filtered[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
@@ -43,8 +39,8 @@ def perform_logistic_regression(df, combination, results_array):
         model.fit(X,y)
         
         # Extract p-value and odds ratio for the germline_gene predictor
-        p_value = result.pvalues[germline_gene]
-        odds_ratio = np.exp(result.params[germline_gene])
+        p_value = result.pvalues[germline_risk_snp]
+        odds_ratio = np.exp(result.params[germline_risk_snp])
         
         # Calculate the 95% confidence interval for the odds ratio
         coef = result.params[germline_gene]
@@ -57,47 +53,10 @@ def perform_logistic_regression(df, combination, results_array):
         conf_int_or = np.exp(conf_int_coef)
 
         # Append results to the results array, including confidence intervals
-        results_array.append((combination, p_value, odds_ratio, conf_int_or[0], conf_int_or[1], af, ac, an, mf, mc, mn))
+        return p_value, odds_ratio, conf_int_or[0], conf_int_or[1]
 
     except Exception as e:
-        print(f"Error processing combination {combination}: {e}")
-
-def get_unique_combinations_nc_c(tsv_file,germline_context,somatic_context):
-    unique_combinations = set()
-    if germline_context == "coding" and somatic_context == "coding":
-        with open(tsv_file, 'r') as file:
-            # Skip the header line
-            next(file)
-        
-            for line in file:
-                line = line.strip().split('\t')
-                germline_gene = line[1]+'-g'
-                germline_context = line[2]
-                somatic_mutation = line[3]+'-s'
-                somatic_context = line[4]
-                criteria = line[5]
-                combination = (germline_gene, somatic_mutation)
-                unique_combinations.add((combination,criteria))
-    if germline_context == "noncoding" and somatic_context == "coding":
-        with open(tsv_file, 'r') as file:
-            # Skip the header line
-            next(file)
-        
-            for line in file:
-                line = line.strip().split('\t')
-                germline_risk_allele = line[1]
-                somatic_mutation = line[4]+'-s'
-                criteria = line[5]
-                combination = (germline_risk_allele, somatic_mutation)
-                unique_combinations.add((combination,criteria))
-    elif germline_context == "noncoding" and somatic_context == "noncoding":
-    	pass
-    elif germline_context == "coding" and somatic_context == "noncoding":
-    	pass
-    else:
-    	raise ValueError("An error occurred: Germline and Somatic Context have to be either 'coding' or 'noncoding'. ")
-
-    return unique_combinations
+        print(f"Error processing combination {germline_risk_snp} - {somatic_gene}: {e}")
 
 
 def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
@@ -128,10 +87,17 @@ def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
         
         # Perform Fisher's exact test
         odds_ratio, p_value = fisher_exact(table)
-        log_or = np.log(odds_ratio)
+
+        # Check if odds_ratio is zero
+        if odds_ratio == 0:
+            log_or = -np.inf  # Use negative infinity for log odds ratio
+        else:
+            log_or = np.log(odds_ratio)
+
+        # Convert the table to a NumPy array
         table_array = np.array(table)
-        
-        # Using a standard error approximation for the log odds ratio
+
+        # Standard error approximation for the log odds ratio
         a, b, c, d = table_array.ravel()
         if a == 0 or b == 0 or c == 0 or d == 0:
             epsilon = 0.01
@@ -139,14 +105,21 @@ def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
             b += epsilon
             c += epsilon
             d += epsilon
+
         se = np.sqrt(1/a + 1/b + 1/c + 1/d)
-        
+
         # Compute 95% confidence interval for log(odds ratio)
         log_ci_low = log_or - 1.96 * se
         log_ci_high = log_or + 1.96 * se
 
-        ci_low = np.exp(log_ci_low)
-        ci_high = np.exp(log_ci_high)
+        # If log_or is -inf, ci_low will be very negative and should be handled
+        if log_or == -np.inf:
+            ci_low = 0  # You might set the lower bound of the CI to 0
+            ci_high = 0  # Or set it to something reasonable, e.g., 0
+        else:
+            ci_low = np.exp(log_ci_low)
+            ci_high = np.exp(log_ci_high)
+            
         return odds_ratio, p_value, ci_low, ci_high
         
     except Exception as e:
