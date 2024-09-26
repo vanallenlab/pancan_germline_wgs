@@ -2,28 +2,29 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import fisher_exact
 import numpy as np
-#from firthlogist import FirthLogisticRegression
+from firthlogist import FirthLogisticRegression
 
-def perform_firth_logistic_regression(df, cancer_type, germline_risk_snp, somatic_gene):
-    
+def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
     # Check if both columns exist in the DataFrame
-    if germline_risk_snp not in df.columns:
-        print(f"germline_gene {germline_risk_snp} not found in DataFrame columns")
+    if germline_event not in df.columns:
+        print(f"germline_gene {germline_event} not found in DataFrame columns")
         return
     if somatic_gene not in df.columns:
         print(f"somatic_gene {somatic_gene} not found in DataFrame columns")
         return
 
     # Filter out rows with NA values in germline or somatic gene columns
-    df_filtered = df.dropna(subset=[germline_risk_snp, somatic_gene])
+    df_filtered = df.dropna(subset=[germline_event, somatic_gene])
     
-    if df_filtered[germline_risk_snp].sum() == 0 or df_filtered[somatic_gene].sum() == 0:
+    if df_filtered[germline_event].sum() == 0 or df_filtered[somatic_gene].sum() == 0:
         #print(f"No germline_gene: {germline_gene}")
         return
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df_filtered[[germline_risk_snp,male,pca_1,pca_2,pca_3,pca_4,stage]]
+        X = df_filtered[[germline_event,male,pca_1,pca_2,pca_3,pca_4,stage]]
         y = df_filtered[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
@@ -39,12 +40,12 @@ def perform_firth_logistic_regression(df, cancer_type, germline_risk_snp, somati
         model.fit(X,y)
         
         # Extract p-value and odds ratio for the germline_gene predictor
-        p_value = result.pvalues[germline_risk_snp]
-        odds_ratio = np.exp(result.params[germline_risk_snp])
+        p_value = result.pvalues[germline_event]
+        odds_ratio = np.exp(result.params[germline_event])
         
         # Calculate the 95% confidence interval for the odds ratio
-        coef = result.params[germline_gene]
-        std_err = result.bse[germline_gene]
+        coef = result.params[germline_event]
+        std_err = result.bse[germline_event]
 
         # The confidence interval for the coefficient
         conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
@@ -56,7 +57,7 @@ def perform_firth_logistic_regression(df, cancer_type, germline_risk_snp, somati
         return p_value, odds_ratio, conf_int_or[0], conf_int_or[1]
 
     except Exception as e:
-        print(f"Error processing combination {germline_risk_snp} - {somatic_gene}: {e}")
+        print(f"Error processing combination {germline_event} - {somatic_gene}: {e}")
 
 
 def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
@@ -119,7 +120,7 @@ def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
         else:
             ci_low = np.exp(log_ci_low)
             ci_high = np.exp(log_ci_high)
-            
+
         return odds_ratio, p_value, ci_low, ci_high
         
     except Exception as e:
