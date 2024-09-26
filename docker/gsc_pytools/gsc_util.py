@@ -27,26 +27,23 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df[[germline_event,'male','pca_1']]#,'pca_2','pca_3','pca_4','stage']]
+        X = df[[germline_event,'male','pca_1','pca_2','pca_3','pca_4','stage']]
         y = df[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
         y = y.apply(lambda x: 1 if x > 1 else x)
 
-        # Add a constant to the predictor variables
-        X = sm.add_constant(X)
-
         # Fit Logistic Regression Model
-        model = FirthLogisticRegression(max_iter=500)
+        model = FirthLogisticRegression()
         model.fit(X,y)
         
         # Extract p-value and odds ratio for the germline_gene predictor
-        p_value = model.pvalues[germline_event]
-        odds_ratio = np.exp(model.params[germline_event])
+        p_value = model.pvals_[0]
+        odds_ratio = np.exp(model.coef_[0])
         
         # Calculate the 95% confidence interval for the odds ratio
-        coef = model.params[germline_event]
-        std_err = model.bse[germline_event]
+        coef = model.coef_[0]
+        std_err = model.bse_[0]
 
         # The confidence interval for the coefficient
         conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
