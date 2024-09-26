@@ -225,7 +225,9 @@ stacked.barplot(cancer.names[qc.df$cancer],
                 colors=cohort.key.cols,
                 x.title="", annotate.counts=TRUE, add.legend=FALSE,
                 major.legend=TRUE, major.legend.colors=cancer.key.cols,
-                parmar=bar.parmar)
+                minor.labels.on.bars=TRUE, minor.label.letter.width=0.06,
+                minor.label.cex=4/6, parmar=bar.parmar)
+axis(2, at=ceiling(par("usr")[3])+0.75, tick=F, las=2, line=-1, labels="Cancer", xpd=T)
 dev.off()
 
 
@@ -237,7 +239,9 @@ stacked.barplot(cohort.names.short[qc.df$simple_cohort],
                 colors=cancer.key.cols, x.title="",
                 annotate.counts=TRUE, orient="left", add.legend=FALSE,
                 major.legend=TRUE, major.legend.colors=cohort.key.cols,
-                parmar=bar.parmar[c(1, 4, 3, 2)])
+                minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
+                minor.label.cex=4/6, parmar=bar.parmar[c(1, 4, 3, 2)])
+axis(4, at=floor(par("usr")[4])+0.5, tick=F, las=2, line=-1, labels="Cohort", xpd=T)
 dev.off()
 
 
