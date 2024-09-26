@@ -133,6 +133,12 @@ def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
         
         # Using a standard error approximation for the log odds ratio
         a, b, c, d = table_array.ravel()
+        if a == 0 or b == 0 or c == 0 or d == 0:
+            epsilon = 0.01
+            a += epsilon
+            b += epsilon
+            c += epsilon
+            d += epsilon
         se = np.sqrt(1/a + 1/b + 1/c + 1/d)
         
         # Compute 95% confidence interval for log(odds ratio)
