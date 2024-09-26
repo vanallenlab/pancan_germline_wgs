@@ -6,16 +6,13 @@
 FROM ubuntu:latest
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
-# Install Python 3.9 and dependencies
+# Install Python 3.9 and pip
 RUN apt-get update && \
     apt-get install -y software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
-    apt-get install -y python3.9 python3.9-distutils python3.9-venv python3-pip && \
+    apt-get install -y python3.9 python3-pip && \
     apt-get clean
-
-# Upgrade pip to the latest version
-RUN python3.9 -m pip install --upgrade pip
 
 # Install Python packages using pip
 RUN python3.9 -m pip install numpy pandas firthlogist scipy seaborn statsmodels
