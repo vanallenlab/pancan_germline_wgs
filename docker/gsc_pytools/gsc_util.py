@@ -107,7 +107,7 @@ def fishers_exact(df, cancer_type, germline_gene,somatic_gene):
     somatic_gene_full_name = somatic_gene + '-s'
 
     if germline_gene_full_name not in df.columns or somatic_gene_full_name not in df.columns:       
-        print(f"Combination {combination} not found in DataFrame")
+        print(f"Combination {germline_gene} - {somatic_gene} not found in DataFrame")
         return
     if df[germline_gene_full_name].sum() == 0 or df[somatic_gene_full_name].sum() == 0:
         return
