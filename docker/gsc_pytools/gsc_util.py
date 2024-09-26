@@ -27,8 +27,8 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df_filtered[[germline_event,'male','pca_1','pca_2','pca_3','pca_4','stage']]
-        y = df_filtered[somatic_gene]
+        X = df[[germline_event,'male','pca_1','pca_2','pca_3','pca_4','stage']]
+        y = df[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
         y = y.apply(lambda x: 1 if x > 1 else x)
