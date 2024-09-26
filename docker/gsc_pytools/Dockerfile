@@ -10,7 +10,7 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install python packages dependencies
 RUN apt-get update && \
-    apt-get install -y python3-numpy python3-pandas \
+    apt-get install -y python3-numpy python3-pandas python3-firthlogist \
                        python3-scipy python3-seaborn python3-statsmodels && \
     apt-get clean
 
