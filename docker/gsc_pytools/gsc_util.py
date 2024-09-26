@@ -192,7 +192,7 @@ def find_mutation_frequency(df, column_name):
     column_values = column_values.apply(lambda x: 1 if x != 0 else 0)
     
     # Calculate the allele frequency
-    mutation_frequency = column_values.sum() / (len(column_values) * 2)
+    mutation_frequency = column_values.sum() / len(column_values)
     
     return mutation_frequency,column_values.sum(),len(column_values)
 
