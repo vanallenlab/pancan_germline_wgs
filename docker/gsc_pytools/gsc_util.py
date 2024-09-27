@@ -4,30 +4,22 @@ from scipy.stats import fisher_exact
 import numpy as np
 from firthlogist import FirthLogisticRegression
 
-def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene):
+def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
 
-    df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4', 'stage'])
+    df= df.dropna(subset=[germline_event] + covariates)
 
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
         return
     if df[germline_event].sum() == 0 or df[somatic_gene].sum() == 0:
         return
-
-    # Check if both columns exist in the DataFrame
-    if germline_event not in df.columns:
-        print(f"germline_gene {germline_event} not found in DataFrame columns")
-        return
-    if somatic_gene not in df.columns:
-        print(f"somatic_gene {somatic_gene} not found in DataFrame columns")
-        return
     
     try:
         # Prepare the predictor (X) and response (y) variables
-        X = df[[germline_event,'male','pca_1','pca_2','pca_3','pca_4']]
+        X = df[[germline_event] + covariates]
         y = df[somatic_gene]
         
         # Normalize somatic_gene values: treat values > 1 as 1
