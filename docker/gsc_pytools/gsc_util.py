@@ -9,14 +9,14 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,cova
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
 
-    df= df.dropna(subset=[germline_event] + covariates)
-
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
         return
     if df[germline_event].sum() == 0 or df[somatic_gene].sum() == 0:
         return
-    
+
+    df= df.dropna(subset=[germline_event] + covariates)
+
     try:
         # Prepare the predictor (X) and response (y) variables
         X = df[[germline_event] + covariates]
