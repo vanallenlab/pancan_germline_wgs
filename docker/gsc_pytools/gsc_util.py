@@ -63,7 +63,8 @@ def find_allele_frequency(df, column_name):
     """
     # Check if the column exists in the DataFrame
     if column_name not in df.columns:
-        raise ValueError(f"Column '{column_name}' not found in DataFrame.")
+        print(f"Column '{column_name}' not found in DataFrame.")
+        return None
     
     # Get the column values, excluding NaNs
     column_values = df[column_name].dropna()
@@ -87,10 +88,11 @@ def find_mutation_frequency(df, cancer_type, column_name):
     # Check if the column exists in the DataFrame
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
-    df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4', 'stage'])
+    df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4'])
 
     if column_name not in df.columns:
-        raise ValueError(f"Column '{column_name}' not found in DataFrame.")
+        print(f"Column '{column_name}' not found in DataFrame.")
+        return None
     
     # Get the column values, excluding NaNs
     column_values = df[column_name].dropna()
