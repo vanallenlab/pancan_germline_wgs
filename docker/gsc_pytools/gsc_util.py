@@ -6,8 +6,8 @@ from firthlogist import FirthLogisticRegression
 
 def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
-    if cancer_type.lower() != "pancancer":
-        df = df[df['cancer_type'].lower() == cancer_type.lower()]
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
 
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
@@ -86,8 +86,8 @@ def find_mutation_frequency(df, cancer_type, column_name):
     float: The calculated allele frequency.
     """
     # Check if the column exists in the DataFrame
-    if cancer_type.lower() != "pancancer":
-        df = df[df['cancer_type'].lower() == cancer_type.lower()]
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
     df= df.dropna(subset=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4'])
 
     if column_name not in df.columns:
