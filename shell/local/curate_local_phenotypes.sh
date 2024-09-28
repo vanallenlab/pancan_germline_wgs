@@ -168,8 +168,9 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_proactive_phenotypes.R \
   --out-dir $WRKDIR
 
 # UFC
-# TODO: add this
-
+# UFC phenotypes were curated via manual chart review and are stored on RLCs laptop
+# Thus, they are directly copied over here
+cp $BASEDIR/data_and_cohorts/ufc/ufc.phenos.tsv $WRKDIR/
 
 ###################
 # STAGE & CLEANUP #

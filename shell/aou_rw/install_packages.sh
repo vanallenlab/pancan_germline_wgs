@@ -25,7 +25,7 @@ for lang in "$@"; do
 
     # Install R libraries
     R)
-      for lib in argparse beeswarm bedr caret EQL vioplot; do
+      for lib in argparse beeswarm bedr caret EQL vioplot DescTools; do
         Rscript -e "if(require('$lib') == FALSE){install.packages('$lib', repos='https://cloud.r-project.org')}"
       done
 

@@ -56,8 +56,8 @@ load.intake.tsv <- function(tsv.in=NULL){
 }
 
 # Merge QC data.frames from AoU and non-AoU samples
-merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL,
-                         id.prefix="G2C", suffix.length=6){
+merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL, id.prefix="G2C",
+                         suffix.length=6, seed=2024){
   # Merge, sort, and deduplicate data
   df <- rbind(aou.df, other.df)
   df <- df[with(df, order(Cohort, Sample)), ]
@@ -70,7 +70,9 @@ merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL,
   }
 
   # Add G2C IDs
-  df$G2C_id <- paste(id.prefix, formatC(1:nrow(df), width=suffix.length, flag="0"), sep="")
+  set.seed(seed)
+  id.nos <- sample(1:(10^suffix.length), nrow(df), replace=F)
+  df$G2C_id <- paste(id.prefix, formatC(id.nos, width=suffix.length, flag="0"), sep="")
 
   return(df)
 }
@@ -220,8 +222,10 @@ other.df <- load.intake.tsv(args$non_aou_tsv)
 qc.df <- merge.qc.dfs(aou.df, other.df, args$include_samples,
                       args$id_prefix, args$suffix_length)
 
-# Simplify cohort assignment
+# Simplify cohort assignment & tissue source (for batching)
 qc.df$simple_cohort <- simplify.cohorts(qc.df)
+qc.df$wgs_tissue[which(is.na(qc.df$wgs_tissue))] <- "unknown"
+qc.df$blood_dna <- grepl("blood", qc.df$wgs_tissue)
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)

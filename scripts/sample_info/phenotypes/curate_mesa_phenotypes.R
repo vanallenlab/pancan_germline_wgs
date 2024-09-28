@@ -46,7 +46,7 @@ load.intake.exam <- function(tsv.in, col.suffix="1"){
   df$vital_status <- NA
   df$age_at_last_contact <- df$age <- as.numeric(df[, paste("age", col.suffix, "c", sep="")])
   df$birth_year <- NA
-  df$years_to_last_contact <- NA
+  df$years_left_censored <- df$years_to_last_contact <- NA
   df$height <- as.numeric(df[, paste("htcm", col.suffix, sep="")])
   df$weight <- 0.453592 * as.numeric(df[, paste("wtlb", col.suffix, sep="")])
   df$bmi <- df$weight / ((df$height / 100)^2)
@@ -80,9 +80,9 @@ load.intake.exam <- function(tsv.in, col.suffix="1"){
   # Only return relevant columns
   keep.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                  "age", "birth_year", "vital_status", "age_at_last_contact",
-                 "years_to_last_contact", "height", "weight", "bmi", "cancer",
-                 "stage", "metastatic", "grade", "smoking_history",
-                 "cancer_icd10", "original_dx", "wgs_tissue")
+                 "years_to_last_contact", "years_left_censored", "height",
+                 "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+                 "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
   df[, keep.cols]
 }
 
@@ -103,6 +103,7 @@ add.followup <- function(df, tsv.in){
   df$age_at_last_contact <- as.numeric(remap(df$Sample, age.v))
   has.fu <- which(!is.na(df$age_at_last_contact))
   df$vital_status[has.fu] <- 1
+  df$years_left_censored[has.fu] <- 0
 
   # Update inferred survival time
   df$years_to_last_contact[has.fu] <- (df$age_at_last_contact - df$age)[has.fu]
@@ -152,7 +153,7 @@ if(!is.null(args$followup_tsv)){
 # Write to --out-tsv
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[, col.order], args$out_tsv, col.names=T, row.names=F, sep="\t", quote=F)

@@ -44,6 +44,7 @@ load.st1 <- function(tsv.in){
   df$vital_status <- abs(1-df$death)
   df$age_at_last_contact <- df$age + (df$survival_months / 12)
   df$years_to_last_contact <- df$survival_months / 12
+  df$years_left_censored <- 0
   df$bmi <- df$weight <- df$height <- NA
   df$cancer <- "lung"
   df$metastatic <- "unknown"
@@ -83,9 +84,9 @@ load.st1 <- function(tsv.in){
   # Return data frame with desired column order
   col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                  "age", "birth_year", "vital_status", "age_at_last_contact",
-                 "years_to_last_contact", "height", "weight", "bmi", "cancer",
-                 "stage", "metastatic", "grade", "smoking_history",
-                 "cancer_icd10", "original_dx", "wgs_tissue")
+                 "years_to_last_contact", "years_left_censored", "height",
+                 "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+                 "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
   return(df[, col.order])
 }
 

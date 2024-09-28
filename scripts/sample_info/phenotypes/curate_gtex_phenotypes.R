@@ -46,7 +46,7 @@ load.phenotypes <- function(tsv.in){
   df$age_at_last_contact <- df$age <- as.numeric(df$AGE)
   df$birth_year <- NA
   df$vital_status <- 0
-  df$years_to_last_contact <- NA
+  df$years_left_censored <- df$years_to_last_contact <- NA
   df$height <- 2.54 * df$HGHT
   df$weight <- 0.453592 * df$WGHT
   df$bmi <- df$BMI
@@ -81,9 +81,9 @@ load.phenotypes <- function(tsv.in){
   # Return only relevant columns
   keep.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                  "age", "birth_year", "vital_status", "age_at_last_contact",
-                 "years_to_last_contact", "height", "weight", "bmi", "cancer",
-                 "stage", "metastatic", "grade", "smoking_history", "cancer_icd10",
-                 "original_dx", "wgs_tissue")
+                 "years_to_last_contact", "years_left_censored", "height",
+                 "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+                 "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
   df[, keep.cols]
 }
 
@@ -145,9 +145,9 @@ if(!is.null(args$sample_attributes_tsv)){
 # Write to --out-tsv
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[, col.order], args$out_tsv, col.names=T, row.names=F, sep="\t", quote=F)
 
 

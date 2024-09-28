@@ -44,11 +44,12 @@ load.meta <- function(tsv.in){
   df$Cohort <- "hgsvc"
   df$reported_sex <- tolower(df$Sex)
   df$reported_race_or_ethnicity <- remap(df$Superpopulation.code, pop.map)
+  df$cancer <- "unknown"
   df$wgs_tissue <- "lymphoblastoid_cell_line"
   na.cols <- c("age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx")
   df[, na.cols] <- NA
 
   return(df)
@@ -77,8 +78,8 @@ df <- load.meta(args$metadata_tsv)
 # Write to --out-tsv
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[, col.order], args$out_tsv, col.names=T,
             row.names=F, sep="\t", quote=F)

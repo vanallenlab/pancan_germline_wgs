@@ -203,6 +203,8 @@ load.clinical.data <- function(tsv.in){
   df$vital_status <- as.numeric(remap(df$vital_status, vital.map))
   df$years_to_last_contact <- as.numeric(df$days_to_last_follow_up) / 365
   df$years_to_last_contact[which(df$years_to_last_contact < 0)] <- 0
+  df$years_left_censored <- 0
+  df$years_left_censored[which(is.na(df$years_to_last_contact))] <- NA
   df$cancer_icd10 <- df$icd_10_code
 
   # Parse age with variable units
@@ -286,8 +288,8 @@ load.clinical.data <- function(tsv.in){
   # Return formatted columns
   df[, c("Sample", "reported_sex", "reported_race_or_ethnicity", "age",
          "birth_year", "vital_status", "age_at_last_contact",
-         "years_to_last_contact", "cancer", "stage", "metastatic",
-         "grade", "cancer_icd10", "original_dx")]
+         "years_to_last_contact", "years_left_censored", "cancer", "stage",
+         "metastatic", "grade", "cancer_icd10", "original_dx")]
 }
 
 # Assign WGS tissue to each sample, where possible
@@ -322,6 +324,7 @@ get.wgs.tissue <- function(df, sample.tsv){
 
   # Map DNA source where possible
   df$wgs_tissue <- remap(df$Sample, dna.map, default.value="unknown")
+  df$wgs_tissue[which(is.na(df$wgs_tissue))] <- "unknown"
 
   return(df)
 }
@@ -419,8 +422,8 @@ if(!is.null(args$cohort)){
 }
 out.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
               "age", "birth_year", "vital_status", "age_at_last_contact",
-              "years_to_last_contact", "height", "weight", "bmi", "cancer",
-              "stage", "metastatic", "grade", "smoking_history", "cancer_icd10",
-              "original_dx", "wgs_tissue")
+              "years_to_last_contact", "years_left_censored", "height",
+              "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+              "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(out.df[order(out.df$Sample), intersect(out.cols, colnames(out.df))],
             args$out_tsv, sep="\t", col.names=T, row.names=F, quote=F)

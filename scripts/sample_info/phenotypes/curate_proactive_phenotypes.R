@@ -200,7 +200,8 @@ curate.main.meta <- function(df){
 
   # Fill columns for which we don't have any data
   na.cols <- c("vital_status", "age_at_last_contact", "years_to_last_contact",
-               "height", "weight", "bmi", "smoking_history", "cancer_icd10")
+               "years_left_censored", "height", "weight", "bmi",
+               "smoking_history", "cancer_icd10")
   df[, na.cols] <- NA
   unk.cols <- c("stage", "metastatic", "grade")
   df[, unk.cols] <- "unknown"
@@ -264,6 +265,7 @@ update.yl.meta <- function(df, tsv.in){
   yl.df$age_at_last_contact[is.na(yl.df$age_at_last_contact)] <- yl.df$age_dx[is.na(yl.df$age_at_last_contact)]
   df$age_at_last_contact[main.yl.idx] <- yl.df$age_at_last_contact
   df$years_to_last_contact[main.yl.idx] <- as.numeric(yl.df$Survival_years)
+  df$years_left_censored[main.yl.idx] <- 0
 
   # Update cancer diagnostic metadata
   df$cancer[main.yl.idx] <- "lung"
@@ -276,6 +278,9 @@ update.yl.meta <- function(df, tsv.in){
   df$smoking_history[main.yl.idx] <- as.numeric(yl.df$smok_status > 0)
   yl.df$orig_dx <- paste("lung", remap(tolower(yl.df$histology), yl.hist.map), sep="_")
   df$original_dx[main.yl.idx] <- yl.df$orig_dx
+
+  # Ensure no missing tissue source
+  df$wgs_tissue[which(is.na(df$wgs_tissue))] <- "unknown"
 
   # Return updated data
   return(df)
@@ -336,9 +341,9 @@ df <- update.yl.meta(df, args$young_lung_meta)
 # Write to --out-tsv separately for proactive-core and proactive-other
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[which(df$Cohort == "proactive-core"), col.order],
             paste(args$out_dir, "proactive-core.phenos.tsv", sep="/"),
             col.names=T, row.names=F, sep="\t", quote=F)

@@ -37,7 +37,9 @@ load.phenotypes <- function(tsv.in){
   df$Sample <- df$SUBJECT_ID
   df$Cohort <- "biome"
   df$reported_sex <- tolower(df$SEX)
-  df$age <- as.integer(df$age_at_dna_blood_draw_wgs)
+  df$age <- as.numeric(apply(df[, grep("age_at_", colnames(df))], 1, min, na.rm=T))
+  df$seq_age <- as.integer(df$age_at_dna_blood_draw_wgs)
+  df$years_left_censored <- df$seq_age - df$age
   df$birth_year <- NA
   df$age_at_last_contact <- as.numeric(apply(df[, grep("age_at_", colnames(df))], 1, max, na.rm=T))
   anthro.cols <- c("height", "weight", "bmi")
@@ -80,8 +82,8 @@ load.phenotypes <- function(tsv.in){
   # Return data frame with columns in desired order
   df[, c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity", "age",
          "birth_year", "vital_status", "age_at_last_contact", "years_to_last_contact",
-         "height", "weight", "bmi", "cancer", "stage", "metastatic", "grade",
-         "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")]
+         "years_left_censored", "height", "weight", "bmi", "cancer", "stage", "metastatic",
+         "grade", "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")]
 }
 
 

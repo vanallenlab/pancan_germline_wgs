@@ -24,7 +24,13 @@ require(G2C, quietly=TRUE)
 load.pheno.df <- function(tsv.in){
   df <- read.table(tsv.in, header=T, sep="\t", quote="")
   keep.cols <- c("Sample", "Cohort", "reported_sex", "cancer", "age",
-                 "years_to_last_contact", "vital_status", "stage")
+                 "years_to_last_contact", "years_left_censored",
+                 "vital_status", "stage", "wgs_tissue")
+  no.na.cols <- c("cancer", "wgs_tissue")
+  df[, no.na.cols] <- apply(df[, no.na.cols], 2, function(cv){
+    cv[is.na(cv)] <- "unknown"
+    return(cv)
+  })
   df[, keep.cols]
 }
 

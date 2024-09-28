@@ -70,7 +70,7 @@ load.manifest <- function(tsv.in){
     return(target.v)
   })
 
-  # Compute earliest reported age post-diagnosis
+  # Compute earliest reported age post-diagnosis, which we interpret as index time
   df$d.b <- as.Date(paste(df$birthYear, "01-01", sep="-"))
   df$d.dx <- as.Date(apply(df[, date.cols], 1, function(d){min(as.Date(d), na.rm=T)}))
   df$age <- as.numeric((df$d.dx - df$d.b) / 365)
@@ -80,10 +80,12 @@ load.manifest <- function(tsv.in){
   has.fu.idx <- which(apply(df[, date.cols], 1, function(d){any(!is.na(d))}))
   df$d.lc <- as.Date(apply(df[, date.cols], 1, function(d){max(as.Date(d), na.rm=T)}))
   df$years_to_last_contact <- as.numeric(df$d.lc - as.Date(df$d.dx)) / 365
-  df$years_to_last_contact[which(df$years_to_last_contact < 0)] <- 0
+  df$years_to_last_contact[which(df$years_to_last_contact <= 0)] <- NA
   has.fu.idx <- intersect(has.fu.idx, which(df$years_to_last_contact > 0))
   df$age_at_last_contact <- df$age + df$years_to_last_contact
   df$age_at_last_contact[-has.fu.idx] <- df$age[-has.fu.idx]
+  df$years_left_censored <- NA
+  df$years_left_censored[has.fu.idx] <- 0
   df$vital_status <- NA
   df$vital_status[has.fu.idx] <- 1
   died.idx <- which(!is.na(df$deathDate))
@@ -146,8 +148,8 @@ df <- add.cancer.labels(df, args$cancer_classification_tsv)
 # Write to --out-tsv
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[!is.na(df$Sample), col.order], args$out_tsv, col.names=T,
             row.names=F, sep="\t", quote=F)

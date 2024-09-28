@@ -95,7 +95,7 @@ load.donors <- function(tsv.in){
     vals[day.idxs] <- vals[day.idxs] / 365
     return(vals)
   })
-  df$age <- apply(df[, age.cols], 1, min, na.rm=T)
+  df$age <- df$donor_age_at_diagnosis
   df$age[which(df$age <= 0 | is.infinite(df$age))] <- NA
   df$fu_age_interval <- (df$donor_age_at_last_followup - df$age) * 365
   fu.t.cols <- grepl("_interval|_time", colnames(df))
@@ -103,6 +103,9 @@ load.donors <- function(tsv.in){
   no.fu <- which(df$max_fu <= 0)
   df$years_to_last_contact <- df$max_fu / 365
   df$years_to_last_contact[no.fu] <- NA
+  df$years_left_censored <- df$donor_age_at_enrollment - df$donor_age_at_diagnosis
+  df$years_left_censored[no.fu] <- NA
+  df$years_left_censored[which(is.na(df$years_left_censored) & !is.na(df$years_to_last_contact))] <- 0
   df$age_at_last_contact <- df$age + df$years_to_last_contact
   df$age_at_last_contact[no.fu] <- df$age[no.fu]
 
@@ -240,6 +243,7 @@ annotate.tissue <- function(df, tsv.in){
 
   # Map specimen info onto dataframe
   df$wgs_tissue <- remap(df$Sample, tissue.map, default.value="unknown")
+  df$wgs_tissue[which(is.na(df$wgs_tissue))] <- "unknown"
   return(df)
 }
 
@@ -284,8 +288,8 @@ df <- annotate.tissue(df, args$specimen_tsv)
 # Write to --out-tsv
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
                "age", "birth_year", "vital_status", "age_at_last_contact",
-               "years_to_last_contact", "height", "weight", "bmi", "cancer",
-               "stage", "metastatic", "grade", "smoking_history",
-               "cancer_icd10", "original_dx", "wgs_tissue")
+               "years_to_last_contact", "years_left_censored", "height",
+               "weight", "bmi", "cancer", "stage", "metastatic", "grade",
+               "smoking_history", "cancer_icd10", "original_dx", "wgs_tissue")
 write.table(df[, col.order], args$out_tsv, col.names=T,
             row.names=F, sep="\t", quote=F)

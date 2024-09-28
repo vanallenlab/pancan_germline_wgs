@@ -66,6 +66,28 @@ grafpop.margin.bar <- function(qc.df, ordered.pops=NULL, label.cex=5.5/6){
                colors=pop.colors[ordered.pops])
 }
 
+# Sex ploidy margin bar
+sex.margin.bar <- function(qc.df, label.cex=5.5/6){
+  sex.df <- data.frame(row.names = c("female", "other", "male"),
+                       "sex" = c("female", "other", "male"),
+                       "n" = c(length(which(qc.df$inferred_sex == "female")),
+                               length(which(qc.df$inferred_sex == "other")),
+                               length(which(qc.df$inferred_sex == "male"))))
+  sex.df$cumsum <- cumsum(sex.df$n)
+  sex.legend.labels <- c(
+    paste("XX (", round(100 * sex.df["female", "n"] / nrow(qc.df), 1), "%)", sep=""),
+    paste("Other (", round(100 * sex.df["other", "n"] / nrow(qc.df), 1), "%)", sep=""),
+    paste("XY (", round(100 * sex.df["male", "n"] / nrow(qc.df), 1), "%)", sep="")
+  )
+  prep.plot.area(c(0, 1), c(0, nrow(qc.df)), parmar=c(2.5, 0.25, 0.5, 7))
+  rect(xleft=0, xright=1, ybottom=c(0, sex.df$cumsum[-nrow(sex.df)]),
+       ytop=sex.df$cumsum, col=sex.colors[rownames(sex.df)], border=NA, bty="n")
+  yaxis.legend(sex.legend.labels, x=1,
+               y.positions=(c(0, sex.df$cumsum[-nrow(sex.df)]) + sex.df$cumsum)/2,
+               sep.wex=0.25, min.label.spacing=0.09*diff(par("usr")[3:4]),
+               label.cex=label.cex, colors=sex.colors[rownames(sex.df)])
+}
+
 # Swarms of all autosomal ploidy estimates
 plot.autosomal.ploidy <- function(qc.df, parmar=c(1.9, 2.1, 1, 0.5)){
   # Ensure libraries are loaded
@@ -154,22 +176,17 @@ apply(t(combn(1:3, 2)), 1, function(gd.idxs){
 
 
 # Visualize sex ploidy distributions
-sex.legend.labels <- c(
-  paste("XX (", round(100 * length(which(qc.df$inferred_sex == "female")) / nrow(qc.df), 1), "%)", sep=""),
-  paste("XY (", round(100 * length(which(qc.df$inferred_sex == "male")) / nrow(qc.df), 1), "%)", sep=""),
-  paste("Other (", round(100 * length(which(qc.df$inferred_sex == "other")) / nrow(qc.df), 1), "%)", sep="")
-)
 pdf(paste(args$out_prefix, "sex_ploidy.pdf", sep="."),
-    height=2.5, width=2.5)
+    height=2.5, width=4)
+layout(matrix(1:2, nrow=1), widths=c(7, 5))
 scatterplot(qc.df$chrX_ploidy, qc.df$chrY_ploidy,
-            colors=sex.colors[toupper(qc.df$inferred_sex)],
+            colors=sex.colors[qc.df$inferred_sex],
             title="Genetic sex",
             x.title="chrX ploidy", y.title="chrY ploidy",
             x.title.line=0.15,
             parmar=c(2.1, 2.6, 1, 0.5),
-            x.label.line=-0.7, y.label.line=-0.6,
-            legend.vals=sex.colors[c("FEMALE", "MALE", "OTHER")],
-            legend.labels=sex.legend.labels)
+            x.label.line=-0.7, y.label.line=-0.6)
+sex.margin.bar(qc.df)
 dev.off()
 
 
@@ -209,39 +226,67 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
 
 
 # Set shared barplot parameters
-bar.parmar <- c(1.5, 4.25, 1.5, 2.75)
+bar.parmars <- list(c(0.25, 4.25, 1.25, 2.75), c(0, 4.25, 2, 2.75))
 bar.pdf.dims <- c(3.5, 3)
+cancer.panel.height.ratio <- c(1/4.65, 1)
+cohort.panel.height.ratio <- c(1/4, 1)
 cancer.key.cols <- cancer.colors
+non.cancer.phenos <- c("control", "unknown")
+cancer.bar.subdfs <- list(qc.df[which(qc.df$cancer %in% non.cancer.phenos), ],
+                          qc.df[which(!qc.df$cancer %in% non.cancer.phenos), ])
 names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
 cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+largest.cohort <- names(cohort.k)[1]
+cohort.bar.subdfs <- list(qc.df[which(qc.df$simple_cohort == largest.cohort), ],
+                          qc.df[which(qc.df$simple_cohort != largest.cohort), ])
 cohort.key.cols <- greyscale.palette(length(cohort.k))
 names(cohort.key.cols) <- cohort.names.short[names(cohort.k)]
 
 # Barplot of samples per cancer, colored by cohort
 pdf(paste(args$out_prefix, "cohort_contributions_per_cancer", "pdf", sep="."),
     height=bar.pdf.dims[1], width=bar.pdf.dims[2])
-stacked.barplot(cancer.names[qc.df$cancer],
-                cohort.names.short[qc.df$simple_cohort],
-                colors=cohort.key.cols,
-                x.title="", annotate.counts=TRUE, add.legend=FALSE,
-                major.legend=TRUE, major.legend.colors=cancer.key.cols,
-                minor.labels.on.bars=TRUE, minor.label.letter.width=0.06,
-                minor.label.cex=4/6, parmar=bar.parmar)
-axis(2, at=ceiling(par("usr")[3])+0.75, tick=F, las=2, line=-1, labels="Cancer", xpd=T)
+layout(matrix(2:1, nrow=2, ncol=1), heights=rev(cancer.panel.height.ratio))
+sapply(1:2, function(s){
+  subdf <- cancer.bar.subdfs[[s]]
+  stacked.barplot(cancer.names[explode.by.cancer(subdf$cancer)$cancer],
+                  cohort.names.short[explode.by.cancer(subdf$cancer, subdf$simple_cohort)$x],
+                  colors=cohort.key.cols,
+                  x.title=if(s==2){"Genomes per cancer type"}else{""},
+                  x.axis.tck=-0.025/cancer.panel.height.ratio[s], x.label.line=-0.85,
+                  x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
+                  major.legend=TRUE, major.legend.colors=cancer.key.cols,
+                  minor.labels.on.bars=TRUE, minor.label.letter.width=0.06,
+                  minor.label.cex=4/6, parmar=bar.parmars[[s]])
+  if(s==2){
+    axis(4, at=par("usr")[3]-1.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
+         labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
+                      "total genomes", sep=""), xpd=T)
+  }
+})
 dev.off()
 
 
 # Barplot of samples by cohort, colored by cancer
 pdf(paste(args$out_prefix, "cancers_per_cohort", "pdf", sep="."),
     height=bar.pdf.dims[1], width=bar.pdf.dims[2])
-stacked.barplot(cohort.names.short[qc.df$simple_cohort],
-                cancer.names[qc.df$cancer],
-                colors=cancer.key.cols, x.title="",
-                annotate.counts=TRUE, orient="left", add.legend=FALSE,
-                major.legend=TRUE, major.legend.colors=cohort.key.cols,
-                minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
-                minor.label.cex=4/6, parmar=bar.parmar[c(1, 4, 3, 2)])
-axis(4, at=floor(par("usr")[4])+0.5, tick=F, las=2, line=-1, labels="Cohort", xpd=T)
+layout(matrix(1:2, nrow=2, ncol=1), heights=cohort.panel.height.ratio)
+sapply(1:2, function(s){
+  subdf <- cohort.bar.subdfs[[s]]
+  subdf$cancer[grepl(";", subdf$cancer, fixed=T)] <- "multiple"
+  stacked.barplot(cohort.names.short[subdf$simple_cohort],
+                  cancer.names[subdf$cancer], colors=cancer.key.cols,
+                  x.title=if(s==1){"Genomes per cohort"}else{""},
+                  x.axis.tck=-0.025/cohort.panel.height.ratio[s], x.label.line=-0.85,
+                  x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
+                  major.legend=TRUE, major.legend.colors=cohort.key.cols,
+                  minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
+                  minor.label.cex=4/6, parmar=bar.parmars[[if(s==1){2}else{1}]])
+  # if(s==2){
+  #   axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
+  #        labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
+  #                     "total genomes", sep=""), xpd=T)
+  # }
+})
 dev.off()
 
 
@@ -258,20 +303,22 @@ dev.off()
 
 # Kaplan-Meier curves for all cases versus all controls
 surv.models <- lapply(c("IV", "III", "II", "I"), function(stage){
-  summary(survfit(Surv(years_to_last_contact, abs(vital_status-1)) ~ 1,
+  summary(survfit(Surv(years_left_censored, years_to_last_contact, abs(vital_status-1)) ~ 1,
                   data=qc.df[which(qc.df$stage == stage), ]))
 })
 names(surv.models) <- c("IV", "III", "II", "I")
-surv.models[["control"]] <- summary(survfit(Surv(years_to_last_contact, vital_status) ~ 1,
+surv.models[["no_stage"]] <- summary(survfit(Surv(years_left_censored, years_to_last_contact, abs(vital_status-1)) ~ 1,
+                                            data=qc.df[which(qc.df$cancer != "control" & !is.na(qc.df$stage)), ]))
+surv.models[["control"]] <- summary(survfit(Surv(years_left_censored, years_to_last_contact, abs(vital_status-1)) ~ 1,
                               data=qc.df[which(qc.df$cancer == "control"), ]))
 # Note: uses hist.pdf.dims (this is intentional)
 pdf(paste(args$out_prefix, "km_surv_by_stage", "pdf", sep="."),
     height=hist.pdf.dims[1], width=hist.pdf.dims[2]+0.3)
 km.curve(surv.models,
-         colors=c(stage.colors[c("IV", "III", "II", "I")], cancer.colors["control"]),
+         colors=c(stage.colors[c("IV", "III", "II", "I")], cancer.colors[c("pancan", "control")]),
          ci.alpha=0, title="Overall survival", y.title="", time.is.days=FALSE,
          legend.label.spacing=0.15, legend.label.cex=5/6,
-         legend.names=c(stage.names.long[names(surv.models)[1:4]], "Controls"),
+         legend.names=c(stage.names.long[names(surv.models)[1:4]], "No stage", "Controls"),
          xlim=c(0, 8), x.tck=-0.025, x.label.line=-1, x.title.line=-0.25,
          km.lwd=4, parmar=c(1.75, 1.25, 1, 5))
 dev.off()
