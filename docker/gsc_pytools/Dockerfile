@@ -15,10 +15,11 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python packages using pip
-RUN python3.9 -m pip install numpy pandas firthlogist scipy seaborn statsmodels
+RUN python3.9 -m pip install numpy pandas firthlogist scipy seaborn statsmodels scikit-learn
 
 # Copy your utility script to the image
 COPY gsc_util.py /opt/
+COPY *.py /opt/
 
 # Set the default command to run at runtime
 CMD ["/bin/bash"]
