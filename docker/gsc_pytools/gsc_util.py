@@ -80,7 +80,7 @@ def find_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariat
     
     return allele_frequency,column_values.sum(),(len(column_values) * 2)
 
-def find_mutation_frequency(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
+def find_mutation_frequency(df, cancer_type, germline_event, somatic_gene, covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     """
     Calculate the allele frequency for a specified column in a DataFrame.
     
