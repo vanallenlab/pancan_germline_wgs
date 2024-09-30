@@ -3,6 +3,7 @@ import statsmodels.api as sm
 from scipy.stats import fisher_exact
 import numpy as np
 from firthlogist import FirthLogisticRegression
+import scipy.stats as stats
 
 def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
