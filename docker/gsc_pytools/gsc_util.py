@@ -73,7 +73,7 @@ def find_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariat
     df= df.dropna(subset=[germline_event,somatic_gene] + covariates)
     
     # Get the column values, excluding NaNs
-    column_values = df[column_name].dropna()
+    column_values = df[germline_event].dropna()
     
     # Calculate the allele frequency
     allele_frequency = column_values.sum() / (len(column_values) * 2)
@@ -104,7 +104,7 @@ def find_mutation_frequency(df, cancer_type, germline_event, somatic_gene, covar
     df= df.dropna(subset=[germline_event,somatic_gene] + covariates)
     
     # Get the column values, excluding NaNs
-    column_values = df[column_name].dropna()
+    column_values = df[somatic_gene].dropna()
     
     # Transform the column values: non-zero values become 1, zero values stay 0
     column_values = column_values.apply(lambda x: 1 if x != 0 else 0)
