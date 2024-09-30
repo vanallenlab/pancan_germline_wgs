@@ -21,9 +21,17 @@ def plot_germline_frequencies(data,
         # Filter the DataFrame for the current cancer type
         filtered_data = data[data['cancer_type'] == cancer_type]
 
+
         # Extract HMF and PROFILE frequencies
         x = filtered_data[hmf_col].values.reshape(-1, 1)
         y = filtered_data[profile_col].values
+
+        # Remove rows where x or y contains NaN
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x_filtered = x[mask].reshape(-1, 1)  # Reshape back after filtering
+        y_filtered = y[mask]
+        x = x_filtered
+        y = y_filtered
 
         # Fit a linear regression model
         model = LinearRegression()
@@ -69,6 +77,13 @@ def plot_somatic_mutation_frequencies(df,
         X = subset[x_col].values.reshape(-1, 1)
         y = subset[y_col].values
         
+        # Remove rows where x or y contains NaN
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x_filtered = x[mask].reshape(-1, 1)  # Reshape back after filtering
+        y_filtered = y[mask]
+        x = x_filtered
+        y = y_filtered
+
         # Fit linear regression
         model = LinearRegression()
         model.fit(X, y)
@@ -97,6 +112,11 @@ def plot_volcano(df,
                  criteria_col="criteria", 
                  cancer_type_col="cancer_type", 
                  save_path="volcano_plot.png"):
+    
+
+    # Filter out rows with NaN or infinite values in p_val_combined and OR_combined
+    df_filtered = df[np.isfinite(df[p_col]) & np.isfinite(df[or_col])]
+    df = df_filtered
     
     # Calculate -log10(p-value) and log2(OR)
     df['log10_p'] = -np.log10(df[p_col])
