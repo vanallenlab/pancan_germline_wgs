@@ -318,7 +318,7 @@ km.curve(surv.models,
          colors=c(stage.colors[c("IV", "III", "II", "I")], cancer.colors[c("pancan", "control")]),
          ci.alpha=0, title="Overall survival", y.title="", time.is.days=FALSE,
          legend.label.spacing=0.15, legend.label.cex=5/6,
-         legend.names=c(stage.names.long[names(surv.models)[1:4]], "No stage", "Controls"),
+         legend.names=c(stage.names.long[names(surv.models)[1:4]], "Stage N.R.", "Controls"),
          xlim=c(0, 8), x.tck=-0.025, x.label.line=-1, x.title.line=-0.25,
          km.lwd=4, parmar=c(1.75, 1.25, 1, 5))
 dev.off()
