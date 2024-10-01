@@ -56,8 +56,8 @@ def plot_germline_frequencies(data,
     plt.close()
 
 def plot_somatic_mutation_frequencies(df, 
-                                        x_col="somatic_mutation_frequency_HMF", 
-                                        y_col="somatic_mutation_frequency_PROFILE", 
+                                        x_col="somatic_plp_HMF", 
+                                        y_col="somatic_plp_PROFILE", 
                                         save_path="somatic_mutation_frequencies.png"):
     # Specify the cancer types to include
     cancer_types = ["Breast", "Prostate", "Colorectal", "Lung", "Kidney", "Pancancer"]
@@ -117,7 +117,8 @@ def plot_volcano(df,
     df['log2_OR'] = np.log2(df[or_col])
     
     # Set up point shapes based on 'criteria' and colors based on 'cancer_type'
-    shapes = {'known_ppi': 'o', 'other': 's'}  # Example shapes for criteria
+    shapes = {'known_ppi': 'o', 'same_gene': 's', 'protein_complex':'h','ligand_receptor':'^',
+            'known_ppi;ligand_receptor':'*','known_ppi;protein_complex':'d'}  # Example shapes for criteria
     colors = {'Breast': 'red', 'Prostate': 'blue', 'Colorectal': 'green', 
               'Lung': 'purple', 'Kidney': 'orange', 'Pancancer': 'black'}
     
@@ -134,13 +135,14 @@ def plot_volcano(df,
     # Add Bonferroni and nominal significance lines
     bonferroni_threshold = -np.log10(0.05 / len(df))  # Bonferroni threshold
     nominal_threshold = -np.log10(0.05)  # Nominal significance threshold
-    plt.axhline(y=bonferroni_threshold, color='red', linestyle='--', label='Bonferroni Significance')
-    plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance')
+    plt.axhline(y=bonferroni_threshold, color='red', linestyle='--', label=f"Bonferroni Significance (p = {round(0.05 / len(df),7)})")
+    plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
     
-    # Label points above Bonferroni threshold with one of the 5 lowest p-values
-    significant_points = df[df['log10_p'] > bonferroni_threshold].nsmallest(5, p_col)
+    # Label points above Bonferroni threshold
+    significant_points = df[df['log10_p'] > bonferroni_threshold]
     for _, row in significant_points.iterrows():
-        plt.text(row['log2_OR'], row['log10_p'], row[or_col], fontsize=8, ha='right')
+        label_text = f"({row['germline_risk_allele']} ,{row['somatic_gene']})"
+        plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Set plot labels and title
     plt.xlabel('log2(OR_combined)')
