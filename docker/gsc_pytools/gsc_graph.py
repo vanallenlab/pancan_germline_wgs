@@ -56,8 +56,8 @@ def plot_germline_frequencies(data,
     plt.close()
 
 def plot_somatic_mutation_frequencies(df, 
-                                        x_col="somatic_plp_HMF", 
-                                        y_col="somatic_plp_PROFILE", 
+                                        x_col="somatic_plp_frequency_HMF", 
+                                        y_col="somatic_plp_frequency_PROFILE", 
                                         save_path="somatic_mutation_frequencies.png"):
     # Specify the cancer types to include
     cancer_types = ["Breast", "Prostate", "Colorectal", "Lung", "Kidney", "Pancancer"]
