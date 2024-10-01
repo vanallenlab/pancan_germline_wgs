@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-ddef plot_germline_frequencies(data, 
+def plot_germline_frequencies(data, 
                               hmf_col='germline_plp_frequency_HMF', 
                               profile_col='germline_plp_frequency_PROFILE', 
                               save_path="germline_snp_frequencies.png"):
