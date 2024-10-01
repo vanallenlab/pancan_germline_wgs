@@ -4,34 +4,31 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-def plot_germline_frequencies(data, 
-    hmf_col='germline_plp_frequency_HMF', 
-    profile_col='germline_plp_frequency_PROFILE', 
-    save_path="germline_snp_frequencies.png"):
+ddef plot_germline_frequencies(data, 
+                              hmf_col='germline_plp_frequency_HMF', 
+                              profile_col='germline_plp_frequency_PROFILE', 
+                              save_path="germline_snp_frequencies.png"):
 
     # Define the cancer types of interest
     cancer_types = ['Breast', 'Prostate', 'Colorectal', 'Lung', 'Kidney', 'Pancancer']
     
+    # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
+    data_clean = data.dropna(subset=[hmf_col, profile_col])
+    data = data_clean
+
     # Create a figure with subplots
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     axes = axes.flatten()  # Flatten the array for easy indexing
 
     # Iterate through each cancer type and create a subplot
     for idx, cancer_type in enumerate(cancer_types):
+
         # Filter the DataFrame for the current cancer type
         filtered_data = data[data['cancer_type'] == cancer_type]
-
 
         # Extract HMF and PROFILE frequencies
         x = filtered_data[hmf_col].values.reshape(-1, 1)
         y = filtered_data[profile_col].values
-
-        # Remove rows where x or y contains NaN
-        mask = ~np.isnan(x) & ~np.isnan(y)
-        x_filtered = x[mask].reshape(-1, 1)  # Reshape back after filtering
-        y_filtered = y[mask]
-        x = x_filtered
-        y = y_filtered
 
         # Fit a linear regression model
         model = LinearRegression()
@@ -64,7 +61,11 @@ def plot_somatic_mutation_frequencies(df,
                                         save_path="somatic_mutation_frequencies.png"):
     # Specify the cancer types to include
     cancer_types = ["Breast", "Prostate", "Colorectal", "Lung", "Kidney", "Pancancer"]
-    
+
+    # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
+    df_clean = df.dropna(subset=[x_col, y_col])
+    df = df_clean
+
     # Set up the figure and axes
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
     axes = axes.flatten()
@@ -76,13 +77,6 @@ def plot_somatic_mutation_frequencies(df,
         # Prepare data for regression
         X = subset[x_col].values.reshape(-1, 1)
         y = subset[y_col].values
-        
-        # Remove rows where x or y contains NaN
-        mask = ~np.isnan(x) & ~np.isnan(y)
-        x_filtered = x[mask].reshape(-1, 1)  # Reshape back after filtering
-        y_filtered = y[mask]
-        x = x_filtered
-        y = y_filtered
 
         # Fit linear regression
         model = LinearRegression()
@@ -114,9 +108,9 @@ def plot_volcano(df,
                  save_path="volcano_plot.png"):
     
 
-    # Filter out rows with NaN or infinite values in p_val_combined and OR_combined
-    df_filtered = df[np.isfinite(df[p_col]) & np.isfinite(df[or_col])]
-    df = df_filtered
+    # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
+    df_clean = df.dropna(subset=[p_col, or_col])
+    df = df_clean
     
     # Calculate -log10(p-value) and log2(OR)
     df['log10_p'] = -np.log10(df[p_col])

@@ -133,6 +133,10 @@ def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged
     df1 = pd.read_csv(tsv1_path, sep='\t')
     df2 = pd.read_csv(tsv2_path, sep='\t')
 
+    # Step 1: Replace 'Renal' with 'Kidney' in the 'cancer_type' column in both DataFrames
+    df1['cancer_type'] = df1['cancer_type'].replace('Renal', 'Kidney')
+    df2['cancer_type'] = df2['cancer_type'].replace('Renal', 'Kidney')
+
     # Step 2: Merge the DataFrames on the relevant columns, including 'criteria'
     merged_df = pd.merge(df1, df2, how='outer', 
                          on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context'],
