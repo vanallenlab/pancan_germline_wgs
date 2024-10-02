@@ -156,3 +156,64 @@ def plot_volcano(df,
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
+
+def plot_p_values(data, 
+                  hmf_col='p_val_HMF', 
+                  profile_col='p_val_PROFILE', 
+                  save_path="p_val_comparison.png"):
+    """
+    Function to plot -log10 transformed p-values for HMF and PROFILE across different cancer types.
+    """
+    # Define the cancer types of interest
+    cancer_types = ['Breast', 'Prostate', 'Colorectal', 'Lung', 'Kidney', 'Pancancer']
+
+    # Drop rows where either the HMF or PROFILE p-value is missing (NaN)
+    data_clean = data.dropna(subset=[hmf_col, profile_col])
+    data_clean = data_clean[(data_clean[hmf_col] > 0) & (data_clean[profile_col] > 0)]
+    data = data_clean
+
+    # Transform p-values to -log10(p)
+    data['log_p_val_HMF'] = -np.log10(data[hmf_col])
+    data['log_p_val_PROFILE'] = -np.log10(data[profile_col])
+
+    # Drop rows with non-finite values after transformation
+    data = data_clean[np.isfinite(data['log_p_val_HMF']) & np.isfinite(data['log_p_val_PROFILE'])]
+
+    # Create a figure with subplots
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.flatten()  # Flatten the array for easy indexing
+
+    # Iterate through each cancer type and create a subplot
+    for idx, cancer_type in enumerate(cancer_types):
+        
+        # Filter the DataFrame for the current cancer type
+        filtered_data = data[data['cancer_type'] == cancer_type]
+
+        # Extract transformed HMF and PROFILE p-values
+        x = filtered_data['log_p_val_HMF'].values.reshape(-1, 1)
+        y = filtered_data['log_p_val_PROFILE'].values
+
+        # Fit a linear regression model
+        model = LinearRegression()
+        model.fit(x, y)
+        y_pred = model.predict(x)
+        r_squared = r2_score(y, y_pred)
+
+        # Plot the data
+        axes[idx].scatter(x, y, alpha=0.5)
+        axes[idx].plot(x, y_pred, color='blue', label='Best Fit', linestyle='--')
+
+        # Add y=x line
+        axes[idx].plot(x, x, color='black', linestyle='--', label='y = x')
+
+        # Set titles and labels
+        axes[idx].set_title(f'{cancer_type} (R² = {r_squared:.2f})')
+        axes[idx].set_xlabel('-log10(p_val_HMF)')
+        axes[idx].set_ylabel('-log10(p_val_PROFILE)')
+        axes[idx].legend()
+        axes[idx].set_xlim(0, max(x.max(), y.max()))
+        axes[idx].set_ylim(0, max(x.max(), y.max()))
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()

@@ -159,23 +159,16 @@ def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged
     # Convert combined log OR back to OR
     merged_df['OR_combined'] = np.exp(merged_df['log_OR_combined'])
 
-    # Step 5: Use sample sizes to weight Z-scores for p-values
-    merged_df['n_HMF'] = merged_df['germline_sample_size_HMF']
-    merged_df['n_PROFILE'] = merged_df['germline_sample_size_PROFILE']
+    # Step 5: Calculate the variance of the combined OR using inverse variance
+    merged_df['variance_OR_combined'] = 1 / (1 / merged_df['variance_HMF'] + 1 / merged_df['variance_PROFILE'])
 
-    merged_df['z_HMF'] = stats.norm.ppf(1 - merged_df['p_val_HMF'] / 2)
-    merged_df['z_PROFILE'] = stats.norm.ppf(1 - merged_df['p_val_PROFILE'] / 2)
+    # Step 6: Calculate Z-scores as OR_combined / variance_OR_combined
+    merged_df['z_combined'] = merged_df['OR_combined'] / merged_df['variance_OR_combined']
 
-    # Combine Z-scores using sample size weighting
-    merged_df['z_combined'] = (
-        (merged_df['z_HMF'] * np.sqrt(merged_df['n_HMF']) + merged_df['z_PROFILE'] * np.sqrt(merged_df['n_PROFILE'])) /
-        np.sqrt(merged_df['n_HMF'] + merged_df['n_PROFILE'])
-    )
+    # Step 7: Calculate p-value from Z-score
+    merged_df['p_val_combined'] = 2 * stats.norm.sf(np.abs(merged_df['z_combined']))
 
-    # Convert combined Z-score back to a p-value using the survival function (sf)
-    merged_df['p_val_combined'] = 2 * stats.norm.sf(merged_df['z_combined'])
-
-    # Step 6: Save the merged DataFrame with combined OR and p-values
+    # Step 8: Save the merged DataFrame with combined OR and p-values
     merged_df.to_csv(output_path, sep='\t', index=False)
 
     # Return the merged DataFrame
