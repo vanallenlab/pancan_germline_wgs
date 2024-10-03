@@ -74,7 +74,7 @@ def plot_somatic_mutation_frequencies(df,
     df = df_clean
 
     # Filtering to keep only the specified columns
-    df = df[['somatic_gene', 'cancer_type', hmf_col, profile_col]]
+    df = df[['somatic_gene', 'cancer_type', x_col, y_col]]
 
     # Removing duplicates
     df = df.drop_duplicates()
