@@ -51,7 +51,7 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,cova
         print(f"Error processing combination {germline_event} - {somatic_gene}: {e}")
 
 
-def find_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
+def find_filtered_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     """
     Calculate the allele frequency for a specified column in a DataFrame.
     
@@ -67,8 +67,6 @@ def find_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariat
 
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
-        return
-    if df[germline_event].sum() == 0 or df[somatic_gene].sum() == 0:
         return
 
     df= df.dropna(subset=[germline_event,somatic_gene] + covariates)
@@ -81,28 +79,63 @@ def find_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariat
     
     return allele_frequency,column_values.sum(),(len(column_values) * 2)
 
-def find_mutation_frequency(df, cancer_type, germline_event, somatic_gene, covariates=['male','pca_1','pca_2','pca_3','pca_4']):
-    """
-    Calculate the allele frequency for a specified column in a DataFrame.
-    
-    Args:
-    df (pd.DataFrame): The input DataFrame.
-    column_name (str): The column name for which to calculate allele frequency.
-    
-    Returns:
-    float: The calculated allele frequency.
-    """
-
+# Get a allele frequency for the cancer_type at large
+def find_allele_frequency(df, cancer_type, germline_event):
+    # Filter to Cancer type of interest
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
 
+    # Make sure the snp is present in the df
+    if germline_event not in df.columns:       
+        print(f"Combination {germline_event} not found in DataFrame")
+        return
+
+    df= df.dropna(subset=[germline_event])
+    
+    # Get the column values, excluding NaNs
+    column_values = df[germline_event].dropna()
+    
+    # Calculate the allele frequency
+    allele_frequency = column_values.sum() / (len(column_values) * 2)
+    
+    return allele_frequency,column_values.sum(),(len(column_values) * 2)
+
+# Get a mutation frequency for specific logistic regression (verify that all variables are there first)
+def find_filtered_mutation_frequency(df, cancer_type, germline_event, somatic_gene, covariates=['male','pca_1','pca_2','pca_3','pca_4']):
+    # Filter to Cancer Type of Interest
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
+
+    # Verify that we have the data we want
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
         return
-    if df[germline_event].sum() == 0 or df[somatic_gene].sum() == 0:
-        return
 
     df= df.dropna(subset=[germline_event,somatic_gene] + covariates)
+    
+    # Get the column values, excluding NaNs
+    column_values = df[somatic_gene].dropna()
+    
+    # Transform the column values: non-zero values become 1, zero values stay 0
+    column_values = column_values.apply(lambda x: 1 if x != 0 else 0)
+    
+    # Calculate the allele frequency
+    mutation_frequency = column_values.sum() / len(column_values)
+    
+    return mutation_frequency,column_values.sum(),len(column_values)
+
+# Get a allele frequency for the cancer_type at large
+def find_mutation_frequency(df, cancer_type, somatic_gene):
+    # Filter to Cancer Type of Interest
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
+
+    # Verify that we have the data we want
+    if somatic_gene not in df.columns:       
+        print(f"Combination {somatic_gene} not found in DataFrame")
+        return
+
+    df= df.dropna(subset=[somatic_gene])
     
     # Get the column values, excluding NaNs
     column_values = df[somatic_gene].dropna()
