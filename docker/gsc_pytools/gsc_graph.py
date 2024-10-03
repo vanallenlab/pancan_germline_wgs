@@ -17,6 +17,12 @@ def plot_germline_frequencies(data,
     data_clean = data.dropna(subset=[hmf_col, profile_col])
     data = data_clean
 
+    # Filtering to keep only the specified columns
+    data = data[['germline_risk_allele', 'cancer_type', hmf_col, profile_col]]
+
+    # Removing duplicates
+    data = data.drop_duplicates()
+
     # Create a figure with subplots
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     axes = axes.flatten()  # Flatten the array for easy indexing
@@ -66,6 +72,12 @@ def plot_somatic_mutation_frequencies(df,
     # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
     df_clean = df.dropna(subset=[x_col, y_col])
     df = df_clean
+
+    # Filtering to keep only the specified columns
+    df = df[['somatic_gene', 'cancer_type', hmf_col, profile_col]]
+
+    # Removing duplicates
+    df = df.drop_duplicates()
 
     # Set up the figure and axes
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
@@ -145,7 +157,7 @@ def plot_volcano(df,
     plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
     
     # Label points above Bonferroni threshold
-    significant_points = df[df['log10_p'] > bonferroni_threshold]
+    significant_points = df[df['log10_p'] > fdr_threshold]
     for _, row in significant_points.iterrows():
         label_text = f"({row['germline_risk_allele']} ,{row['somatic_gene']})"
         plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
@@ -162,6 +174,7 @@ def plot_volcano(df,
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
+
 
 def plot_p_values(data, 
                   hmf_col='p_val_HMF', 
@@ -223,3 +236,4 @@ def plot_p_values(data,
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
+
