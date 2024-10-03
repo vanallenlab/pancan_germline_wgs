@@ -15,10 +15,13 @@ task ShardVcf {
     File vcf_idx
     Int records_per_shard
     String bcftools_docker
+
+    Int cpu = 2
+    Float mem_gb = 3.75
   }
 
   String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "") + ".sharded"
-  Int disk_gb = ceil(3 * size(vcf, "GB"))
+  Int disk_gb = ceil(3 * size(vcf, "GB")) + 20
 
   command <<<
     set -eu -o pipefail
@@ -45,9 +48,9 @@ task ShardVcf {
   }
 
   runtime {
-    cpu: 2
-    memory: "3.75 GiB"
-    disks: "local-disk " + disk_gb + 20 + " HDD"
+    cpu: cpu
+    memory: "~{mem_gb} GiB"
+    disks: "local-disk ~{disk_gb} HDD"
     bootDiskSizeGb: 10
     docker: bcftools_docker
     preemptible: 3
@@ -62,10 +65,13 @@ task ShardVcfByRegion {
     File vcf_idx
     File scatter_regions
     String bcftools_docker
+
+    Int cpu = 2
+    Float mem_gb = 3.75
   }
 
   String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "") + ".sharded"
-  Int disk_gb = ceil(3 * size(vcf, "GB"))
+  Int disk_gb = ceil(3 * size(vcf, "GB")) + 20
 
   command <<<
     set -eu -o pipefail
@@ -92,9 +98,9 @@ task ShardVcfByRegion {
   }
 
   runtime {
-    cpu: 2
-    memory: "3.75 GiB"
-    disks: "local-disk " + disk_gb + 20 + " HDD"
+    cpu: cpu
+    memory: "~{mem_gb} GiB"
+    disks: "local-disk ~{disk_gb} HDD"
     bootDiskSizeGb: 10
     docker: bcftools_docker
     preemptible: 3
