@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
+from statsmodels.stats.multitest import fdrcorrection
 
 def plot_germline_frequencies(data, 
                               hmf_col='germline_plp_frequency_HMF', 
@@ -45,8 +46,8 @@ def plot_germline_frequencies(data,
 
         # Set titles and labels
         axes[idx].set_title(f'{cancer_type} (R² = {r_squared:.2f})')
-        axes[idx].set_xlabel('germline_plp_frequency_HMF')
-        axes[idx].set_ylabel('germline_plp_frequency_PROFILE')
+        axes[idx].set_xlabel('Germline Allele Frequency HMF')
+        axes[idx].set_ylabel('Germline Allele Frequency PROFILE')
         axes[idx].legend()
         axes[idx].set_xlim(0, max(x.max(), y.max()))
         axes[idx].set_ylim(0, max(x.max(), y.max()))
@@ -135,6 +136,11 @@ def plot_volcano(df,
     # Add Bonferroni and nominal significance lines
     bonferroni_threshold = -np.log10(0.05 / len(df))  # Bonferroni threshold
     nominal_threshold = -np.log10(0.05)  # Nominal significance threshold
+    rejected, pvals_corrected = fdrcorrection(df[p_col], alpha=0.05, method='indep', is_sorted=False)
+
+    # We calculate the highest corrected p-value that is still below the alpha threshold (0.05)
+    fdr_threshold = -np.log10(pvals_corrected[rejected].max())
+    plt.axhline(y=fdr_threshold, color='green', linestyle='--', label=f'FDR Threshold: {-np.log10(fdr_threshold):.2f}')
     plt.axhline(y=bonferroni_threshold, color='red', linestyle='--', label=f"Bonferroni Significance (p = {round(0.05 / len(df),7)})")
     plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
     
