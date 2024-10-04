@@ -144,6 +144,7 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_hmf_phenotypes.R \
 export ICGCDIR=$BASEDIR/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023
 $CODEDIR/scripts/sample_info/phenotypes/curate_icgc_phenotypes.R \
   --donors-tsv $ICGCDIR/donor.all_projects.tsv.gz \
+  --repository-tsv $ICGCDIR/../repository_1685119483.tsv \
   --project-cancer-map $BASEDIR/data_and_cohorts/icgc/icgc_project_to_g2c_map.tsv \
   --specimen-tsv $ICGCDIR/specimen.all_projects.tsv.gz \
   --exposure-tsv $ICGCDIR/donor_exposure.all_projects.tsv.gz \

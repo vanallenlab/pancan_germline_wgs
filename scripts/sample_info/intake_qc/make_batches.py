@@ -74,7 +74,7 @@ def parse_cutoff(cut_str, values):
     return eval(cut_str)
 
 
-def run_qc(md, jsonfile, log, quiet=False):
+def run_qc(md, jsonfile, log, hard_pass=set(), quiet=False):
     """
     Apply filters specified in json_in to pd.Dataframe md (sample metadata)
     Returns a set of samples failing any filter
@@ -102,6 +102,7 @@ def run_qc(md, jsonfile, log, quiet=False):
 
         # Apply filter
         new_fails = set(md.index[md[feature].apply(lambda v: eq_fx(v, cutoff))].tolist())
+        new_fails = new_fails - hard_pass
         fails.update(new_fails)
         if not quiet:
             fail_reason = '{} ({} {} {:.2f} [{}])'.format(filt_name, filt_info['feature'],
@@ -165,6 +166,8 @@ def main():
     parser.add_argument('--custom-qc-fail-samples', help='Optional list of samples ' +
                         'to be treated as failing global QC and excluded from ' +
                         'batching.')
+    parser.add_argument('--custom-qc-pass-samples', help='Optional list of samples ' +
+                        'to be treated as passing both global and batch-specific QC.')
     parser.add_argument('--batch-qc-cutoffs', help='Optional .json specifying ' +
                         'QC cutoffs for batch-specific sample exclusion.')
     parser.add_argument('--batch-size', type=int, default=500,
@@ -195,9 +198,11 @@ def main():
     missing_colname_msg = 'The following features were passed to {} but could ' + \
                            'be located in the input sample metadata .tsv: {}'
     if len(matchon_missing) > 0:
-        err(missing_colname_msg.format('--match-on', ', '.join(matchon_missing)))
+        print(missing_colname_msg.format('--match-on', ', '.join(matchon_missing)))
+        exit(1)
     if len(batchby_missing) > 0:
-        err(missing_colname_msg.format('--batch-by', ', '.join(batchby_missing)))
+        print(missing_colname_msg.format('--batch-by', ', '.join(batchby_missing)))
+        exit(1)
 
     # Print log title
     if args.logfile in 'stdout /dev/stdout -'.split():
@@ -213,6 +218,13 @@ def main():
     if any(getattr(args, x) is None for x in qc_args):
         md['preqc_batch_assignment'] = [None] * md.shape[0]
 
+    # Load list of auto-pass samples, if optioned
+    if args.custom_qc_pass_samples is not None:
+        with open(args.custom_qc_pass_samples) as fin:
+            hard_pass = set([s.rstrip() for s in fin.readlines()])
+    else:
+        hard_pass = set()
+
     # Global sample QC, if optioned
     if not all(getattr(args, x) is None for x in qc_args[:2]):
         md['global_qc_pass'] = [True] * md.shape[0]
@@ -221,11 +233,11 @@ def main():
             log.write('Performing global QC before batching. Summary:\n')
         if args.global_qc_cutoffs is not None:
             with open(args.global_qc_cutoffs) as j_in:
-                global_qc_fails = run_qc(md, j_in, log, args.quiet)
+                global_qc_fails = run_qc(md, j_in, log, hard_pass, args.quiet)
                 global_fails.update(global_qc_fails)
         if args.custom_qc_fail_samples is not None:
             with open(args.custom_qc_fail_samples) as fin:
-                hard_fails = set([s.rstrip() for s in fin.readlines()])
+                hard_fails = set([s.rstrip() for s in fin.readlines()]) - hard_pass
                 global_fails.update(hard_fails)
                 n_hard_fails = len(hard_fails)
                 if not args.quiet:
@@ -245,7 +257,7 @@ def main():
             log.write('No --global-qc-cutoffs supplied; skipping pre-batching sample QC\n\n')
 
     # Enumerate matching strata
-    strata_values = [list(md[f].unique()) for f in args.match_on]
+    strata_values = [list(md.drop(global_fails)[f].unique()) for f in args.match_on]
     strata = {k : set() for k in tuple(product(*strata_values))}
     for ks in strata.keys():
         strata[ks] = filter_samples(md, zip(args.match_on, ks))
@@ -342,7 +354,7 @@ def main():
             if not args.quiet:
                 log.write('QC summary for batch "{}":\n'.format(batch))
             with open(args.batch_qc_cutoffs) as j_in:
-                new_batch_qc_fails = run_qc(batch_md, j_in, log, args.quiet)
+                new_batch_qc_fails = run_qc(batch_md, j_in, log, hard_pass, args.quiet)
             if not args.quiet:
                 qc_log_vals = [len(new_batch_qc_fails), 
                                100 * len(new_batch_qc_fails) / batch_md.shape[0],
@@ -352,6 +364,7 @@ def main():
                 log.write(msg.format(batch_md.shape[0] - len(new_batch_qc_fails), batch))
             batch_qc_fails.update(new_batch_qc_fails)
         md.loc[list(batch_qc_fails), 'batch_qc_pass'] = False
+        md.loc[list(global_qc_fails), 'batch_qc_pass'] = None
         md.loc[list(batch_qc_fails), 'final_batch_assignment'] = None
         if not args.quiet:
             n_kept = md['batch_qc_pass'].sum()

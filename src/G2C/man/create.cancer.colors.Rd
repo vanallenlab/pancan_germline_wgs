@@ -7,8 +7,8 @@
 create.cancer.colors(
   cancers,
   n.shades = 2,
-  saturation.range = c(0.35, 0.85),
-  value.range = c(0.4, 1),
+  saturation.range = c(0.3, 0.95),
+  value.range = c(0.35, 1),
   period = NULL,
   plot.colors = FALSE,
   plot.palettes = FALSE
@@ -20,9 +20,9 @@ create.cancer.colors(
 \item{n.shades}{Number of shades (and highlights) appended to each cancer
 type-specific palette [default: 2]}
 
-\item{saturation.range}{Values passed to \code{\link[RLCtools:categorical.rainbow]{RLCtools::categorical.rainbow()}} [default: c(0.35, 0.85)]}
+\item{saturation.range}{Values passed to \code{\link[RLCtools:categorical.rainbow]{RLCtools::categorical.rainbow()}} [default: c(0.3, 0.95)]}
 
-\item{value.range}{Values passed to \code{\link[RLCtools:categorical.rainbow]{RLCtools::categorical.rainbow()}} [default: c(0.3, 1)]}
+\item{value.range}{Values passed to \code{\link[RLCtools:categorical.rainbow]{RLCtools::categorical.rainbow()}} [default: c(0.35, 1)]}
 
 \item{period}{Value passed to \code{\link[RLCtools:categorical.rainbow]{RLCtools::categorical.rainbow()}} [default: \code{length(cancers) / 3}]}
 

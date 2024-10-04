@@ -50,10 +50,7 @@ load.phenotypes <- function(tsv.in){
   df$grade <- NA
   df$cancer_icd10 <- NA
   df$original_dx <- NA
-
-  # Using COPD status as an imperfect but highly correlated proxy for positive smoking history
   df$smoking_history <- NA
-  df$smoking_history[which(df$COPD == 2)] <- 1
 
   # Based on NCBI BioProject information, it appears (?) that all BioMe samples were
   # sequenced from blood-based DNA (e.g., https://www.ncbi.nlm.nih.gov/biosample/13779884)

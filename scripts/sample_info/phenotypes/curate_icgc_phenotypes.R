@@ -76,7 +76,6 @@ load.donors <- function(tsv.in){
   df <- read.table(tsv.in, header=T, sep="\t", quote="")
 
   # Convert simple columns
-  df$Sample <- df$icgc_donor_id
   df$Cohort <- "icgc"
   df$reported_sex <- df$donor_sex
   df$reported_sex[which(df$reported_sex == "")] <- NA
@@ -170,6 +169,29 @@ load.donors <- function(tsv.in){
   return(df)
 }
 
+# Add donors present in repository.tsv not present in phenotype metadata
+add.missing.donors <- function(df, tsv.in){
+  # Read repository.tsv
+  rep.df <- read.table(tsv.in, header=T, sep="\t", comment.char="")
+
+  # Subset to minimally necessary columns
+  # Restrict to samples not present in main donor df
+  rep.df <- rep.df[which(!rep.df$ICGC.Donor %in% df$icgc_donor_id),
+                   c("ICGC.Donor", "Project", "Specimen.Type")]
+  colnames(rep.df) <- c("icgc_donor_id", "project_code", "specimen_type")
+  rep.df$Cohort <- "icgc"
+
+  # Harmonize columns between donor and repository dataframes
+  df$specimen_type <- NA
+  rep.df[, setdiff(colnames(df), colnames(rep.df))] <- NA
+
+  # Merge and update standardized Sample column
+  df <- as.data.frame(rbind(df, rep.df[, colnames(df)]))
+  df$Sample <- df$icgc_donor_id
+
+  return(df)
+}
+
 # Annotate cancer diagnoses and G2C cancer types per sample
 # This requires a three-column .tsv input with ICGC project code,
 # description, and G2C cancer type. This was sourced from:
@@ -223,6 +245,12 @@ annotate.tissue <- function(df, tsv.in){
                      })
   spec <- spec[norm.idxs, ]
 
+  # Add specimen information from samples uniquely drawn from --repository-tsv
+  add.spec <- df[which(!df$icgc_donor_id %in% spec$icgc_donor_id & !is.na(df$specimen_type)),
+     c("icgc_donor_id", "specimen_type")]
+  add.spec[, setdiff(colnames(spec), colnames(add.spec))] <- NA
+  spec <- as.data.frame(rbind(spec, add.spec[, colnames(spec)]))
+
   # Reformat specimen information
   spec$tissue <- tolower(gsub(" derived", "", gsub("^Normal - ", "", spec$specimen_type)))
   no.tissue.idx <- which(spec$tissue %in% c("ebv immortalized", "other", "solid tissue",
@@ -234,11 +262,11 @@ annotate.tissue <- function(df, tsv.in){
     head(v[which(!is.na(v))], 1)
   })
   spec$storage <- remap(spec$specimen_processing, pres.map)
-  no.storage.idx <- which(spec$storage == "")
+  no.storage.idx <- which(spec$storage == "" | is.na(spec$storage))
   spec$storage[no.storage.idx] <- remap(spec$specimen_processing_other[no.storage.idx],
                                         pres.supp.map)
   tissue.map <- apply(spec[, c("storage", "final_tissue")], 1, paste, collapse=" ")
-  tissue.map <- gsub("^_", "", tolower(gsub(" ", "_", tissue.map)))
+  tissue.map <- gsub("^na_", "", gsub("^_", "", tolower(gsub(" ", "_", tissue.map))))
   names(tissue.map) <- spec$icgc_donor_id
 
   # Map specimen info onto dataframe
@@ -255,6 +283,8 @@ annotate.tissue <- function(df, tsv.in){
 parser <- ArgumentParser(description="Curate ICGC phenotype data")
 parser$add_argument("--donors-tsv", metavar=".tsv", type="character", required=TRUE,
                     help="donor.tsv.gz downloaded from ICGC")
+parser$add_argument("--repository-tsv", metavar=".tsv", type="character", required=TRUE,
+                    help="repository.tsv downloaded from ICGC")
 parser$add_argument("--project-cancer-map", metavar=".tsv", type="character",
                     help="three-column .tsv mapping ICGC project code to G2C cancer",
                     required=TRUE)
@@ -268,6 +298,7 @@ args <- parser$parse_args()
 
 # # DEV:
 # args <- list("donors_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023/donor.all_projects.tsv.gz",
+#              "repository_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/repository_1685119483.tsv",
 #              "project_cancer_map" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/icgc_project_to_g2c_map.tsv",
 #              "specimen_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023/specimen.all_projects.tsv.gz",
 #              "exposure_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023/donor_exposure.all_projects.tsv.gz",
@@ -275,6 +306,9 @@ args <- parser$parse_args()
 
 # Load main donor table
 df <- load.donors(args$donors_tsv)
+
+# Backfill missing samples from repository.tsv
+df <- add.missing.donors(df, args$repository_tsv)
 
 # Annotate with cancer diagnosis and G2C cancer
 df <- annotate.cancers(df, args$project_cancer_map)

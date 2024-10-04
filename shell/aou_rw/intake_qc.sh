@@ -19,7 +19,8 @@ export GPROJECT="vanallen-pancan-germline-wgs"
 export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
-for dir in data data/tarballs plots plots/raw_intake_qc; do
+for dir in data data/tarballs plots plots/raw_intake_qc plots/global_qc_pass \
+           plots/batch_qc_pass; do
   if ! [ -e $dir ]; then mkdir $dir; fi
 done
 
@@ -40,6 +41,7 @@ done
 gsutil -m -u $GPROJECT cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/dfci-g2c.intake_qc.aou.tsv.gz \
   gs://dfci-g2c-inputs/intake_qc/dfci-g2c.intake_qc.non_aou.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/phenotypes/dfci-g2c.aou.phenos.tsv.gz \
   gs://dfci-g2c-inputs/phenotypes/dfci-g2c.non_aou.phenos.tsv.gz \
   gs://dfci-g2c-refs/hgsv/HGSV.ByrskaBishop.sample_populations.tsv \
   data/
@@ -63,6 +65,7 @@ for subset in non_aou aou; do
 done
 
 # Merge AoU and non-AoU manifests
+# Also labels ancestry, sex, and infers PCR status
 code/scripts/merge_intake_qc_manifests.R \
   --aou-tsv data/dfci-g2c.intake_qc_with_phenos.aou.tsv.gz \
   --non-aou-tsv data/dfci-g2c.intake_qc_with_phenos.non_aou.tsv.gz \
@@ -89,12 +92,61 @@ gsutil -m cp \
   data/tarballs/dfci-g2c.phase1.raw_intake_qc.plots.tar.gz \
   $MAIN_WORKSPACE_BUCKET/results/intake_qc/
 
+# Extract list of QC hard fail samples (missing all phenotype data, reported != inferred sex, etc.)
+code/scripts/get_intake_qc_hard_fails.R \
+  --qc-tsv data/dfci-g2c.intake_qc.all.tsv.gz \
+  --outfile data/dfci-g2c.intake_qc.hard_fail.samples.list
+
+# Extract list of samples with noncanonical sex chromosome ploidies
+# These samples need to be hard-passed through global & batch-specific QC
+# The unusual ploidy on X/Y cause them to have artificially inflated CHARR
+# and other SNP-based metrics
+karyo_cidx=$( zcat data/dfci-g2c.intake_qc.all.tsv.gz \
+              | head -n1 | sed 's/\t/\n/g' \
+              | awk '{ if ($1=="sex_karyotype") print NR }' )
+zcat data/dfci-g2c.intake_qc.all.tsv.gz \
+| fgrep -v "#" \
+| awk -v cidx=$karyo_cidx '{ if ($cidx != "XX" && $cidx != "XY") print $1 }' \
+> data/dfci-g2c.intake_qc.hard_pass.samples.list
+
 # Run batching & QC procedure
-# TODO: implement this
+gunzip data/dfci-g2c.intake_qc.all.tsv.gz
+code/scripts/make_batches.py \
+  --match-on batching_sex \
+  --match-on batching_pheno \
+  --batch-by batching_tissue \
+  --batch-by wgd_score \
+  --batch-by median_coverage \
+  --global-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.global_qc_thresholds.json \
+  --batch-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.batch_qc_thresholds.json \
+  --custom-qc-fail-samples data/dfci-g2c.intake_qc.hard_fail.samples.list \
+  --custom-qc-pass-samples data/dfci-g2c.intake_qc.hard_pass.samples.list \
+  --batch-size 550 \
+  --prefix dfci-g2c.gatk-sv \
+  --outfile data/dfci-g2c.intake_qc.all.post_qc_batching.tsv \
+  --batch-names-tsv data/dfci-g2c.gatk-sv.batches.list \
+  --batch-membership-tsv data/dfci-g2c.gatk-sv.batch_membership.tsv \
+  --logfile data/dfci-g2c.intake_qc.all.post_qc_batching.log \
+  data/dfci-g2c.intake_qc.all.tsv
+gzip -f data/dfci-g2c.intake_qc.all.post_qc_batching.tsv
 
-# Generate QC plots after batching (on full cohort, not per-batch)
-# TODO: implement this
+# Generate QC plots after global QC
+code/scripts/plot_intake_qc.R \
+  --qc-tsv data/dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
+  --pass-column global_qc_pass \
+  --out-prefix plots/global_qc_pass/dfci-g2c.phase1.global_qc_pass
 
-# Generate summary plots per batch
-# TODO: implement this
+# Generate QC plots after batch-specific QC
+code/scripts/plot_intake_qc.R \
+  --qc-tsv data/dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
+  --pass-column batch_qc_pass \
+  --out-prefix plots/batch_qc_pass/dfci-g2c.phase1.batch_qc_pass
+
+# Compress & copy global & batch-specific QC plots to results bucket
+tar -czvf data/tarballs/dfci-g2c.phase1.global_qc_pass.plots.tar.gz plots/global_qc_pass
+tar -czvf data/tarballs/dfci-g2c.phase1.batch_qc_pass.plots.tar.gz plots/batch_qc_pass
+gsutil -m cp \
+  data/tarballs/dfci-g2c.phase1.global_qc_pass.plots.tar.gz \
+  data/tarballs/dfci-g2c.phase1.batch_qc_pass.plots.tar.gz \
+  $MAIN_WORKSPACE_BUCKET/results/intake_qc/
 

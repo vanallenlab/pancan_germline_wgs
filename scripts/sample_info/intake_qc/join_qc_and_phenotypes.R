@@ -23,14 +23,15 @@ require(G2C, quietly=TRUE)
 # Load phenotype data and subset only to columns needed for QC and batching
 load.pheno.df <- function(tsv.in){
   df <- read.table(tsv.in, header=T, sep="\t", quote="")
-  keep.cols <- c("Sample", "Cohort", "reported_sex", "cancer", "age",
-                 "years_to_last_contact", "years_left_censored",
+  keep.cols <- c("Sample", "Cohort", "reported_sex", "cancer", "batching_pheno",
+                 "age", "years_to_last_contact", "years_left_censored",
                  "vital_status", "stage", "wgs_tissue")
-  no.na.cols <- c("cancer", "wgs_tissue")
-  df[, no.na.cols] <- apply(df[, no.na.cols], 2, function(cv){
-    cv[is.na(cv)] <- "unknown"
-    return(cv)
-  })
+
+  # Simplify cancer for batching
+  df$batching_pheno <- "case"
+  control.idxs <- which(df$cancer %in% c("control", "unknown") | is.na(df$cancer))
+  df$batching_pheno[control.idxs] <- "control"
+
   df[, keep.cols]
 }
 

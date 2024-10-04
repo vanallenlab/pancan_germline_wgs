@@ -1,0 +1,57 @@
+{
+	"high WGD" : {
+		"feature" : "wgd_score",
+		"equality" : ">",
+		"value" : "max([Q3+(9*MAD), 0.5])"
+	},
+	"low WGD" : {
+		"feature" : "wgd_score",
+		"equality" : "<",
+		"value" : "min([Q1-(9*MAD), -0.5])"
+	},
+	"high median coverage" : {
+		"feature" : "median_coverage",
+		"equality" : ">",
+		"value" : "80"
+	},
+	"low median coverage" : {
+		"feature" : "median_coverage",
+		"equality" : "<",
+		"value" : "10"
+	},
+	"high mean coverage" : {
+		"feature" : "mean_coverage",
+		"equality" : ">",
+		"value" : "80"
+	},
+	"low mean coverage" : {
+		"feature" : "mean_coverage",
+		"equality" : "<",
+		"value" : "10"
+	},
+	"too young" : {
+		"feature" : "age",
+		"equality" : "<",
+		"value" : "18"
+	},
+	"high contamination" : {
+		"feature" : "charr",
+		"equality" : ">",
+		"value" : "max([Q3-(9*MAD), 0.04])"
+	},
+	"low HQ het rate" : {
+		"feature" : "hq_het_rate",
+		"equality" : "<",
+		"value" : "min([Q1-(9*MAD), 0.99])"
+	},
+	"high ref contamination in HQ homs" : {
+		"feature" : "mean_ref_ab_hom_alt",
+		"equality" : ">",
+		"value" : "max([Q3+(9*MAD), 0.01])"
+	},
+	"high rate of hets with bad allele balance" : {
+		"feature" : "inconsistent_ab_het_rate",
+		"equality" : ">",
+		"value" : "max([Q3+(9*MAD), 0.1])"
+	}
+}

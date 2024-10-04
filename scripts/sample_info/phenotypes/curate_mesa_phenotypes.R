@@ -76,6 +76,8 @@ load.intake.exam <- function(tsv.in, col.suffix="1"){
   df$stage[any.cancer] <- "unknown"
   df$metastatic[any.cancer] <- "unknown"
   df$grade[any.cancer] <- "unknown"
+  na.cancer <- is.na(df$cancer)
+  df$cancer[na.cancer] <- "unknown"
 
   # Only return relevant columns
   keep.cols <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",

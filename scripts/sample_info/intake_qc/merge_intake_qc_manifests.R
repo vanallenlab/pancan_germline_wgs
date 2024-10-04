@@ -7,6 +7,7 @@
 
 # Merge and harmonize AoU and non-AoU intake QC manifests
 # Also assigns G2C IDs to all samples
+# Also infers genetic sex for all samples (and assigns batching sex)
 # Also assigns provisional ancestry labels based on 1kG
 
 
@@ -17,6 +18,7 @@
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
 require(caret, quietly=TRUE)
+require(RLCtools, quietly=TRUE)
 
 
 ##################
@@ -88,10 +90,14 @@ simplify.cohorts <- function(df, min.n=400, other.label="other"){
 }
 
 # Infer sex from X/Y ploidy estimates
+# Also assigns batching sex, which is simply based on chrX ploidy
 infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
   # Begin by estimating copy numbers for X/Y with simple rounding
   n.x <- round(df$chrX_CopyNumber)
   n.y <- round(df$chrY_CopyNumber)
+
+  # Assign batching sex as simply whether round(chrX) >= 2
+  df$batching_sex <- remap(as.character(n.x >= 2), c("TRUE" = "female", "FALSE" = "male"))
 
   # Clean up samples with non-binary sex complements
   check.idx <- which(n.x+n.y != 2)
@@ -170,7 +176,8 @@ clean.output <- function(df, n.ploidy.bins=2711){
   }
 
   # Return columns in a specific order
-  cols.first <- c("G2C_id", "original_id", "cohort", "inferred_sex", "intake_qc_pop")
+  cols.first <- c("G2C_id", "original_id", "cohort", "inferred_sex",
+                  "batching_sex", "intake_qc_pop")
   pop.cols <- c(colnames(df)[grep("grafpop", colnames(df))],
                 colnames(df)[grep("pct_[A-Z]", colnames(df))],
                 "intake_qc_subpop")
@@ -225,7 +232,8 @@ qc.df <- merge.qc.dfs(aou.df, other.df, args$include_samples,
 # Simplify cohort assignment & tissue source (for batching)
 qc.df$simple_cohort <- simplify.cohorts(qc.df)
 qc.df$wgs_tissue[which(is.na(qc.df$wgs_tissue))] <- "unknown"
-qc.df$blood_dna <- grepl("blood", qc.df$wgs_tissue)
+qc.df$batching_tissue <- remap(as.character(grepl("blood", qc.df$wgs_tissue)),
+                               c("TRUE" = "blood", "FALSE" = "other"))
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)

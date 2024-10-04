@@ -20,8 +20,8 @@
 #' @param cancers Character vector of cancers, in order to be mapped onto rainbow
 #' @param n.shades Number of shades (and highlights) appended to each cancer
 #' type-specific palette \[default: 2\]
-#' @param saturation.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.35, 0.85)\]
-#' @param value.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.3, 1)\]
+#' @param saturation.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.3, 0.95)\]
+#' @param value.range Values passed to [RLCtools::categorical.rainbow()] \[default: c(0.35, 1)\]
 #' @param period Value passed to [RLCtools::categorical.rainbow()] \[default: `length(cancers) / 3`\]
 #' @param plot.colors Should a cancer color diagnostic plot be generated? \[default: FALSE\]
 #' @param plot.palettes Should a cancer palette diagnostic plot be generated? \[default: FALSE\]
@@ -35,8 +35,8 @@
 #'
 #' @export create.cancer.colors
 #' @export
-create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0.85),
-                                 value.range=c(0.4, 1), period=NULL,
+create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.95),
+                                 value.range=c(0.35, 1), period=NULL,
                                  plot.colors=FALSE, plot.palettes=FALSE){
   require(RLCtools, quietly=TRUE)
 
@@ -52,7 +52,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0
   names(cancer.colors) <- cancers
   cancer.colors["oral_cavity"] <- cancer.colors["oral"]
   cancer.colors["control"] <- "#D6D6D6"
-  cancer.colors["multiple"] <- cancer.colors["other"]
+  cancer.colors["multiple"] <- cancer.colors["other"] <- cancer.colors["pancan"]
   cancer.colors[c("unknown", "not_specified", "NA")] <- "gray85"
 
   # Visualize cancer colors to screen, if optioned
@@ -86,7 +86,6 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0
 }
 
 
-
 #' Load study constants
 #'
 #' Load a subset of constants used throughout G2C
@@ -113,10 +112,8 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.35, 0
 #' @export
 load.constants <- function(subset, envir=.GlobalEnv){
   # Define colors
-  cancer.color.order <- c("pancan", "cns", "melanoma", "esophagus", "lung", "liver",
-                          "kidney", "bladder", "oral", "stomach", "colorectal",
-                          "prostate", "pancreas", "uterus", "breast", "ovary", "other")
-  cancer.color.set <- create.cancer.colors(cancer.color.order)
+  cancer.color.order <- c("pancan", "sarcoma", "oral", "melanoma", "esophagus", "thyroid","lung", "liver", "kidney", "bladder", "cns",  "colorectal", "prostate", "stomach", "pancreas", "uterus", "ovary", "breast")
+  cancer.color.set <- create.cancer.colors(cancer.color.order, period=3.9)
   male.colors <- c("dark2" = "#2A5869",
                    "dark1" = "#3F839D",
                    "main" = "#54AFD1",
@@ -406,14 +403,16 @@ load.constants <- function(subset, envir=.GlobalEnv){
                        "uterus" = "Uterine",
                        "kidney" = "Renal",
                        "bladder" = "Bladder",
-                       "oral_cavity" = "Oral cavity",
-                       "oral" = "Oral cavity",
+                       "oral_cavity" = "Oral",
+                       "oral" = "Oral",
                        "ovary" = "Ovarian",
                        "cns" = "CNS",
-                       "pancreas" = "Pancreas",
-                       "esophagus" = "Esophagus",
+                       "pancreas" = "Pancreatic",
+                       "esophagus" = "Esophageal",
                        "liver" = "Liver",
-                       "stomach" = "Stomach",
+                       "stomach" = "Gastric",
+                       "thyroid" = "Thyroid",
+                       "sarcoma" = "Sarcoma",
                        "other" = "Other",
                        "multiple" = "Multiple cancers",
                        "control" = "Control",

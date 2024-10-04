@@ -138,6 +138,12 @@ plot.autosomal.ploidy <- function(qc.df, parmar=c(1.9, 2.1, 1, 0.5)){
 parser <- ArgumentParser(description="Visualize intake QC metrics")
 parser$add_argument("--qc-tsv", metavar=".tsv", type="character", required=TRUE,
                     help="Intake QC .tsv")
+parser$add_argument("--pass-column", metavar="string", type="character",
+                    help=paste("Intake QC .tsv will be filtered according to",
+                               "boolean (or boolean-coercible) 'true' in",
+                               "this column prior to plotting. Column values",
+                               "are not case sensitive. Can be specified",
+                               "multiple times"), action="append")
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     default="G2C.intake_qc",
                     help="String or path to use as prefix for output plots")
@@ -145,10 +151,27 @@ args <- parser$parse_args()
 
 # # DEV:
 # args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
+#              "pass_column" = NULL,
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
 qc.df <- load.qc.df(args$qc_tsv)
+
+# Filter data to --pass-column, if optioned
+if(!is.null(args$pass_column) & length(args$pass_column) > 0){
+  for(c.name in args$pass_column){
+    if(c.name %in% colnames(qc.df)){
+      if(is.numeric(qc.df[, c.name])){
+        qc.df <- qc.df[which(as.logical(qc.df[, c.name])), ]
+      }else{
+        qc.df <- qc.df[which(as.logical(toupper(as.character(qc.df[, c.name])))), ]
+      }
+    }else{
+      stop(paste("Column name '", c.name, "', specified as --pass-column,",
+                 "but this column could not be located in --qc-tsv. Exiting."))
+    }
+  }
+}
 
 # Grafpop coordinates by ancestry
 apply(t(combn(1:3, 2)), 1, function(gd.idxs){
