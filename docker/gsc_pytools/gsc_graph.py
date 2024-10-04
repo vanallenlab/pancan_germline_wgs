@@ -151,8 +151,17 @@ def plot_volcano(df,
     rejected, pvals_corrected = fdrcorrection(df[p_col], alpha=0.05, method='indep', is_sorted=False)
 
     # We calculate the highest corrected p-value that is still below the alpha threshold (0.05)
-    fdr_threshold = -np.log10(pvals_corrected[rejected].max())
-    plt.axhline(y=fdr_threshold, color='green', linestyle='--', label=f'FDR Threshold: {-np.log10(fdr_threshold):.2f}')
+    # Check if any values are rejected and handle the case where none are
+    if rejected.any():  # If any p-values are below the FDR threshold
+        fdr_threshold = -np.log10(pvals_corrected[rejected].max())
+        plt.axhline(y=fdr_threshold, color='green', linestyle='--', label=f'FDR Threshold: {-np.log10(fdr_threshold):.2f}')
+    else:
+        fdr_threshold = -np.log10(0.05)  # Or set it to a default value, e.g., np.nan
+
+    # Optionally, print a warning if no p-values passed the FDR threshold
+    if fdr_threshold is None:
+        print("Warning: No p-values passed the FDR threshold.")
+        
     plt.axhline(y=bonferroni_threshold, color='red', linestyle='--', label=f"Bonferroni Significance (p = {round(0.05 / len(df),7)})")
     plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
     
