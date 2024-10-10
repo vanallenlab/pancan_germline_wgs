@@ -64,49 +64,50 @@ task ShardVcfByRegion {
     File vcf
     File vcf_idx
     File scatter_regions
-    String bcftools_docker
+    String sterm = ".sharded."
 
-    Int cpu = 2
-    Float mem_gb = 3.75
+    Int cpu = 4
+    Float memGB = 8
+    String bcftools_docker
   }
 
-  String out_prefix = sub(basename(vcf), "\\.[bv]cf(\\.gz)?", "") + ".sharded"
-  Int disk_gb = ceil(3 * size(vcf, "GB")) + 20
+  Int diskGB = ceil(3 * size(vcf, "GB"))
+
+  String here_vcf = basename(vcf)
+  String pref = sub(here_vcf, "\\.[bv]cf(\\.gz)?", "") + sterm
 
   command <<<
     set -eu -o pipefail
-
-    # Make an empty shard in case the input VCF is totally empty
-    bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
+    
+    ln -s ~{vcf} ~{here_vcf}
+    ln -s ~{vcf_idx} ~{basename(vcf_idx)}
 
     bcftools +scatter \
-      -O z3 -o . -p "~{out_prefix}". \
+      -O z3 -o . -p "~{pref}" \
       -S ~{scatter_regions} \
-      ~{vcf}
+      --threads ~{cpu} \
+      ~{here_vcf}
 
     # Print all VCFs to stdout for logging purposes
     find ./ -name "*.vcf.gz"
 
     # Index all shards
-    find ./ -name "~{out_prefix}.*.vcf.gz" \
+    find ./ -name "~{pref}*.vcf.gz" \
     | xargs -I {} tabix -p vcf -f {}
   >>>
 
   output {
-    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
-    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
+    Array[File] vcf_shards = glob("~{pref}*.vcf.gz")
+    Array[File] vcf_shard_idxs = glob("~{pref}*.vcf.gz.tbi")
   }
 
   runtime {
+    disks: "local-disk ~{diskGB} HDD"
+    memory: "~{memGB} GiB"
     cpu: cpu
-    memory: "~{mem_gb} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
-    docker: bcftools_docker
     preemptible: 3
-    maxRetries: 1
+    docker: bcftools_docker
   }
-}
 
 
 task ConcatVcfs {
@@ -325,5 +326,60 @@ task SplitRegions {
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
     docker: docker
+  }
+}
+
+
+task SortOrder {
+  # the first capture group of the sort_regex is used as the sorting term
+  # this task is *NOT* robust to partially applicable regex;
+  #   the regex must apply to every single datum
+  # if integer_sort is true, the capture group
+  #   must produce a valid integer string
+
+  input {
+    String sort_regex
+    Array[String] items
+
+    Boolean integer_sort = true
+  }
+  
+  File tsv = write_lines(items) # adds a spare newline at end
+  
+  command <<<
+    set -eu -o pipefail
+
+    python3 - <<'__script__'
+    import re, json
+    with open('~{tsv}', 'r') as inp:
+      items = inp.read().strip().split('\n')
+        
+    print("Items in:", len(items))
+    print("~{sort_regex}")
+    
+    N = range(len(items)) # ordinals
+    T = [re.search("~{sort_regex}", i)[1] for i in items] # terms
+    if "~{integer_sort}" == "true":
+      T = [int(i) for i in T]
+
+    # sorting terms in parallel with their ordinals produces a sorting index
+    paired = sorted(zip(T, N), key = lambda x: x[0])
+    _, O = zip(*paired)
+
+    with open('sort_index.tsv', 'w') as out:
+      out.write(json.dumps(O))
+    __script__
+  >>>
+  
+  output {
+    Array[Int] subindex = read_json('sort_index.tsv')
+  }
+  
+  runtime {
+    disks: "local-disk 10 HDD"
+    memory: "4 Gi"
+    cpu: 1
+    preemptible: 3
+    docker: "python:latest"
   }
 }
