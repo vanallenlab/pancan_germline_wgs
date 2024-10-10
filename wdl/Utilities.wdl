@@ -6,7 +6,7 @@
 # Common WDL tasks shared across workflows
 
 
-version 1.0
+version development
 
 
 task ShardVcf {
