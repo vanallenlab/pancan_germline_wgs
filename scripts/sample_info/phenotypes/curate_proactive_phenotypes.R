@@ -119,7 +119,8 @@ load.main.metas <- function(tsvs.in){
 
       # Identify non-duplicate samples based on MRN + Broad sample ID
       keep.ridx <- which(!(meta.new$`OncDRS DFCI MRN` %in% meta$`OncDRS DFCI MRN`)
-                         & !(meta.new$sample_id %in% meta$sample_id))
+                         & !(meta.new$sample_id %in% meta$sample_id)
+                         & !is.na(meta.new$sample_id))
 
       # If any new samples are found, merge into main manifest
       if(length(keep.ridx) > 0){
@@ -286,6 +287,14 @@ update.yl.meta <- function(df, tsv.in){
   return(df)
 }
 
+# Deduplicate phenotype data.frame based on fewest number of missing variables
+dedup.df <- function(df){
+  n.missing <- apply(df, 1, function(v){length(which(is.na(v)))})
+  df <- df[order(n.missing), ]
+  df <- df[!duplicated(df$Sample), ]
+  df[order(df$Sample), ]
+}
+
 
 ###########
 # RScript #
@@ -337,6 +346,9 @@ df <- curate.main.meta(df)
 
 # Update missing metadata from young lung manifest
 df <- update.yl.meta(df, args$young_lung_meta)
+
+# Deduplicate by sample ID based on least number of missing variables
+df <- dedup.df(df)
 
 # Write to --out-tsv separately for proactive-core and proactive-other
 col.order <- c("Sample", "Cohort", "reported_sex", "reported_race_or_ethnicity",
