@@ -108,6 +108,7 @@ task ShardVcfByRegion {
     preemptible: 3
     docker: bcftools_docker
   }
+}
 
 
 task ConcatVcfs {
