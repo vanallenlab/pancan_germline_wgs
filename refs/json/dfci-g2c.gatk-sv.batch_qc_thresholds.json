@@ -12,7 +12,7 @@
 	"high contamination" : {
 		"feature" : "charr",
 		"equality" : ">",
-		"value" : "max([Q3-(9*MAD), 0.025])"
+		"value" : "max([Q3-(9*MAD), 0.03])"
 	},
 	"high ref contamination in HQ homs" : {
 		"feature" : "mean_ref_ab_hom_alt",
@@ -22,6 +22,6 @@
 	"high rate of hets with bad allele balance" : {
 		"feature" : "inconsistent_ab_het_rate",
 		"equality" : ">",
-		"value" : "max([Q3+(10*MAD), 0.075])"
+		"value" : "max([Q3+(10*MAD), 0.15])"
 	}
 }

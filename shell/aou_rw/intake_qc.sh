@@ -101,6 +101,7 @@ code/scripts/get_intake_qc_hard_fails.R \
 # These samples need to be hard-passed through global & batch-specific QC
 # The unusual ploidy on X/Y cause them to have artificially inflated CHARR
 # and other SNP-based metrics
+# TODO: also should add 
 karyo_cidx=$( zcat data/dfci-g2c.intake_qc.all.tsv.gz \
               | head -n1 | sed 's/\t/\n/g' \
               | awk '{ if ($1=="sex_karyotype") print NR }' )

@@ -37,7 +37,7 @@
 	"high contamination" : {
 		"feature" : "charr",
 		"equality" : ">",
-		"value" : "max([Q3-(9*MAD), 0.04])"
+		"value" : "max([Q3-(9*MAD), 0.03])"
 	},
 	"low HQ het rate" : {
 		"feature" : "hq_het_rate",
@@ -52,6 +52,6 @@
 	"high rate of hets with bad allele balance" : {
 		"feature" : "inconsistent_ab_het_rate",
 		"equality" : ">",
-		"value" : "max([Q3+(9*MAD), 0.1])"
+		"value" : "max([Q3+(9*MAD), 0.15])"
 	}
 }
