@@ -5,6 +5,91 @@ import numpy as np
 from firthlogist import FirthLogisticRegression
 import scipy.stats as stats
 
+import statsmodels.api as sm
+import numpy as np
+
+# Assuming FirthLogisticRegression is already imported or defined elsewhere
+# You may need to implement this if it's not available.
+
+def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_gene, covariates=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4']):
+    print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
+    
+    # Filter based on cancer_type if it's not Pancancer
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
+
+    # Check if the germline_event and somatic_gene are in the dataframe columns
+    if germline_event not in df.columns or somatic_gene not in df.columns:
+        print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
+        return
+    
+    # If either column has no positive cases, skip
+    if df[germline_event].sum() == 0 or df[somatic_gene].sum() == 0:
+        return
+
+    # Drop rows with NaN values in the columns of interest
+    df = df.dropna(subset=[germline_event, somatic_gene] + covariates)
+
+    # Prepare the predictor (X) and response (y) variables
+    X = df[[germline_event] + covariates]
+    y = df[somatic_gene]
+
+    # Normalize somatic_gene values: treat values > 1 as 1
+    y = y.apply(lambda x: 1 if x > 1 else x)
+
+    # Add a constant to the predictors for logistic regression
+    X = sm.add_constant(X)
+
+    # Try regular logistic regression
+    try:
+        model = sm.Logit(y, X)
+        result = model.fit(disp=False)
+        
+        # If the model converged, extract p-value, odds ratio, and confidence intervals
+        if result.mle_retvals['converged']:
+            print("Regular logistic regression converged successfully!")
+            
+            # Extract p-value and odds ratio for the germline_gene predictor
+            p_value = result.pvalues[1]  # Assuming germline_event is the first predictor after the constant
+            odds_ratio = np.exp(result.params[1])
+
+            # Confidence intervals
+            conf_int = result.conf_int()
+            conf_int_or = np.exp(conf_int.iloc[1])  # Convert log-odds CI to odds ratio CI
+
+            # Return the results: odds ratio, p-value, and confidence intervals
+            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1]
+        
+        else:
+            raise ValueError("Regular logistic regression failed to converge.")
+    
+    # Fallback to Firth logistic regression if regular logistic regression fails
+    except Exception as e:
+        print(f"Regular logistic regression failed: {e}")
+        print("Falling back to Firth logistic regression...")
+        
+        try:
+            # Fit Firth logistic regression (Assuming FirthLogisticRegression is defined)
+            model = FirthLogisticRegression()
+            model.fit(X, y)
+            
+            # Extract p-value and odds ratio for the germline_gene predictor
+            p_value = model.pvals_[1]  # Assuming the predictor is the second column after the constant
+            odds_ratio = np.exp(model.coef_[1])
+            
+            # Calculate confidence intervals
+            coef = model.coef_[1]
+            std_err = model.bse_[1]
+            conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
+            conf_int_or = np.exp(conf_int_coef)
+
+            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1]
+
+        except Exception as e:
+            print(f"Firth logistic regression failed: {e}")
+            return
+
+
 def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
     if cancer_type != "Pancancer":
