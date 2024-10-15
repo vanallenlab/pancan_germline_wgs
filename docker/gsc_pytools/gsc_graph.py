@@ -118,7 +118,7 @@ def plot_volcano(df,
                  or_col="OR_combined", 
                  criteria_col="criteria", 
                  cancer_type_col="cancer_type",
-                 germline_context="germline_risk_allele" 
+                 germline_context="germline_risk_allele",
                  save_path="volcano_plot.png"):
     
 
