@@ -117,6 +117,8 @@ task ConcatVcfs {
     Array[File] vcf_idxs
     String out_prefix
 
+    String outFormat = 'z'
+
     String bcftools_concat_options = ""
 
     Float mem_gb = 3.5
@@ -126,9 +128,14 @@ task ConcatVcfs {
     String bcftools_docker
   }
 
-  String out_filename = out_prefix + ".vcf.gz"
-
   Int default_disk_gb = ceil(2.5 * size(vcfs, "GB")) + 10
+
+  String suf = if outFormat == "v" then ".vcf" else (
+               if outFormat == "z" then ".vcf.gz" else (
+               if outFormat == "u" then ".bcf" else (
+               if outFormat == "b" then ".bcf.gz" else ".vcf")))
+
+  String out_filename = "~{out_prefix}.~{suf}"
 
   command <<<
     set -eu -o pipefail
@@ -136,9 +143,11 @@ task ConcatVcfs {
     bcftools concat \
       ~{bcftools_concat_options} \
       --file-list ~{write_lines(vcfs)} \
-      -O z \
+      --threads ~{ceil(cpu_cores/2)}
+    | bcftools view \
+      -O ~{outFormat}
       -o ~{out_filename} \
-      --threads ~{cpu_cores}
+      --threads ~{floor(cpu_cores/2)}
 
     tabix -p vcf -f ~{out_filename}
   >>>
