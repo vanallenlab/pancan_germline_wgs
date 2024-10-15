@@ -120,7 +120,6 @@ def plot_volcano(df,
                  cancer_type_col="cancer_type",
                  germline_context="germline_risk_allele",
                  save_path="volcano_plot.png"):
-    
 
     # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
     df_clean = df.dropna(subset=[p_col, or_col])
