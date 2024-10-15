@@ -50,12 +50,18 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
             print("Regular logistic regression converged successfully!")
             
             # Extract p-value and odds ratio for the germline_gene predictor
-            p_value = result.pvalues[1]  # Assuming germline_event is the first predictor after the constant
-            odds_ratio = np.exp(result.params[1])
+            p_value = result.pvalues[germline_event]  # Assuming germline_event is the first predictor after the constant
+            odds_ratio = np.exp(result.params[germline_event])
 
-            # Confidence intervals
-            conf_int = result.conf_int()
-            conf_int_or = np.exp(conf_int.iloc[1])  # Convert log-odds CI to odds ratio CI
+            # Calculate the 95% confidence interval for the odds ratio
+            coef = result.params[germline_gene]
+            std_err = result.bse[germline_gene]
+
+            # The confidence interval for the coefficient
+            conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
+
+            # Convert the confidence interval from log odds to odds ratio
+            conf_int_or = np.exp(conf_int_coef)
 
             # Return the results: odds ratio, p-value, and confidence intervals
             return odds_ratio, p_value, conf_int_or[0], conf_int_or[1]
@@ -74,12 +80,12 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
             model.fit(X, y)
             
             # Extract p-value and odds ratio for the germline_gene predictor
-            p_value = model.pvals_[1]  # Assuming the predictor is the second column after the constant
-            odds_ratio = np.exp(model.coef_[1])
+            p_value = model.pvals_[germline_gene]  # Assuming the predictor is the second column after the constant
+            odds_ratio = np.exp(model.coef_[germline_gene])
             
             # Calculate confidence intervals
-            coef = model.coef_[1]
-            std_err = model.bse_[1]
+            coef = model.coef_[germline_gene]
+            std_err = model.bse_[germline_gene]
             conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
             conf_int_or = np.exp(conf_int_coef)
 
