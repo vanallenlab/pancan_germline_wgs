@@ -168,7 +168,7 @@ def plot_volcano(df,
     # Label points above Bonferroni threshold
     significant_points = df[df['log10_p'] > fdr_threshold]
     for _, row in significant_points.iterrows():
-        label_text = f"({row[{germline_context}]} ,{row['somatic_gene']})"
+        label_text = f"({row['{germline_context}']} ,{row['somatic_gene']})"
         plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Set plot labels and title
