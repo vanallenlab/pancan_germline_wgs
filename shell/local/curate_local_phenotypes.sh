@@ -81,8 +81,18 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
 
 # BioMe
 $CODEDIR/scripts/sample_info/phenotypes/curate_biome_phenotypes.R \
-  --in-tsv ~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/topmed/biome/phs001644.v2.pht009946.v2.p2.c1.TOPMed_CCDG_BioME_Subject_Phenotypes.HMB-NPU.txt \
+  --in-tsv $BASEDIR/data_and_cohorts/topmed/biome/phs001644.v2.pht009946.v2.p2.c1.TOPMed_CCDG_BioME_Subject_Phenotypes.HMB-NPU.txt \
   --out-tsv $WRKDIR/biome.phenos.tsv
+
+# COPDGene
+# Note: working on getting complete phenotype data access via dbGaP
+# For now, just using the minimal data available from TOPMed accession
+# We can udpate this later if/when we get access to more phenotype data
+$CODEDIR/scripts/sample_info/phenotypes/curate_copdgene_phenotypes.R \
+  --sample-attributes $BASEDIR/data_and_cohorts/copdgene/dbgap_downloads/phs000951.v5.pht005052.v5.p5.c1.TOPMed_WGS_COPDGene_Sample_Attributes.HMB.txt.gz \
+  --topmed-subject-tsv $BASEDIR/data_and_cohorts/copdgene/dbgap_downloads/phs000951.v5.pht005050.v5.p5.TOPMed_WGS_COPDGene_Subject.MULTI.txt.gz \
+  --id-link-tsv $BASEDIR/data_and_cohorts/copdgene/dbgap_downloads/phs000951.v5.pht005051.v5.p5.TOPMed_WGS_COPDGene_Sample.MULTI.txt.gz \
+  --out-tsv $WRKDIR/copdgene.phenos.tsv
 
 # CEPH
 # Note: working on getting complete phenotype data access for CEPH

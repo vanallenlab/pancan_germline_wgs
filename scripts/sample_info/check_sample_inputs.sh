@@ -38,7 +38,7 @@ if [ -z $BUCKET ]; then
 fi
 
 if [ -z $TMPDIR ]; then
-  TMPDIR=`mtemp -d`
+  TMPDIR=`mktemp -d`
   RM_TMPDIR="true"
 else
   RM_TMPDIR="false"

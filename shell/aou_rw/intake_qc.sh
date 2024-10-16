@@ -26,7 +26,7 @@ done
 
 # Copy necessary code to local disk
 gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
-for suffix in py R; do
+for suffix in py R sh; do
   find code/ -name "*.${suffix}" | xargs -I {} chmod a+x {}
 done
 
