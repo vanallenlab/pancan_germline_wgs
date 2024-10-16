@@ -75,6 +75,7 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
   --out-tsv $WRKDIR/wcdt.phenos.tsv
 
 
+
 #########
 # dbGaP #
 #########
@@ -152,13 +153,29 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_hmf_phenotypes.R \
 
 # ICGC
 export ICGCDIR=$BASEDIR/data_and_cohorts/icgc/icgc_wgs_download_may26_2023/icgc_donor_metadata_release_28_may_2023
+export TCGADIR=$BASEDIR/data_and_cohorts/icgc/tcga_sarcoma_thyroid_oct2024/
+ICGC_PROCDIR=`mktemp -d`
 $CODEDIR/scripts/sample_info/phenotypes/curate_icgc_phenotypes.R \
   --donors-tsv $ICGCDIR/donor.all_projects.tsv.gz \
   --repository-tsv $ICGCDIR/../repository_1685119483.tsv \
   --project-cancer-map $BASEDIR/data_and_cohorts/icgc/icgc_project_to_g2c_map.tsv \
   --specimen-tsv $ICGCDIR/specimen.all_projects.tsv.gz \
   --exposure-tsv $ICGCDIR/donor_exposure.all_projects.tsv.gz \
-  --out-tsv $WRKDIR/icgc.phenos.tsv
+  --out-tsv $ICGC_PROCDIR/icgc.phenos.tsv
+for cancer in thyroid sarcoma; do
+  $CODEDIR/scripts/sample_info/phenotypes/curate_nci_gdc_phenotypes.R \
+    --clinical-tsv $TCGADIR/$cancer/clinical.tsv \
+    --exposure-tsv $TCGADIR/$cancer/exposure.tsv \
+    --biospecimen-tsv $TCGADIR/$cancer/sample.tsv \
+    --cohort icgc \
+    --out-tsv $ICGC_PROCDIR/tcga.$cancer.phenos.tsv
+done
+cat \
+  $ICGC_PROCDIR/icgc.phenos.tsv \
+  <( sed '1d' $ICGC_PROCDIR/tcga.thyroid.phenos.tsv ) \
+  <( sed '1d' $ICGC_PROCDIR/tcga.sarcoma.phenos.tsv ) \
+> $WRKDIR/icgc.phenos.tsv
+rm -rf $ICGC_PROCDIR
 
 # Proactive
 gsutil -m cat gs://dfci-g2c-inputs/sample-lists/proactive-*.samples.list \

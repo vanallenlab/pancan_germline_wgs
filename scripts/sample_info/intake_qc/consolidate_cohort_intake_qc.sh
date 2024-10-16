@@ -69,8 +69,8 @@ gsutil -m cp \
 find $TMPDIR/${COHORT}_cov/ -name "*.tsv" > $TMPDIR/${COHORT}_cov/cov.files.list
 paste \
   <( cat $TMPDIR/${COHORT}_cov/cov.files.list | xargs -I {} basename {} | sed 's/.raw-counts.tsv//g' ) \
-  <( cat $( cat $TMPDIR/${COHORT}_cov/cov.files.list ) | grep "^rd_q50_" | cut -f2 ) \
-  <( cat $( cat $TMPDIR/${COHORT}_cov/cov.files.list ) | grep "^rd_mean_" | cut -f2 ) \
+  <( cat $TMPDIR/${COHORT}_cov/cov.files.list | xargs -I {} cat {} | grep "^rd_q50_" | cut -f2 ) \
+  <( cat $TMPDIR/${COHORT}_cov/cov.files.list | xargs -I {} cat {} | grep "^rd_mean_" | cut -f2 ) \
 | sort -Vk1,1 | cat <( echo -e "Sample\trd_median\trd_mean" ) - | gzip -c \
 > $TMPDIR/${COHORT}_cov/$COHORT.cov.tsv.gz
 

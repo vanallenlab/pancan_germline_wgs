@@ -40,6 +40,9 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
                                  plot.colors=FALSE, plot.palettes=FALSE){
   require(RLCtools, quietly=TRUE)
 
+  # Enforce pan-cancer as the first color, always
+  cancers <- c("pancan", setdiff(cancers, "pancan"))
+
   # Get required parameters
   n.cancers <- length(cancers)
   if(is.null(period)){
@@ -54,13 +57,15 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
   cancer.colors["control"] <- "#D6D6D6"
   cancer.colors["multiple"] <- cancer.colors["other"] <- cancer.colors["pancan"]
   cancer.colors[c("unknown", "not_specified", "NA")] <- "gray85"
+  cancer.colors["pancan"] <- "#C43825"
 
   # Visualize cancer colors to screen, if optioned
   if(plot.colors){
-    plot(rep(1, length(cancer.colors)), 1:length(cancer.colors), pch=18, cex=4,
-         col=cancer.colors, xlim=c(0, 4), xaxt="n", xlab="", yaxt="n", ylab="")
-    text(x=rep(1, length(cancer.colors)), y=1:length(cancer.colors), pos=4,
-         labels=names(cancer.colors))
+    plot(length(cancer.colors):1, 1:length(cancer.colors), pch=18, cex=4,
+         col=rev(cancer.colors), xlim=c(0, length(cancer.colors)+4),
+         ylim=c(0, 1.15*length(cancer.colors)), xaxt="n", xlab="", yaxt="n", ylab="")
+    text(x=length(cancer.colors):1, y=1:length(cancer.colors), pos=4,
+         labels=rev(names(cancer.colors)), srt=45)
   }
 
   # Generate one palette for each cancer type

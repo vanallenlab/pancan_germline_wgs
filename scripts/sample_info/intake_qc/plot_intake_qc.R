@@ -262,7 +262,7 @@ cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
 largest.cohort <- names(cohort.k)[1]
 cohort.bar.subdfs <- list(qc.df[which(qc.df$simple_cohort == largest.cohort), ],
                           qc.df[which(qc.df$simple_cohort != largest.cohort), ])
-cohort.key.cols <- greyscale.palette(length(cohort.k))
+cohort.key.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
 names(cohort.key.cols) <- cohort.names.short[names(cohort.k)]
 
 # Barplot of samples per cancer, colored by cohort
@@ -303,7 +303,8 @@ sapply(1:2, function(s){
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
                   major.legend=TRUE, major.legend.colors=cohort.key.cols,
                   minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
-                  minor.label.cex=4/6, parmar=bar.parmars[[if(s==1){2}else{1}]])
+                  minor.label.cex=4/6, sort.minor=TRUE,
+                  parmar=bar.parmars[[if(s==1){2}else{1}]])
   # if(s==2){
   #   axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
   #        labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
