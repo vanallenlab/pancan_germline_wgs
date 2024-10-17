@@ -74,8 +74,13 @@ paste \
 | sort -Vk1,1 | cat <( echo -e "Sample\trd_median\trd_mean" ) - | gzip -c \
 > $TMPDIR/${COHORT}_cov/$COHORT.cov.tsv.gz
 
-# Copy ploidy data
-gsutil -m cp $PLOIDY $TMPDIR/$COHORT.ploidy.tsv.gz
+# Copy ploidy data and restrict to cohort of interest
+gsutil -m cp $PLOIDY $TMPDIR/all.ploidy.tsv.gz
+zcat $TMPDIR/all.ploidy.tsv.gz | head -n1 > $TMPDIR/$COHORT.ploidy.tsv
+zcat $TMPDIR/all.ploidy.tsv.gz \
+| awk -v cohort=$COHORT -v OFS="\t" '{ if ($1==cohort) print }' \
+>> $TMPDIR/$COHORT.ploidy.tsv
+gzip -f $TMPDIR/$COHORT.ploidy.tsv
 
 # Merge all data, keeping only the strict intersection of sample IDs present in
 # Charr, demographics, and ploidy. It will tolerate missingness in GATK-SV coverage.
@@ -98,5 +103,7 @@ rm -rf \
   $TMPDIR/${COHORT}_charr \
   $TMPDIR/${COHORT}_demo \
   $TMPDIR/${COHORT}_cov \
+  $TMPDIR/all.ploidy.tsv.gz \
+  $TMPDIR/$COHORT.ploidy.tsv.gz \
   $TMPDIR/$COHORT.intake_qc.tsv.gz
 if [ $RM_TMPDIR == "true" ]; then rm -rf $TMPDIR; fi

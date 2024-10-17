@@ -177,24 +177,31 @@ if(!is.null(args$pass_column) & length(args$pass_column) > 0){
 apply(t(combn(1:3, 2)), 1, function(gd.idxs){
   idx.1 <- gd.idxs[1]
   idx.2 <- gd.idxs[2]
-  pdf(paste(args$out_prefix, ".grafpop_gd", idx.1, "_gd", idx.2,
-            "_by_subpop.pdf", sep=""),
-      height=2.5, width=4)
-  layout(matrix(1:2, nrow=1), widths=c(7, 5))
-  scatterplot(qc.df[, paste("grafpop_GD", idx.1, sep="")],
-              qc.df[, paste("grafpop_GD", idx.2, sep="")],
-              title="Genetic ancestry",
-              subpop.colors[qc.df$intake_qc_subpop],
-              x.title=paste("Genetic distance", idx.1),
-              y.title=paste("Genetic distance", idx.2),
-              parmar=c(2.25, 2.5, 1, 0.35),
-              x.label.line=-0.7, y.label.line=-0.6, x.title.line=0.25)
-  pop.order <- names(sort(sapply(unique(qc.df$intake_qc_pop), function(pop){
-    mean(qc.df[which(qc.df$intake_qc_pop == pop),
-               paste("grafpop_GD", idx.2, sep="")], na.rm=T)
-  })))
-  grafpop.margin.bar(qc.df, pop.order)
-  dev.off()
+  gp.out.prefix <- paste(args$out_prefix, ".grafpop_gd", idx.1, "_gd", idx.2,
+                      "_by_subpop", sep="")
+  for(device in c("pdf", "png")){
+    if(device == "pdf"){
+      pdf(paste(gp.out.prefix, "pdf", sep="."), height=2.5, width=4)
+    }else if(device == "png"){
+      png(paste(gp.out.prefix, "png", sep="."),
+          height=2.5*300, width=4*300, res=300)
+    }
+    layout(matrix(1:2, nrow=1), widths=c(7, 5))
+    scatterplot(qc.df[, paste("grafpop_GD", idx.1, sep="")],
+                qc.df[, paste("grafpop_GD", idx.2, sep="")],
+                title="Genetic ancestry",
+                subpop.colors[qc.df$intake_qc_subpop],
+                x.title=paste("Genetic distance", idx.1),
+                y.title=paste("Genetic distance", idx.2),
+                parmar=c(2.25, 2.5, 1, 0.35),
+                x.label.line=-0.7, y.label.line=-0.6, x.title.line=0.25)
+    pop.order <- names(sort(sapply(unique(qc.df$intake_qc_pop), function(pop){
+      mean(qc.df[which(qc.df$intake_qc_pop == pop),
+                 paste("grafpop_GD", idx.2, sep="")], na.rm=T)
+    })))
+    grafpop.margin.bar(qc.df, pop.order)
+    dev.off()
+  }
 })
 
 
@@ -258,6 +265,10 @@ non.cancer.phenos <- c("control", "unknown")
 cancer.bar.subdfs <- list(qc.df[which(qc.df$cancer %in% non.cancer.phenos), ],
                           qc.df[which(!qc.df$cancer %in% non.cancer.phenos), ])
 names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
+qc.df$single_cancer <- qc.df$cancer
+qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
+cancer.k <- sort(table(qc.df$single_cancer), decreasing=TRUE)
+cancer.key.cols <- cancer.key.cols[cancer.names[names(cancer.k)]]
 cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
 largest.cohort <- names(cohort.k)[1]
 cohort.bar.subdfs <- list(qc.df[which(qc.df$simple_cohort == largest.cohort), ],
@@ -295,7 +306,6 @@ pdf(paste(args$out_prefix, "cancers_per_cohort", "pdf", sep="."),
 layout(matrix(1:2, nrow=2, ncol=1), heights=cohort.panel.height.ratio)
 sapply(1:2, function(s){
   subdf <- cohort.bar.subdfs[[s]]
-  subdf$cancer[grepl(";", subdf$cancer, fixed=T)] <- "multiple"
   stacked.barplot(cohort.names.short[subdf$simple_cohort],
                   cancer.names[subdf$cancer], colors=cancer.key.cols,
                   x.title=if(s==1){"Genomes per cohort"}else{""},
@@ -303,7 +313,7 @@ sapply(1:2, function(s){
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
                   major.legend=TRUE, major.legend.colors=cohort.key.cols,
                   minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
-                  minor.label.cex=4/6, sort.minor=TRUE,
+                  minor.label.cex=4/6, custom.minor.order=names(cancer.key.cols),
                   parmar=bar.parmars[[if(s==1){2}else{1}]])
   # if(s==2){
   #   axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
@@ -321,7 +331,8 @@ pdf(paste(args$out_prefix, "cancer_stages", "pdf", sep="."),
 stacked.barplot(stage.names[qc.df$stage], colors=stage.colors,
                 x.title="Stage at Dx",
                 add.legend=F, custom.order=stage.names,
-                x.label.line=-0.8, x.title.line=0.1)
+                x.label.line=-0.8, x.title.line=0.1,
+                parmar=c(0.5, 3, 2.5, 0.75))
 dev.off()
 
 

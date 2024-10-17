@@ -117,7 +117,10 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
 #' @export
 load.constants <- function(subset, envir=.GlobalEnv){
   # Define colors
-  cancer.color.order <- c("pancan", "sarcoma", "oral", "melanoma", "esophagus", "thyroid","lung", "liver", "kidney", "bladder", "cns",  "colorectal", "prostate", "stomach", "pancreas", "uterus", "ovary", "breast")
+  cancer.color.order <- c("pancan", "sarcoma", "oral", "melanoma", "esophagus",
+                          "thyroid","lung", "liver", "kidney", "bladder", "cns",
+                          "colorectal", "prostate", "stomach", "pancreas",
+                          "uterus", "ovary", "breast")
   cancer.color.set <- create.cancer.colors(cancer.color.order, period=3.9)
   male.colors <- c("dark2" = "#2A5869",
                    "dark1" = "#3F839D",
@@ -428,6 +431,7 @@ load.constants <- function(subset, envir=.GlobalEnv){
                              "aou" = "NIH All of Us",
                              "biome" = "BioMe Biobank at Icahn School of Medicine",
                              "ceph" = "Utah Centre d′Etudes du Polymorphisme Humain",
+                             "copdgene" = "COPD Genetic Epidemiology",
                              "cptac" = "Clinical Proteomic Tumor Analysis Consortium",
                              "eagle" = "Environment And Genetics in Lung Cancer Etiology",
                              "gmkf" = "Gabriella Miller Kids First",
@@ -449,6 +453,7 @@ load.constants <- function(subset, envir=.GlobalEnv){
                             "aou" = "NIH All of Us",
                             "biome" = "BioMe Biobank",
                             "ceph" = "CEPH Families",
+                            "copdgene" = "COPDGene",
                             "cptac" = "NCI CPTAC",
                             "eagle" = "NCI EAGLE",
                             "gmkf" = "GMKF",
@@ -470,6 +475,7 @@ load.constants <- function(subset, envir=.GlobalEnv){
                              "aou" = "All of Us",
                              "biome" = "BioMe",
                              "ceph" = "CEPH",
+                             "copdgene" = "COPDGene",
                              "cptac" = "CPTAC",
                              "eagle" = "EAGLE",
                              "gmkf" = "GMKF",
