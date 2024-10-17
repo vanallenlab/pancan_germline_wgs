@@ -143,7 +143,7 @@ task ConcatVcfs {
     bcftools concat \
       ~{bcftools_concat_options} \
       --file-list ~{write_lines(vcfs)} \
-      --threads ~{ceil(cpu_cores/2)}
+      --threads ~{ceil(cpu_cores/2)} \
     | bcftools view \
       -O ~{outFormat}
       -o ~{out_filename} \
