@@ -30,18 +30,21 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     # Drop rows with NaN values in the columns of interest
     df = df.dropna(subset=[germline_event, somatic_gene] + covariates)
 
-    # Prepare the predictor (X) and response (y) variables
-    X = df[[germline_event] + covariates]
-    y = df[somatic_gene]
 
-    # Normalize somatic_gene values: treat values > 1 as 1
-    y = y.apply(lambda x: 1 if x > 1 else x)
 
-    # Add a constant to the predictors for logistic regression
-    X = sm.add_constant(X)
 
     # Try regular logistic regression
     try:
+        # Prepare the predictor (X) and response (y) variables
+        X = df[[germline_event] + covariates]
+        y = df[somatic_gene]
+
+        # Normalize somatic_gene values: treat values > 1 as 1
+        y = y.apply(lambda x: 1 if x > 1 else x)
+
+        # Add a constant to the predictors for logistic regression
+        X = sm.add_constant(X)
+
         model = sm.Logit(y, X)
         result = model.fit(disp=False)
         
@@ -75,6 +78,13 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
         print("Falling back to Firth logistic regression...")
         
         try:
+            # Prepare the predictor (X) and response (y) variables
+            X = df[[germline_event] + covariates]
+            y = df[somatic_gene]
+
+            # Normalize somatic_gene values: treat values > 1 as 1
+            y = y.apply(lambda x: 1 if x > 1 else x)
+
             # Fit Firth logistic regression (Assuming FirthLogisticRegression is defined)
             model = FirthLogisticRegression()
             model.fit(X, y)
