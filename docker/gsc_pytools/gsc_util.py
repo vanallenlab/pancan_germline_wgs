@@ -80,12 +80,12 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
             model.fit(X, y)
             
             # Extract p-value and odds ratio for the germline_gene predictor
-            p_value = model.pvals_[germline_event]  # Assuming the predictor is the second column after the constant
-            odds_ratio = np.exp(model.coef_[germline_event])
+            p_value = model.pvals_[0]  # Assuming the predictor is the second column after the constant
+            odds_ratio = np.exp(model.coef_[0])
             
             # Calculate confidence intervals
-            coef = model.coef_[germline_event]
-            std_err = model.bse_[germline_event]
+            coef = model.coef_[0]
+            std_err = model.bse_[0]
             conf_int_coef = [coef - 1.96 * std_err, coef + 1.96 * std_err]
             conf_int_or = np.exp(conf_int_coef)
 

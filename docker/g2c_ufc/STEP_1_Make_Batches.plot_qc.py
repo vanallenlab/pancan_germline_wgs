@@ -49,7 +49,7 @@ def plot_qc_metrics(pre_filtered_df, post_filtered_df):
         # Adjust layout and spacing
         plt.tight_layout()
 
-        # Save the plot                                                                                                    47%
+        # Save the plot
         plt.savefig(f'{metric}_qc.png')
         plt.close()
 
