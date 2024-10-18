@@ -166,9 +166,12 @@ def plot_volcano(df,
     plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
     
     # Label points above Bonferroni threshold
-    significant_points = df[df['log10_p'] > fdr_threshold]
+    significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        label_text = f"({row[germline_context]} ,{row['somatic_gene']})"
+        if pd.notna(germline_context):  # Check if germline_context is NOT NaN
+            label_text = f"({row[germline_context]} ,{row['somatic_gene']})"
+        else:
+            label_text = f"({row['germline_gene']} ,{row['somatic_gene']})"
         plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Set plot labels and title
@@ -179,6 +182,8 @@ def plot_volcano(df,
     # Display legend
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     
+    plt.xlim(left=-20)  # Set the left side limit to -20 while keeping the right side unchanged
+
     # Save plot to file
     plt.tight_layout()
     plt.savefig(save_path)
