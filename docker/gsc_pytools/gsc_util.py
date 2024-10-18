@@ -273,7 +273,7 @@ def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged
 
     # Step 2: Merge the DataFrames on the relevant columns, including 'criteria'
     merged_df = pd.merge(df1, df2, how='outer', 
-                         on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context'],
+                         on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer'],
                          suffixes=('_HMF', '_PROFILE'))
 
     # Step 3: Calculate variance for ORs based on confidence intervals (CI)
