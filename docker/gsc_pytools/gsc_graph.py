@@ -168,7 +168,7 @@ def plot_volcano(df,
     # Label points above Bonferroni threshold
     significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        if pd.notna(germline_context):  # Check if germline_context is NOT NaN
+        if pd.notna(row[germline_context]):  # Check if germline_context is NOT NaN
             label_text = f"({row[germline_context]} ,{row['somatic_gene']})"
         else:
             label_text = f"({row['germline_gene']} ,{row['somatic_gene']})"
