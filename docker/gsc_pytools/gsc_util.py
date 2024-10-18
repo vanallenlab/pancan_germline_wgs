@@ -291,16 +291,16 @@ def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged
     )
 
     # Convert combined log OR back to OR
-    merged_df['OR_combined'] = np.exp(merged_df['log_OR_combined'])
+    merged_df['OR_final'] = np.exp(merged_df['log_OR_combined'])
 
     # Step 5: Calculate the variance of the combined OR using inverse variance
     merged_df['variance_OR_combined'] = 1 / (1 / merged_df['variance_HMF'] + 1 / merged_df['variance_PROFILE'])
 
     # Step 6: Calculate Z-scores as OR_combined / variance_OR_combined
-    merged_df['z_combined'] = np.log(merged_df['OR_combined']) / np.sqrt(merged_df['variance_OR_combined'])
+    merged_df['z_combined'] = np.log(merged_df['OR_final']) / np.sqrt(merged_df['variance_OR_combined'])
 
     # Step 7: Calculate p-value from Z-score
-    merged_df['p_val_combined'] = 2 * stats.norm.sf(np.abs(merged_df['z_combined']))
+    merged_df['p_val_final'] = 2 * stats.norm.sf(np.abs(merged_df['z_combined']))
 
     # Step 8: Save the merged DataFrame with combined OR and p-values
     merged_df.to_csv(output_path, sep='\t', index=False)
