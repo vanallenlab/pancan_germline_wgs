@@ -145,7 +145,7 @@ task ConcatVcfs {
       --file-list ~{write_lines(vcfs)} \
       --threads ~{ceil(cpu_cores/2)} \
     | bcftools view \
-      -O ~{outFormat}
+      -O ~{outFormat} \
       -o ~{out_filename} \
       --threads ~{floor(cpu_cores/2)}
 
