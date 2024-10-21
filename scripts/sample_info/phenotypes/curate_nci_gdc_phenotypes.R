@@ -40,6 +40,7 @@ origin.map <- c("prostate_gland" = "prostate",
                 "gum" = "oral_cavity",
                 "cheek_mucosa" = "oral_cavity",
                 "head_face_or_neck" = "oral_cavity",
+                "thyroid_gland" = "thyroid",
                 "tonsil" = "oral_cavity",
                 "skin" = "melanoma",
                 "colon" = "colorectal",
@@ -395,11 +396,11 @@ parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("clinical_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/clinical.cases_selection.2024-03-27/clinical.tsv",
-#              "exposure_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/clinical.cases_selection.2024-03-27/exposure.tsv",
-#              "biospecimen_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/cptac/biospecimen.project-cptac-3.2024-08-20/sample.tsv",
-#              "cohort" = "cptac",
-#              "out_tsv" = "~/scratch/cptac.pheno.dev.tsv")
+# args <- list("clinical_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/tcga_sarcoma_thyroid_oct2024/sarcoma/clinical.tsv",
+#              "exposure_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/tcga_sarcoma_thyroid_oct2024/sarcoma/exposure.tsv",
+#              "biospecimen_tsv" = "~/Desktop/Collins/VanAllen/pancancer_wgs/data_and_cohorts/icgc/tcga_sarcoma_thyroid_oct2024//sarcoma/sample.tsv",
+#              "cohort" = "icgc",
+#              "out_tsv" = "~/scratch/icgc.thyroid.pheno.dev.tsv")
 
 # Load and clean clinical data
 clin.df <- load.clinical.data(args$clinical_tsv)

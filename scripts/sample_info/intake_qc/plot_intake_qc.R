@@ -29,6 +29,14 @@ load.qc.df <- function(tsv.in){
   colnames(qc.df)[1] <- gsub("^#", "", colnames(qc.df)[1])
   rownames(qc.df) <- qc.df$G2C_id
   qc.df$G2C_id <- NULL
+  qc.df$cohort_type <- remap(qc.df$cohort, cohort.type.map)
+  qc.df$single_cancer <- qc.df$cancer
+  qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
+  bool.cols <- grep("_qc_pass", colnames(qc.df))
+  if(length(bool.cols) > 0){
+    qc.df[, bool.cols] <- apply(qc.df[, bool.cols], 2, remap,
+                                map=c("True" = TRUE, "False" = FALSE))
+  }
   return(qc.df)
 }
 
@@ -130,6 +138,157 @@ plot.autosomal.ploidy <- function(qc.df, parmar=c(1.9, 2.1, 1, 0.5)){
   })
 }
 
+# Plot a matrix/grid of selected features vs. one categorical variable (cohort|cancer)
+# TODO: need to implement this for batch as the primary column
+qc.grid <- function(qc.df, primary.variable){
+  # Format primary and secondary variables
+  if(primary.variable == "cancer"){
+    prim <- cancer <- as.character(explode.by.cancer(qc.df$cancer)$cancer)
+    cohort <- as.character(explode.by.cancer(qc.df$cancer, qc.df$simple_cohort)$x)
+    sex <- as.character(explode.by.cancer(qc.df$cancer, qc.df$inferred_sex)$x)
+    pop <- as.character(explode.by.cancer(qc.df$cancer, qc.df$intake_qc_pop)$x)
+    age <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$age)$x)
+    coverage <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$mean_coverage)$x)
+    wgd <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$wgd_score)$x)
+  }else{
+    cancer <- as.character(qc.df$single_cancer)
+    prim <- cohort <- as.character(qc.df$simple_cohort)
+    sex <- as.character(qc.df$inferred_sex)
+    pop <- as.character(qc.df$intake_qc_pop)
+    age <- as.numeric(qc.df$age)
+    coverage <- as.numeric(qc.df$mean_coverage)
+    wgd <- as.numeric(qc.df$wgd_score)
+  }
+  prim.order <- names(sort(table(prim)))
+  prim.titles <- list("cancer" = cancer.names, "cohort" = cohort.names.short)[[primary.variable]]
+  sec.order <- setdiff(c("cancer", "cohort", "sex", "pop", "age", "coverage"),
+                       primary.variable)
+
+  # Configure oscillating greyscale for cohort colors on the fly
+  cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+  cohort.colors <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+  names(cohort.colors) <- names(cohort.k)
+
+  # Prep plot layout
+  n.rows <- length(prim.order)
+  n.cols <- length(sec.order) + 1
+  layout(matrix(1:n.cols, nrow=1), widths=c(2, rep(1.4, n.rows-1)))
+  top.y.margin <- 2.5
+  inner.margin <- 0.3
+
+  # First panel is always simple barplot of total abundance per row + right margin labels
+  if(primary.variable == "cancer"){
+    prim.colors <- cancer.colors[prim.order]
+    names(prim.colors) <- prim.titles[prim.order]
+  }else if(primary.variable == "cohort"){
+    prim.colors <- cohort.colors
+    names(prim.colors) <- prim.titles[names(cohort.colors)]
+  }
+  stacked.barplot(prim.titles[prim], color=prim.colors,
+                  outer.borders=prim.colors[prim.titles[prim.order]],
+                  x.axis.side=NA, orient="left",
+                  custom.major.order=prim.titles[prim.order],
+                  add.legend=FALSE, annotate.counts=TRUE,
+                  parmar=c(0.1, 3, top.y.margin, 4.5))
+  axis(3, at=mean(par("usr")[1:2]), tick=F, line=-0.8, labels="Genomes")
+
+  for(sec in sec.order){
+    # Get values for each secondary variable
+    if(sec == "cancer"){
+      s.names <- cancer.names
+      s.v <- s.names[cancer]
+      s.col <- cancer.colors
+      names(s.col) <- s.names[names(s.col)]
+      s.title <- "Cancer type"
+      plot.type <- "bar"
+      sort.minor <- TRUE
+
+    }else if(sec == "cohort"){
+      s.names <- cohort.names.short
+      s.v <- s.names[cohort]
+      s.k <- sort(table(s.v), decreasing=TRUE)
+      s.col <- cohort.colors
+      names(s.col) <- s.names[names(cohort.colors)]
+      s.title <- "Cohort"
+      plot.type <- "bar"
+      sort.minor <- TRUE
+
+    }else if(sec == "sex"){
+      s.names <- genetic.sex.names
+      s.v <- s.names[sex]
+      s.col <- sex.colors
+      names(s.col) <- s.names[names(s.col)]
+      s.title <- "Genetic sex"
+      plot.type <- "bar"
+      sort.minor <- FALSE
+
+    }else if(sec == "pop"){
+      s.names <- names(pop.colors)
+      names(s.names) <- s.names
+      s.v <- s.names[pop]
+      s.col <- pop.colors
+      names(s.col) <- s.names[names(s.col)]
+      s.title <- "Genetic\nancestry"
+      plot.type <- "bar"
+      sort.minor <- TRUE
+
+    }else if(sec == "age"){
+      s.v <- lapply(prim.order, function(p){
+        p.a <- as.numeric(age[which(prim == p)])
+        p.a <- p.a[which(!is.na(p.a))]
+      })
+      xlims <- NULL
+      s.title <- "Age (years)"
+      plot.type <- "ridge"
+
+    }else if(sec == "coverage"){
+      s.v <- lapply(prim.order, function(p){
+        p.c <- as.numeric(coverage[which(prim == p)])
+        p.c <- p.c[which(!is.na(p.c))]
+      })
+      s.title <- "WGS coverage (x)"
+      xlims <- c(0, min(c(80, quantile(unlist(s.v), probs=0.999))))
+      plot.type <- "ridge"
+
+    }
+
+    if(plot.type == "bar"){
+      stacked.barplot(major.values=prim, minor.values=s.v, colors=s.col,
+                      as.proportion=T, add.legend=F, add.major.label=F,
+                      minor.labels.on.bars=TRUE, x.axis.side=NA,
+                      minor.label.letter.width=0.07, sort.minor=sort.minor,
+                      parmar=c(0.1, inner.margin, top.y.margin, inner.margin))
+
+      if(sec == "sex"){
+        abline(v=0.5, lty=3)
+        clean.axis(3, at=0.5, labels="50:50", title=s.title, title.line=0.3,
+                   label.line=-0.65)
+      }else{
+        axis(3, at=0.5, tick=F, line=-0.5, labels=s.title)
+      }
+    }else if(plot.type == "ridge"){
+      if(primary.variable == "cancer"){
+        ridge.fill <- cancer.colors[prim.order]
+        ridge.light <- sapply(cancer.palettes[prim.order], function(v){v["light1"]})
+        ridge.border <- sapply(cancer.palettes[prim.order], function(v){v["dark2"]})
+        median.color <- sapply(cancer.palettes[prim.order], function(v){v["light2"]})
+      }else if(primary.variable == "cohort"){
+        ridge.fill <- cohort.colors[prim.order]
+        ridge.light <- adjust.brightness(ridge.fill, 0.15)
+        ridge.border <- adjust.brightness(ridge.fill, -0.3)
+        median.color <- adjust.brightness(ridge.fill, 0.3)
+      }
+      ridgeplot(s.v, x.title=s.title, x.axis.side=3, xlims=xlims, y.axis=FALSE,
+                bw.adj=0.5, yaxs="i", hill.overlap=-0.1, hill.bottom=0.1,
+                border.lwd=1, fill=ridge.fill, fancy.light.fill=ridge.light,
+                border=ridge.border, fancy.median.color=median.color,
+                parmar=c(0.1, inner.margin+0.1, top.y.margin, inner.margin+0.1))
+    }else{
+      prep.plot.area(0:1, 0:1, rep(0, 4))
+    }
+  }
+}
+
 
 ###########
 # RScript #
@@ -150,28 +309,87 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
-#              "pass_column" = NULL,
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.post_qc_batching.tsv.gz",
+#              "pass_column" = c("global_qc_pass", "batch_qc_pass"),
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
 qc.df <- load.qc.df(args$qc_tsv)
 
-# Filter data to --pass-column, if optioned
+
+# Set shared barplot parameters
+bar.parmars <- list(c(0, 4.35, 1.25, 2.75), c(0, 4.35, 2, 2.75))
+fail.bar.pdf.dims <- c(4.5, 4.5)
+cancer.key.cols <- cancer.colors
+names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
+cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+names(cohort.cols) <- cohort.names.short[names(cohort.k)]
+cohort.key.cols <- cohort.cols
+
+
+# Handle --pass-column behavior, if optioned
 if(!is.null(args$pass_column) & length(args$pass_column) > 0){
+  # Collect list of row indexes failing any of --pass-column
+  fail.rows <- c()
   for(c.name in args$pass_column){
     if(c.name %in% colnames(qc.df)){
       if(is.numeric(qc.df[, c.name])){
-        qc.df <- qc.df[which(as.logical(qc.df[, c.name])), ]
+        fail.rows <- c(fail.rows, which(!as.logical(qc.df[, c.name])))
       }else{
-        qc.df <- qc.df[which(as.logical(toupper(as.character(qc.df[, c.name])))), ]
+        fail.rows <- c(fail.rows, which(!as.logical(toupper(as.character(qc.df[, c.name])))))
       }
     }else{
       stop(paste("Column name '", c.name, "', specified as --pass-column,",
                  "but this column could not be located in --qc-tsv. Exiting."))
     }
   }
+  fail.rows <- sort(unique(fail.rows))
+  fail.df <- qc.df[fail.rows, ]
+
+  # Before excluding samples, first generate barplots of failure rate per cohort & cancer
+  # Barplot by cancer type, colored by cohort
+  pdf(paste(args$out_prefix, "failure_rate_per_cancer", "pdf", sep="."),
+      height=fail.bar.pdf.dims[1], width=fail.bar.pdf.dims[2])
+    stacked.barplot(cancer.names[explode.by.cancer(fail.df$cancer)$cancer],
+                    cohort.names.short[explode.by.cancer(fail.df$cancer, fail.df$simple_cohort)$x],
+                    colors=cohort.cols, x.title="Samples failing QC",
+                    x.label.line=-0.85, x.axis.tck = -0.0125,
+                    x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
+                    major.legend=TRUE, major.legend.colors=cancer.key.cols, major.legend.xadj=-0.02,
+                    minor.labels.on.bars=TRUE, minor.label.letter.width=0.05,
+                    minor.label.cex=4/6, parmar=bar.parmars[[2]])
+  dev.off()
+  # Barplot by cohort, colored by cancer
+  pdf(paste(args$out_prefix, "failure_rate_per_cohort", "pdf", sep="."),
+      height=fail.bar.pdf.dims[1], width=fail.bar.pdf.dims[2])
+  stacked.barplot(cohort.names.short[explode.by.cancer(fail.df$cancer, fail.df$simple_cohort)$x],
+                  cancer.names[explode.by.cancer(fail.df$cancer)$cancer],
+                  colors=cancer.key.cols, x.title="Samples failing QC",
+                  x.label.line=-0.85, x.axis.tck = -0.0125,
+                  x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
+                  major.legend=TRUE, major.legend.colors=cohort.cols, major.legend.xadj=-0.02,
+                  minor.labels.on.bars=TRUE, minor.label.letter.width=0.05, sort.minor=TRUE,
+                  minor.label.cex=4/6, parmar=bar.parmars[[2]])
+  dev.off()
+
+
+
+  # Lastly, drop samples outright from qc.df before continuing
+  qc.df <- qc.df[-fail.rows, ]
 }
+
+
+# Reset some barplot parameters after excluding QC failures
+cancer.k <- sort(table(qc.df$single_cancer), decreasing=TRUE)
+cancer.key.cols <- cancer.key.cols[cancer.names[names(cancer.k)]]
+cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+names(cohort.cols) <- cohort.names.short[names(cohort.k)]
+cohort.type.k <- sort(table(qc.df$cohort_type), decreasing=TRUE)
+cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE)
+names(cohort.type.cols) <- cohort.type.names.short[names(cohort.type.k)]
+
 
 # Grafpop coordinates by ancestry
 apply(t(combn(1:3, 2)), 1, function(gd.idxs){
@@ -184,7 +402,7 @@ apply(t(combn(1:3, 2)), 1, function(gd.idxs){
       pdf(paste(gp.out.prefix, "pdf", sep="."), height=2.5, width=4)
     }else if(device == "png"){
       png(paste(gp.out.prefix, "png", sep="."),
-          height=2.5*300, width=4*300, res=300)
+          height=2.5*300, width=4*300, res=300, family="Arial")
     }
     layout(matrix(1:2, nrow=1), widths=c(7, 5))
     scatterplot(qc.df[, paste("grafpop_GD", idx.1, sep="")],
@@ -206,25 +424,38 @@ apply(t(combn(1:3, 2)), 1, function(gd.idxs){
 
 
 # Visualize sex ploidy distributions
-pdf(paste(args$out_prefix, "sex_ploidy.pdf", sep="."),
-    height=2.5, width=4)
-layout(matrix(1:2, nrow=1), widths=c(7, 5))
-scatterplot(qc.df$chrX_ploidy, qc.df$chrY_ploidy,
-            colors=sex.colors[qc.df$inferred_sex],
-            title="Genetic sex",
-            x.title="chrX ploidy", y.title="chrY ploidy",
-            x.title.line=0.15,
-            parmar=c(2.1, 2.6, 1, 0.5),
-            x.label.line=-0.7, y.label.line=-0.6)
-sex.margin.bar(qc.df)
-dev.off()
+for(device in c("pdf", "png")){
+  if(device == "pdf"){
+    pdf(paste(args$out_prefix, "sex_ploidy.pdf", sep="."), height=2.5, width=4)
+  }else if(device == "png"){
+    png(paste(args$out_prefix, "sex_ploidy.png", sep="."),
+        height=2.5*300, width=4*300, res=300, family="Arial")
+  }
+  layout(matrix(1:2, nrow=1), widths=c(7, 5))
+  scatterplot(qc.df$chrX_ploidy, qc.df$chrY_ploidy,
+              colors=sex.colors[qc.df$inferred_sex],
+              title="Genetic sex",
+              x.title="chrX ploidy", y.title="chrY ploidy",
+              x.title.line=0.15,
+              parmar=c(2.1, 2.6, 1, 0.5),
+              x.label.line=-0.7, y.label.line=-0.6)
+  sex.margin.bar(qc.df)
+  dev.off()
+}
 
 
 # Autosomal ploidy estimates
-pdf(paste(args$out_prefix, "autosomal_ploidy.pdf", sep="."),
-    height=2.25, width=5)
-plot.autosomal.ploidy(qc.df)
-dev.off()
+for(device in c("pdf", "png")){
+  if(device == "pdf"){
+    pdf(paste(args$out_prefix, "autosomal_ploidy.pdf", sep="."),
+        height=2.25, width=5)
+  }else if(device == "png"){
+    png(paste(args$out_prefix, "autosomal_ploidy.png", sep="."),
+        height=2.25*300, width=5*300, res=300, family="Arial")
+  }
+  plot.autosomal.ploidy(qc.df)
+  dev.off()
+}
 
 
 # Numeric metrics with no special coloring
@@ -255,26 +486,26 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
 }
 
 
-# Set shared barplot parameters
-bar.parmars <- list(c(0.25, 4.25, 1.25, 2.75), c(0, 4.25, 2, 2.75))
+# Format data for main barplots
 bar.pdf.dims <- c(3.5, 3)
-cancer.panel.height.ratio <- c(1/4.65, 1)
+cancer.panel.height.ratio <- c(1/5, 1)
 cohort.panel.height.ratio <- c(1/4, 1)
-cancer.key.cols <- cancer.colors
 non.cancer.phenos <- c("control", "unknown")
 cancer.bar.subdfs <- list(qc.df[which(qc.df$cancer %in% non.cancer.phenos), ],
                           qc.df[which(!qc.df$cancer %in% non.cancer.phenos), ])
-names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
-qc.df$single_cancer <- qc.df$cancer
-qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
-cancer.k <- sort(table(qc.df$single_cancer), decreasing=TRUE)
-cancer.key.cols <- cancer.key.cols[cancer.names[names(cancer.k)]]
-cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
 largest.cohort <- names(cohort.k)[1]
 cohort.bar.subdfs <- list(qc.df[which(qc.df$simple_cohort == largest.cohort), ],
                           qc.df[which(qc.df$simple_cohort != largest.cohort), ])
-cohort.key.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
-names(cohort.key.cols) <- cohort.names.short[names(cohort.k)]
+cohort.type.k <- sort(table(qc.df$cohort_type), decreasing=TRUE)
+cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE)
+names(cohort.type.cols) <- cohort.type.names.short[names(cohort.type.k)]
+all.cohorts <- names(sort(table(qc.df$cohort), decreasing=TRUE))
+cohort.key.cols <- cohort.type.cols[cohort.type.names.short[cohort.type.map[all.cohorts]]]
+names(cohort.key.cols) <- cohort.names.short[all.cohorts]
+cohort.key.cols["Other"] <- cohort.type.cols["Oncology"]
+frac.multi <- sum(grepl(";", qc.df$cancer)) / sum(qc.df$cancer %in% c("control", "unknown"))
+annot.color <- "gray70"
+
 
 # Barplot of samples per cancer, colored by cohort
 pdf(paste(args$out_prefix, "cohort_contributions_per_cancer", "pdf", sep="."),
@@ -283,18 +514,21 @@ layout(matrix(2:1, nrow=2, ncol=1), heights=rev(cancer.panel.height.ratio))
 sapply(1:2, function(s){
   subdf <- cancer.bar.subdfs[[s]]
   stacked.barplot(cancer.names[explode.by.cancer(subdf$cancer)$cancer],
-                  cohort.names.short[explode.by.cancer(subdf$cancer, subdf$simple_cohort)$x],
-                  colors=cohort.key.cols,
+                  cohort.type.names.short[explode.by.cancer(subdf$cancer, subdf$cohort_type)$x],
+                  colors=cohort.type.cols,
                   x.title=if(s==2){"Genomes per cancer type"}else{""},
                   x.axis.tck=-0.025/cancer.panel.height.ratio[s], x.label.line=-0.85,
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
                   major.legend=TRUE, major.legend.colors=cancer.key.cols,
-                  minor.labels.on.bars=TRUE, minor.label.letter.width=0.06,
+                  minor.labels.on.bars=TRUE, minor.label.letter.width=0.05,
                   minor.label.cex=4/6, parmar=bar.parmars[[s]])
   if(s==2){
     axis(4, at=par("usr")[3]-1.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
-         labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
-                      "total genomes", sep=""), xpd=T)
+         labels=paste(round(100 * frac.multi, 1), "% of cases have\nmultiple cancers"),
+         xpd=T, col.axis=annot.color)
+    axis(4, at=par("usr")[3]-4.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
+         labels=paste("Mean = ", prettyNum(round(mean(cancer.k), 0), big.mark=","),
+                      "\nper cancer type", sep=""), xpd=T, col.axis=annot.color)
   }
 })
 dev.off()
@@ -307,7 +541,7 @@ layout(matrix(1:2, nrow=2, ncol=1), heights=cohort.panel.height.ratio)
 sapply(1:2, function(s){
   subdf <- cohort.bar.subdfs[[s]]
   stacked.barplot(cohort.names.short[subdf$simple_cohort],
-                  cancer.names[subdf$cancer], colors=cancer.key.cols,
+                  cancer.names[subdf$cancer], colors=cancer.key.cols, inner.borders=cancer.key.cols,
                   x.title=if(s==1){"Genomes per cohort"}else{""},
                   x.axis.tck=-0.025/cohort.panel.height.ratio[s], x.label.line=-0.85,
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
@@ -315,11 +549,11 @@ sapply(1:2, function(s){
                   minor.labels.on.bars=TRUE, minor.label.letter.width=0.07,
                   minor.label.cex=4/6, custom.minor.order=names(cancer.key.cols),
                   parmar=bar.parmars[[if(s==1){2}else{1}]])
-  # if(s==2){
-  #   axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
-  #        labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
-  #                     "total genomes", sep=""), xpd=T)
-  # }
+  if(s==2){
+    axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
+         labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
+                      "total genomes", sep=""), xpd=T, col.axis=annot.color)
+  }
 })
 dev.off()
 
@@ -330,7 +564,7 @@ pdf(paste(args$out_prefix, "cancer_stages", "pdf", sep="."),
     height=hist.pdf.dims[1], width=hist.pdf.dims[2]-0.3)
 stacked.barplot(stage.names[qc.df$stage], colors=stage.colors,
                 x.title="Stage at Dx",
-                add.legend=F, custom.order=stage.names,
+                add.legend=F, custom.major.order=stage.names,
                 x.label.line=-0.8, x.title.line=0.1,
                 parmar=c(0.5, 3, 2.5, 0.75))
 dev.off()
@@ -358,3 +592,15 @@ km.curve(surv.models,
          km.lwd=4, parmar=c(1.75, 1.25, 1, 5))
 dev.off()
 
+
+# Summary grid of key metrics by cancer type & cohort
+sapply(c("cancer", "cohort"), function(primary.variable){
+  pdf(paste(args$out_prefix, "qc_grid", primary.variable, "pdf", sep="."),
+      height=if(primary.variable == "cancer"){4}else{2.5}, width=7.2)
+  qc.grid(qc.df, primary.variable)
+  dev.off()
+})
+
+
+# TODO: implement qc matrix for all batches (full page layout for supplement)
+# Also split in ~half for double-wide layout on powerpoint slide

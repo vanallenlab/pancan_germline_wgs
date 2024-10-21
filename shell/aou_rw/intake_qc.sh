@@ -140,6 +140,7 @@ code/scripts/plot_intake_qc.R \
 # Generate QC plots after batch-specific QC
 code/scripts/plot_intake_qc.R \
   --qc-tsv data/dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
+  --pass-column global_qc_pass \
   --pass-column batch_qc_pass \
   --out-prefix plots/batch_qc_pass/dfci-g2c.phase1.batch_qc_pass
 

@@ -168,7 +168,11 @@ for cancer in thyroid sarcoma; do
     --exposure-tsv $TCGADIR/$cancer/exposure.tsv \
     --biospecimen-tsv $TCGADIR/$cancer/sample.tsv \
     --cohort icgc \
-    --out-tsv $ICGC_PROCDIR/tcga.$cancer.phenos.tsv
+    --out-tsv $ICGC_PROCDIR/tcga.$cancer.phenos.pre.tsv
+  awk -v FS="\t" -v OFS="\t" -v cancer=$cancer \
+    '{ if ($1 !~ /^Sample/) $14=cancer; print }' \
+    $ICGC_PROCDIR/tcga.$cancer.phenos.pre.tsv \
+  > $ICGC_PROCDIR/tcga.$cancer.phenos.tsv
 done
 cat \
   $ICGC_PROCDIR/icgc.phenos.tsv \

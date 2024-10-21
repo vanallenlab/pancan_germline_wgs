@@ -56,7 +56,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
   cancer.colors["oral_cavity"] <- cancer.colors["oral"]
   cancer.colors["control"] <- "#D6D6D6"
   cancer.colors["multiple"] <- cancer.colors["other"] <- cancer.colors["pancan"]
-  cancer.colors[c("unknown", "not_specified", "NA")] <- "gray85"
+  cancer.colors[c("unknown", "not_specified", "NA")] <- "gray95"
   cancer.colors["pancan"] <- "#C43825"
 
   # Visualize cancer colors to screen, if optioned
@@ -71,7 +71,15 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
   # Generate one palette for each cancer type
   cancer.palettes <- lapply(cancer.colors, function(color){
     pal.w.buffers <- colorRampPalette(c("black", color, "white"))((2*n.shades)+3)
-    pal.w.buffers[-c(1, length(pal.w.buffers))]
+    p <- pal.w.buffers[-c(1, length(pal.w.buffers))]
+    p.names <- "main"
+    if(n.shades > 0){
+      p.names <- c(paste("dark", n.shades:1, sep=""),
+                   p.names,
+                   paste("light", 1:n.shades, sep=""))
+    }
+    names(p) <- p.names
+    return(p)
   })
 
   # Visualize palettes to screen, if optioned
@@ -95,13 +103,14 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
 #'
 #' Load a subset of constants used throughout G2C
 #'
-#' @param susbet Vector of constant groups to load See `Details` for options.
+#' @param susbet Vector of constant groups to load. See `Details` for options. \[default: load all constants\]
 #' @param envir Environment passed to [base::assign] \[default: .GlobalEnv\]
 #'
 #' @details Recognized values for `subset` include:
 #' * `colors` : all color palettes used
 #' * `scales` : all scales and scale labels
 #' * `names` : names of various variables
+#' * `other` : miscellaneous other constants
 #' * `all` : load all constants
 #'
 #' @examples
@@ -115,7 +124,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
 #'
 #' @export load.constants
 #' @export
-load.constants <- function(subset, envir=.GlobalEnv){
+load.constants <- function(subset="all", envir=.GlobalEnv){
   # Define colors
   cancer.color.order <- c("pancan", "sarcoma", "oral", "melanoma", "esophagus",
                           "thyroid","lung", "liver", "kidney", "bladder", "cns",
@@ -368,6 +377,9 @@ load.constants <- function(subset, envir=.GlobalEnv){
     "sex.names" = c("male" = "Male",
                     "female" = "Female",
                     "other" = "Other"),
+    "genetic.sex.names" = c("male" = "XY",
+                    "female" = "XX",
+                    "other" = "Other"),
     "stage.names" = c("I" = "I",
                       "II" = "II",
                       "III" = "III",
@@ -443,16 +455,16 @@ load.constants <- function(subset, envir=.GlobalEnv){
                              "lcins" = "Zhang et al., Nat. Genet. (2021)",
                              "mesa" = "Multi-Ethnic Study of Atherosclerosis",
                              "proactive-core" = "Dana-Farber Proactive",
-                             "proactive-other" = "Dana-Farber Other",
+                             "proactive-other" = "Dana-Farber other",
                              "proactive" = "Dana-Farber Proactive",
                              "stjude" = "St. Jude Children's Research Hospital",
                              "ufc" = "Dana-Farber Unexplained Familial Cancers",
                              "wcdt" = "NCI West-Coast Dream Team",
-                             "other" = "Other Cohorts"),
+                             "other" = "Other cohorts"),
     "cohort.names.long" = c("apollo" = "NCI APOLLO",
                             "aou" = "NIH All of Us",
                             "biome" = "BioMe Biobank",
-                            "ceph" = "CEPH Families",
+                            "ceph" = "CEPH families",
                             "copdgene" = "COPDGene",
                             "cptac" = "NCI CPTAC",
                             "eagle" = "NCI EAGLE",
@@ -465,10 +477,10 @@ load.constants <- function(subset, envir=.GlobalEnv){
                             "lcins" = "Zhang 2021",
                             "mesa" = "MESA",
                             "proactive-core" = "DFCI Proactive",
-                            "proactive-other" = "DFCI Other",
+                            "proactive-other" = "DFCI other",
                             "proactive" = "DFCI Proactive",
                             "stjude" = "St. Jude",
-                            "ufc" = "DFCI Familial",
+                            "ufc" = "DFCI families",
                             "wcdt" = "NCI WCDT",
                             "other" = "Other"),
     "cohort.names.short" = c("apollo" = "APOLLO",
@@ -487,12 +499,44 @@ load.constants <- function(subset, envir=.GlobalEnv){
                              "lcins" = "LCINS",
                              "mesa" = "MESA",
                              "proactive-core" = "Proactive",
-                             "proactive-other" = "DFCI Other",
+                             "proactive-other" = "DFCI other",
                              "proactive" = "Proactive",
                              "stjude" = "St. Jude",
-                             "ufc" = "DFCI Familial",
+                             "ufc" = "DFCI families",
                              "wcdt" = "WCDT",
-                             "other" = "Other")
+                             "other" = "Other"),
+    "cohort.type.names" = c("aou" = "All of Us",
+                            "cancer" = "Oncology research",
+                            "popgen" = "Population genomics"),
+    "cohort.type.names.short" = c("aou" = "All of Us",
+                            "cancer" = "Oncology",
+                            "popgen" = "Pop. gen.")
+  )
+
+  # Define other constants
+  other <- list(
+    "cohort.type.map" = c("apollo" = "cancer",
+                          "aou" = "aou",
+                          "biome" = "popgen",
+                          "ceph" = "popgen",
+                          "copdgene" = "popgen",
+                          "cptac" = "cancer",
+                          "eagle" = "cancer",
+                          "gmkf" = "cancer",
+                          "gtex" = "popgen",
+                          "hcmi" = "cancer",
+                          "hgsvc" = "popgen",
+                          "hmf" = "cancer",
+                          "icgc" = "cancer",
+                          "lcins" = "cancer",
+                          "mesa" = "popgen",
+                          "proactive-core" = "cancer",
+                          "proactive-other" = "cancer",
+                          "proactive" = "cancer",
+                          "stjude" = "cancer",
+                          "ufc" = "cancer",
+                          "wcdt" = "cancer",
+                          "other" = "other")
   )
 
   # Assign constants to global environment
@@ -509,6 +553,11 @@ load.constants <- function(subset, envir=.GlobalEnv){
   if(length(intersect(subset, c("names", "all"))) > 0){
     for(variable in names(all.names)){
       assign(variable, all.names[[variable]], envir=envir)
+    }
+  }
+  if(length(intersect(subset, c("other", "all"))) > 0){
+    for(variable in names(other)){
+      assign(variable, other[[variable]], envir=envir)
     }
   }
 }
