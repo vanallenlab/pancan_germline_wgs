@@ -135,7 +135,7 @@ task ConcatVcfs {
                if outFormat == "u" then ".bcf" else (
                if outFormat == "b" then ".bcf.gz" else ".vcf")))
 
-  String out_filename = "~{out_prefix}.~{suf}"
+  String out_filename = "~{out_prefix}~{suf}"
 
   command <<<
     set -eu -o pipefail
