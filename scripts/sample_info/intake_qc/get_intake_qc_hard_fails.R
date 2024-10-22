@@ -32,14 +32,15 @@ parser$add_argument("--outfile", metavar=".txt", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.post_qc_batching.tsv.gz",
 #              "outfile" = "~/scratch/dfci-g2c.intake_qc.hard_fail.samples.list")
 
 # Load QC matrix
 qc.df <- read.table(args$qc_tsv, header=T, sep="\t", comment.char="", check.names=F)
 
 # Find samples with inferred & reported sex mismatch
-sex.mm.fails <- qc.df[which(qc.df$batching_sex != qc.df$reported_sex), 1]
+sex.mm.fails <- qc.df[which(qc.df$batching_sex != qc.df$reported_sex
+                            & qc.df$sex_karyotype %in% c("XX", "XY")), 1]
 cat(paste(prettyNum(length(sex.mm.fails), big.mark=","), "samples had mismatching",
           "inferred and reported sexes\n"))
 

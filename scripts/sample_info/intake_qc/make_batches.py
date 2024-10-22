@@ -12,10 +12,12 @@ Perform sample batching and outlier exclusion for a single cohort before GATK-SV
 
 
 import argparse
+import csv
 import json
 import numpy as np
 import operator as op
 import pandas as pd
+import warnings
 from datetime import datetime
 from itertools import product
 from os.path import basename
@@ -74,7 +76,8 @@ def parse_cutoff(cut_str, values):
     return eval(cut_str)
 
 
-def run_qc(md, jsonfile, log, hard_pass=set(), quiet=False):
+def run_qc(md, jsonfile, log, hard_pass=set(), exemptions=dict(), 
+           fail_log=None, stage='unspecified', quiet=False):
     """
     Apply filters specified in json_in to pd.Dataframe md (sample metadata)
     Returns a set of samples failing any filter
@@ -103,6 +106,7 @@ def run_qc(md, jsonfile, log, hard_pass=set(), quiet=False):
         # Apply filter
         new_fails = set(md.index[md[feature].apply(lambda v: eq_fx(v, cutoff))].tolist())
         new_fails = new_fails - hard_pass
+        new_fails = new_fails - exemptions.get(feature, set())
         fails.update(new_fails)
         if not quiet:
             fail_reason = '{} ({} {} {:.2f} [{}])'.format(filt_name, filt_info['feature'],
@@ -110,6 +114,9 @@ def run_qc(md, jsonfile, log, hard_pass=set(), quiet=False):
                                                           filt_info['value'])
             log.write(qc_log_fmt.format(len(new_fails), 100 * len(new_fails) / md.shape[0],
                                         fail_reason))
+        if fail_log is not None:
+            for sid in new_fails:
+                fail_log.write('\t'.join([sid, stage, feature]) + '\n')
 
     return fails
 
@@ -163,6 +170,9 @@ def main():
                         'provided to --batch-by.')
     parser.add_argument('--global-qc-cutoffs', help='Optional .json specifying ' +
                         'QC cutoffs for global sample exclusion prior to batching.')
+    parser.add_argument('--global-exemptions', help='Optional two-column .tsv ' +
+                        'specifying sample IDs (first column) to be exempted ' +
+                        'from global QC for certain metrics (second column).')
     parser.add_argument('--custom-qc-fail-samples', help='Optional list of samples ' +
                         'to be treated as failing global QC and excluded from ' +
                         'batching.')
@@ -174,12 +184,16 @@ def main():
                         help='ideal batch size')
     parser.add_argument('--prefix', default='wgs_batch',
                         help='prefix for all batches')
+    parser.add_argument('--short-batch-names', action='store_true',
+                        help='shorten batch names where possible')
     parser.add_argument('-o', '--outfile', required=True, help='path to revised ' +
                         'metadata .tsv output with QC and batch labels')
     parser.add_argument('--batch-names-tsv', help='path to Terra-style .tsv file ' + 
                         'output with names of all batches')
     parser.add_argument('--batch-membership-tsv', help='prefix for Terra-style .tsv ' +
                         'file with IDs of samples per batch')
+    parser.add_argument('--fail-reasons-log', help='optional path to .tsv mapping ' +
+                        'sample IDs to their QC failure reasons')
     parser.add_argument('-l', '--logfile', default='stdout', help='Path to ' +
                         'diagnostic log file. Suppressed by --quiet.')
     parser.add_argument('-q', '--quiet', action='store_true', help='Suppress ' +
@@ -212,6 +226,12 @@ def main():
     if not args.quiet:
         print_log_header(args, log)
 
+    # Open connection to sample failure log, if optioned
+    if args.fail_reasons_log is not None:
+        fail_log = open(args.fail_reasons_log, 'w')
+    else:
+        fail_log = None
+
     # Load sample metadata
     md = load_metadata(args.sample_metadata, log, args.quiet)
     qc_args = 'global_qc_cutoffs custom_qc_fail_samples batch_qc_cutoffs'.split()
@@ -225,6 +245,19 @@ def main():
     else:
         hard_pass = set()
 
+    # Load global QC exemptions, if optioned
+    global_exempt = {}
+    if args.global_exemptions is not None:
+        with open(args.global_exemptions) as tsvin:
+            for sid, metric in csv.reader(tsvin, delimiter='\t'):
+                if metric not in global_exempt.keys():
+                    global_exempt[metric] = set()
+                if metric not in colnames:
+                    msg = 'Feature "{}" is not present in sample metadata header ' + \
+                          'but was specified in {}. No exemption will be applied.'
+                    warnings.warn(msg.format(metric, args.global_exemptions))
+                global_exempt[metric].add(sid)
+
     # Global sample QC, if optioned
     if not all(getattr(args, x) is None for x in qc_args[:2]):
         md['global_qc_pass'] = [True] * md.shape[0]
@@ -233,7 +266,8 @@ def main():
             log.write('Performing global QC before batching. Summary:\n')
         if args.global_qc_cutoffs is not None:
             with open(args.global_qc_cutoffs) as j_in:
-                global_qc_fails = run_qc(md, j_in, log, hard_pass, args.quiet)
+                global_qc_fails = run_qc(md, j_in, log, hard_pass, global_exempt, 
+                                         fail_log, 'global', args.quiet)
                 global_fails.update(global_qc_fails)
         if args.custom_qc_fail_samples is not None:
             with open(args.custom_qc_fail_samples) as fin:
@@ -309,7 +343,10 @@ def main():
     batch_name_template = args.prefix
     for bb in args.batch_by:
         if bb in bb_numeric:
-            batch_name_template += '-' + bb + '_{}'
+            if args.short_batch_names:
+                batch_name_template += '-' + bb[0] + '{}'
+            else:
+                batch_name_template += '-' + bb + '_{}'
         else:
             batch_name_template += '-{}'
     for strat, strat_ids in strata.items():
@@ -322,7 +359,10 @@ def main():
                     if str(v).isnumeric():
                         bnvals.append(v + 1)
                     else:
-                        bnvals.append(v)
+                        if args.short_batch_names:
+                            bnvals.append(v[0])
+                        else:
+                            bnvals.append(v)
                 batch_name = batch_name_template.format(*bnvals)
                 md_sub = md.loc[list(samples), args.batch_by].copy()
                 for key, value in zip(branches.keys(), combo):
@@ -354,7 +394,8 @@ def main():
             if not args.quiet:
                 log.write('QC summary for batch "{}":\n'.format(batch))
             with open(args.batch_qc_cutoffs) as j_in:
-                new_batch_qc_fails = run_qc(batch_md, j_in, log, hard_pass, args.quiet)
+                new_batch_qc_fails = run_qc(batch_md, j_in, log, hard_pass, dict(),
+                                            fail_log, 'batch', args.quiet)
             if not args.quiet:
                 qc_log_vals = [len(new_batch_qc_fails), 
                                100 * len(new_batch_qc_fails) / batch_md.shape[0],
@@ -393,9 +434,12 @@ def main():
                 for sid in md.index[md['final_batch_assignment'] == batch].tolist():
                     fout.write('{}\t{}\n'.format(batch, sid))
 
+    # Close handles to clear buffers
     if not args.quiet:
         log.write('Finished.\n')
     log.close()
+    if args.fail_reasons_log is not None:
+        fail_log.close()
 
 
 if __name__ == '__main__':

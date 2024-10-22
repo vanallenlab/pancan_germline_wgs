@@ -138,8 +138,7 @@ plot.autosomal.ploidy <- function(qc.df, parmar=c(1.9, 2.1, 1, 0.5)){
   })
 }
 
-# Plot a matrix/grid of selected features vs. one categorical variable (cohort|cancer)
-# TODO: need to implement this for batch as the primary column
+# Plot a matrix/grid of selected features vs. a categorical variable (cohort|cancer|batch)
 qc.grid <- function(qc.df, primary.variable){
   # Format primary and secondary variables
   if(primary.variable == "cancer"){
@@ -150,7 +149,7 @@ qc.grid <- function(qc.df, primary.variable){
     age <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$age)$x)
     coverage <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$mean_coverage)$x)
     wgd <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$wgd_score)$x)
-  }else{
+  }else if(primary.variable %in% c("cohort", "batch")){
     cancer <- as.character(qc.df$single_cancer)
     prim <- cohort <- as.character(qc.df$simple_cohort)
     sex <- as.character(qc.df$inferred_sex)
@@ -158,11 +157,25 @@ qc.grid <- function(qc.df, primary.variable){
     age <- as.numeric(qc.df$age)
     coverage <- as.numeric(qc.df$mean_coverage)
     wgd <- as.numeric(qc.df$wgd_score)
+    if(primary.variable == "batch"){
+      prim <- as.character(qc.df$final_batch_assignment)
+    }
+  }else{
+    stop(paste("primary.variable ", primary.variable, " currently not supported", sep="`"))
   }
-  prim.order <- names(sort(table(prim)))
-  prim.titles <- list("cancer" = cancer.names, "cohort" = cohort.names.short)[[primary.variable]]
+  if(primary.variable %in% c("cancer", "cohort")){
+    prim.order <- names(sort(table(prim)))
+    prim.titles <- list("cancer" = cancer.names, "cohort" = cohort.names.short)[[primary.variable]]
+  }else{
+    prim.order <- sort(unique(sort(as.character(qc.df$final_batch_assignment))))
+    prim.titles <- rev(paste("Batch", 1:length(prim.order)))
+    names(prim.titles) <- prim.order
+  }
   sec.order <- setdiff(c("cancer", "cohort", "sex", "pop", "age", "coverage"),
                        primary.variable)
+  if(primary.variable == "batch"){
+    sec.order <- setdiff(c(sec.order, "wgd"), "age")
+  }
 
   # Configure oscillating greyscale for cohort colors on the fly
   cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
@@ -183,6 +196,9 @@ qc.grid <- function(qc.df, primary.variable){
   }else if(primary.variable == "cohort"){
     prim.colors <- cohort.colors
     names(prim.colors) <- prim.titles[names(cohort.colors)]
+  }else if(primary.variable == "batch"){
+    prim.colors <- rep("black", length(prim.titles))
+    names(prim.colors) <- prim.titles
   }
   stacked.barplot(prim.titles[prim], color=prim.colors,
                   outer.borders=prim.colors[prim.titles[prim.order]],
@@ -250,6 +266,15 @@ qc.grid <- function(qc.df, primary.variable){
       xlims <- c(0, min(c(80, quantile(unlist(s.v), probs=0.999))))
       plot.type <- "ridge"
 
+    }else if(sec == "wgd"){
+      s.v <- lapply(prim.order, function(p){
+        p.w <- as.numeric(wgd[which(prim == p)])
+        p.w <- p.w[which(!is.na(p.w))]
+      })
+      s.title <- "Dosage bias"
+      xlims <- quantile(wgd, probs=c(0.001, 0.999))
+      plot.type <- "ridge"
+
     }
 
     if(plot.type == "bar"){
@@ -257,6 +282,7 @@ qc.grid <- function(qc.df, primary.variable){
                       as.proportion=T, add.legend=F, add.major.label=F,
                       minor.labels.on.bars=TRUE, x.axis.side=NA,
                       minor.label.letter.width=0.07, sort.minor=sort.minor,
+                      minor.label.cex=if(primary.variable == "batch"){4/6}else{5/6},
                       parmar=c(0.1, inner.margin, top.y.margin, inner.margin))
 
       if(sec == "sex"){
@@ -277,6 +303,8 @@ qc.grid <- function(qc.df, primary.variable){
         ridge.light <- adjust.brightness(ridge.fill, 0.15)
         ridge.border <- adjust.brightness(ridge.fill, -0.3)
         median.color <- adjust.brightness(ridge.fill, 0.3)
+      }else if(primary.variable == "batch"){
+        ridge.fill <- ridge.light <- ridge.border <- median.color <- NULL
       }
       ridgeplot(s.v, x.title=s.title, x.axis.side=3, xlims=xlims, y.axis=FALSE,
                 bw.adj=0.5, yaxs="i", hill.overlap=-0.1, hill.bottom=0.1,
@@ -402,7 +430,7 @@ apply(t(combn(1:3, 2)), 1, function(gd.idxs){
       pdf(paste(gp.out.prefix, "pdf", sep="."), height=2.5, width=4)
     }else if(device == "png"){
       png(paste(gp.out.prefix, "png", sep="."),
-          height=2.5*300, width=4*300, res=300, family="Arial")
+          height=2.5*300, width=4*300, res=300)
     }
     layout(matrix(1:2, nrow=1), widths=c(7, 5))
     scatterplot(qc.df[, paste("grafpop_GD", idx.1, sep="")],
@@ -429,7 +457,7 @@ for(device in c("pdf", "png")){
     pdf(paste(args$out_prefix, "sex_ploidy.pdf", sep="."), height=2.5, width=4)
   }else if(device == "png"){
     png(paste(args$out_prefix, "sex_ploidy.png", sep="."),
-        height=2.5*300, width=4*300, res=300, family="Arial")
+        height=2.5*300, width=4*300, res=300)
   }
   layout(matrix(1:2, nrow=1), widths=c(7, 5))
   scatterplot(qc.df$chrX_ploidy, qc.df$chrY_ploidy,
@@ -451,7 +479,7 @@ for(device in c("pdf", "png")){
         height=2.25, width=5)
   }else if(device == "png"){
     png(paste(args$out_prefix, "autosomal_ploidy.png", sep="."),
-        height=2.25*300, width=5*300, res=300, family="Arial")
+        height=2.25*300, width=5*300, res=300)
   }
   plot.autosomal.ploidy(qc.df)
   dev.off()
@@ -602,5 +630,11 @@ sapply(c("cancer", "cohort"), function(primary.variable){
 })
 
 
-# TODO: implement qc matrix for all batches (full page layout for supplement)
-# Also split in ~half for double-wide layout on powerpoint slide
+# Summary grid of key metrics per batch
+if("final_batch_assignment" %in% colnames(qc.df)){
+  # Full page layout for supplement
+  pdf(paste(args$out_prefix, "qc_grid.batch.portrait.pdf", sep="."),
+      height=9.5, width=7.2)
+  qc.grid(qc.df, "batch")
+  dev.off()
+}

@@ -97,39 +97,50 @@ code/scripts/get_intake_qc_hard_fails.R \
   --qc-tsv data/dfci-g2c.intake_qc.all.tsv.gz \
   --outfile data/dfci-g2c.intake_qc.hard_fail.samples.list
 
-# Extract list of samples with noncanonical sex chromosome ploidies
-# These samples need to be hard-passed through global & batch-specific QC
-# The unusual ploidy on X/Y cause them to have artificially inflated CHARR
-# and other SNP-based metrics
-# TODO: also should add 
-karyo_cidx=$( zcat data/dfci-g2c.intake_qc.all.tsv.gz \
-              | head -n1 | sed 's/\t/\n/g' \
-              | awk '{ if ($1=="sex_karyotype") print NR }' )
+# # Extract list of samples with noncanonical sex chromosome ploidies
+# # These samples need to be hard-passed through global & batch-specific QC
+# # The unusual ploidy on X/Y cause them to have artificially inflated CHARR
+# # and other SNP-based metrics
+# karyo_cidx=$( zcat data/dfci-g2c.intake_qc.all.tsv.gz \
+#               | head -n1 | sed 's/\t/\n/g' \
+#               | awk '{ if ($1=="sex_karyotype") print NR }' )
+# zcat data/dfci-g2c.intake_qc.all.tsv.gz \
+# | fgrep -v "#" \
+# | awk -v cidx=$karyo_cidx '{ if ($cidx != "XX" && $cidx != "XY") print $1 }' \
+# > data/dfci-g2c.intake_qc.hard_pass.samples.list
+
+# HMF needs to be exempted from global WGD cutoffs
+# The hope here is that these samples might (?) be rescued by batching with other bad controls?
 zcat data/dfci-g2c.intake_qc.all.tsv.gz \
-| fgrep -v "#" \
-| awk -v cidx=$karyo_cidx '{ if ($cidx != "XX" && $cidx != "XY") print $1 }' \
-> data/dfci-g2c.intake_qc.hard_pass.samples.list
+| awk -v FS="\t" -v OFS="\t" '{ if ($3=="hmf") print $1, "wgd_score" }' \
+> dfci-g2c.intake_qc.global_exemptions.tsv
 
 # Run batching & QC procedure
-gunzip data/dfci-g2c.intake_qc.all.tsv.gz
+zcat data/dfci-g2c.intake_qc.all.tsv.gz > data/dfci-g2c.intake_qc.all.tsv
 code/scripts/make_batches.py \
   --match-on batching_sex \
   --match-on batching_pheno \
-  --batch-by batching_tissue \
   --batch-by wgd_score \
   --batch-by median_coverage \
   --global-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.global_qc_thresholds.json \
+  --global-exemptions dfci-g2c.intake_qc.global_exemptions.tsv \
   --batch-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.batch_qc_thresholds.json \
   --custom-qc-fail-samples data/dfci-g2c.intake_qc.hard_fail.samples.list \
-  --custom-qc-pass-samples data/dfci-g2c.intake_qc.hard_pass.samples.list \
   --batch-size 550 \
-  --prefix dfci-g2c.gatk-sv \
+  --prefix g2c \
+  --short-batch-names \
   --outfile data/dfci-g2c.intake_qc.all.post_qc_batching.tsv \
   --batch-names-tsv data/dfci-g2c.gatk-sv.batches.list \
   --batch-membership-tsv data/dfci-g2c.gatk-sv.batch_membership.tsv \
+  --fail-reasons-log data/dfci-g2c.intake_qc.all.sample_failure_reasons.tsv \
   --logfile data/dfci-g2c.intake_qc.all.post_qc_batching.log \
   data/dfci-g2c.intake_qc.all.tsv
 gzip -f data/dfci-g2c.intake_qc.all.post_qc_batching.tsv
+
+# Copy manifest with updated QC & batching labels to main workspace bucket
+gsutil -m cp \
+  data/dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/
 
 # Generate QC plots after global QC
 code/scripts/plot_intake_qc.R \
