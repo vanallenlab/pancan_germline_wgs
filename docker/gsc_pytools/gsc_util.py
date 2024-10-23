@@ -407,8 +407,8 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
               
-        germline_output = find_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix)
-        somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_gene + somatic_suffix)
+      germline_output = find_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix)
+      somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_gene + somatic_suffix)
           
       # Assign values using ternary operators for cleaner code
       OR, p_val, ci_OR_low, ci_OR_high = regression_output if regression_output else (pd.NA, pd.NA, pd.NA, pd.NA)
