@@ -432,30 +432,30 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
       if germline_context == "coding":
         # Append the results to the list
         results.append([
-          cancer_type, germline_snp, germline_gene, germline_context, 
-          somatic_gene, somatic_context, criteria,
-          germline_plp_frequency, germline_plp_count, germline_sample_size,
-          filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
-          somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
-          filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-          OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            cancer_type, germline_gene, germline_context, 
+            somatic_gene, somatic_context, criteria,
+            germline_plp_frequency, germline_plp_count, germline_sample_size,
+            filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
+            somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
+            filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
         ])
       else:
         # Append the results to the list
         results.append([
-          cancer_type, germline_gene, germline_context, 
-          somatic_gene, somatic_context, criteria,
-          germline_plp_frequency, germline_plp_count, germline_sample_size,
-          filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
-          somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
-          filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-          OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            cancer_type, germline_snp, germline_gene, germline_context, 
+            somatic_gene, somatic_context, criteria,
+            germline_plp_frequency, germline_plp_count, germline_sample_size,
+            filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
+            somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
+            filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
         ])          
 
   if germline_context == "coding":
     # Convert the results to a DataFrame
     output_df = pd.DataFrame(results, columns=[
-        'cancer_type', 'germline_risk_allele','germline_gene', 'germline_context', 
+        'cancer_type', 'germline_gene', 'germline_context', 
         'somatic_gene', 'somatic_context', 'criteria',
         f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
@@ -466,7 +466,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   else:
     # Convert the results to a DataFrame
     output_df = pd.DataFrame(results, columns=[
-        'cancer_type', 'germline_gene', 'germline_context', 
+        'cancer_type', 'germline_risk_allele','germline_gene', 'germline_context', 
         'somatic_gene', 'somatic_context', 'criteria',
         f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
