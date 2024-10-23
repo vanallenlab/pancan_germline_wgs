@@ -341,7 +341,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   convergences_df = pd.read_csv(convergence_table_path,sep='\t')
   convergences_df = convergences_df[(convergences_df['germline_context'] == germline_context) & 
                                   (convergences_df['somatic_context'] == somatic_context)]
-  genotype_df = pd.read_csv(genotype_table_path, sep='\t')
+  patient_df = pd.read_csv(genotype_table_path, sep='\t')
   
   # Initialize an empty list to store results
   results = []
