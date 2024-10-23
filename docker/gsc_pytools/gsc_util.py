@@ -339,7 +339,8 @@ def filter_by_pvalues(input_tsv, output_tsv = "filtered.tsv"):
 def analyze_data(convergence_table_path,genotype_table_path,germline_context,somatic_context,cohort,output_file):
   # Step 1: Read in Dataframe containing convergences and Dataframe containing patient level data  
   convergences_df = pd.read_csv(convergence_table_path,sep='\t')
-  convergences_df = convergences_df[convergences_df['germline_context'] == germline_context and convergences_df['somatic_context'] == somatic_context]
+  convergences_df = convergences_df[(convergences_df['germline_context'] == germline_context) & 
+                                  (convergences_df['somatic_context'] == somatic_context)]
   genotype_df = pd.read_csv(genotype_table_path, sep='\t')
   
   # Initialize an empty list to store results
