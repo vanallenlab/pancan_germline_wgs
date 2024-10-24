@@ -360,6 +360,8 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   germline_suffix = None
   if germline_context == "coding":
     germline_suffix = "-g"
+  else:
+    germline_suffix = ""
 
   somatic_suffix = None
   if somatic_context == "coding":
@@ -396,9 +398,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         relevant_cancer = 1
       elif cancer_type == "Pancancer":
         relevant_cancer = 2
-      
-      print("Debugging:")
-      print(f"{cancer_type}\t{germline_event}\t${germline_context}")
+
       # Apply the functions to get metrics
       if cancer_type == "Breast" or cancer_type == "Prostate":
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_hsc)
