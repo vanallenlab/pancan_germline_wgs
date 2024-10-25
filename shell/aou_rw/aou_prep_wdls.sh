@@ -42,7 +42,7 @@ cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 # Copy WDLs to AoU RW bucket
 # Note: must use AoU Google credentials
 export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
-gcloud auth login
+# gcloud auth login
 gsutil -m cp -r \
   wdl \
   pancan_germline_wgs/refs \
