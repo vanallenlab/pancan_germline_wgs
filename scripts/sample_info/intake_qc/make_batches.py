@@ -180,6 +180,9 @@ def main():
                         'to be treated as passing both global and batch-specific QC.')
     parser.add_argument('--batch-qc-cutoffs', help='Optional .json specifying ' +
                         'QC cutoffs for batch-specific sample exclusion.')
+    parser.add_argument('--batch-exemptions', help='Optional two-column .tsv ' +
+                        'specifying sample IDs (first column) to be exempted ' +
+                        'from batch QC for certain metrics (second column).')
     parser.add_argument('--batch-size', type=int, default=500,
                         help='ideal batch size')
     parser.add_argument('--prefix', default='wgs_batch',
@@ -377,6 +380,19 @@ def main():
         log.write('Batching finished. Batch membership summary:\n')
         summarize_batches(md['preqc_batch_assignment'], log)
 
+    # Load batch QC exemptions, if optioned
+    batch_exempt = {}
+    if args.batch_exemptions is not None:
+        with open(args.batch_exemptions) as tsvin:
+            for sid, metric in csv.reader(tsvin, delimiter='\t'):
+                if metric not in batch_exempt.keys():
+                    batch_exempt[metric] = set()
+                if metric not in colnames:
+                    msg = 'Feature "{}" is not present in sample metadata header ' + \
+                          'but was specified in {}. No exemption will be applied.'
+                    warnings.warn(msg.format(metric, args.batch_exemptions))
+                batch_exempt[metric].add(sid)
+
     # Batch-specific sample QC, if optioned
     md['final_batch_assignment'] = md['preqc_batch_assignment'].copy()
     if args.batch_qc_cutoffs is None:
@@ -394,7 +410,7 @@ def main():
             if not args.quiet:
                 log.write('QC summary for batch "{}":\n'.format(batch))
             with open(args.batch_qc_cutoffs) as j_in:
-                new_batch_qc_fails = run_qc(batch_md, j_in, log, hard_pass, dict(),
+                new_batch_qc_fails = run_qc(batch_md, j_in, log, hard_pass, batch_exempt,
                                             fail_log, 'batch', args.quiet)
             if not args.quiet:
                 qc_log_vals = [len(new_batch_qc_fails), 

@@ -15,7 +15,7 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=aou_processing
+export g2c_branch=g2c_intake_qc_batching
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git && \
 cd pancan_germline_wgs && \
 git checkout $g2c_branch && \

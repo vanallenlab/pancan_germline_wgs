@@ -132,8 +132,8 @@ task GetMultipleMetrics {
       >> "~{metrics_table_filename}"
 
     # Format values for G2C
-    rl=$( fgrep -w "MEAN_READ_LENGTH" "~{metrics_table_filename}" )
-    isize=$( fgrep -w "MEAN_INSERT_SIZE" "~{metrics_table_filename}" )
+    rl=$( fgrep -w "MEAN_READ_LENGTH" "~{metrics_table_filename}" | cut -f2 )
+    isize=$( fgrep -w "MEAN_INSERT_SIZE" "~{metrics_table_filename}" | cut -f2 )
     echo -e "#Sample\tinsert_size\tread_length" > "~{g2c_metrics_filename}"
     echo -e "~{sample_id}\t$isize\t$rl" >> "~{g2c_metrics_filename}"
   >>>
@@ -144,7 +144,7 @@ task GetMultipleMetrics {
     disks: "local-disk " + vm_disk_size + " HDD"
     bootDiskSizeGb: 10
     docker: gatk_docker
-    preemptible: 3
+    preemptible: 1
     maxRetries: 1
   }
   Int java_mem_mb = round(1024 * (7.0 - java_mem_pad_gb))
@@ -167,8 +167,7 @@ task StageOutput {
 
   String target_bucket = staging_bucket_base + select_first([cohort]) + "/gatk-sv/metrics/"
 
-  Int disk_base = size(files_to_stage, "GB")
-  Int disk_gb = ceil(disk_base + 20)
+  Int disk_gb = ceil(size(files_to_stage, "GB") + 20)
 
   command <<<
     set -eu -o pipefail

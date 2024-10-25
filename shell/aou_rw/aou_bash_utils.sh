@@ -62,11 +62,7 @@ submit_workflows() {
       gate_width=100
       gate_timeout=60m
       workflow_name="Read metric collection"
-      awk '{ if ($2=="staged") print $1 }' \
-        cromshell/progress/$cancer_sub.read_metrics.sample_progress.tsv \
-      | fgrep -wf - data/cram_paths/$cancer_sub.cram_paths.tsv \
-      > $cancer_sub.$wflow.sids_to_submit.list
-      sid_cram_list=$cancer_sub.$wflow.sids_to_submit.list
+      sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       ;;
   esac
   if ! [ -e $status_tsv ]; then

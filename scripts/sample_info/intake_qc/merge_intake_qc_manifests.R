@@ -119,6 +119,16 @@ infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
   return(df)
 }
 
+# Compute number of apparent aneuploidies, defined as the residual of ploidy
+# point estimate (e.g., abs(2 - ploidy)) being >= (1 - tolerance)
+# This allows for a small degree of wiggle room without rounding up/down from 2.5/1.5, etc.
+count.aneuploidies <- function(df, tolerance=0.15){
+  autosome.cols <- paste("chr", 1:22, "_CopyNumber", sep="")
+  auto.aneu <- apply(df[, autosome.cols], 1, function(v){sum(abs(v - 2) >= 1 - tolerance)})
+  sex.aneu <- as.integer(!df$sex_karyotype %in% c("XX", "XY"))
+  auto.aneu + sex.aneu
+}
+
 # Assign provisional ancestries based on KNN clustering vs. HGSV samples
 assign.ancestry <- function(df, hgsv.labels.tsv){
   # Read HGSV ground-truth labels
@@ -239,6 +249,9 @@ qc.df$batching_read_length <- remap(as.character(qc.df$read_length >= 140),
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)
+
+# Count number of apparent aneuploidies
+qc.df$apparent_aneuploidies <- count.aneuploidies(qc.df)
 
 # Assign provisional ancestry based on 1kG + grafpop distances, if optioned
 if(!is.null(args$hgsv_pop_assignments)){

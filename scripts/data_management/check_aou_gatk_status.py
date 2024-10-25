@@ -195,7 +195,7 @@ def find_complete_wids(workflow_ids, bucket, sid, mode, metrics_optional=False):
                                    uri_fmt=formats[mode]['gvcf'],
                                    suffix='vcf.gz.tbi')
         return wids_with_tbi
-    
+
     elif mode == 'gatk-sv':
         surviving_wids = workflow_ids
         if metrics_optional:
@@ -208,6 +208,9 @@ def find_complete_wids(workflow_ids, bucket, sid, mode, metrics_optional=False):
                                            formats[mode][key]['src'])
         return surviving_wids
 
+    elif mode == 'read-metrics':
+        return []
+    
 
 def check_workflow_status(workflow_id, max_retries=20, timeout=5):
     """
@@ -395,37 +398,38 @@ def main():
         with open(workflow_ids_path) as fin:
             wids = [line.rstrip() for line in fin.readlines()]
             wid_priority = {wid : i + 1 for i, wid in enumerate(wids[::-1])}
-        
-        # Try to find workflows with full set of complete final outputs
-        complete_wids = find_complete_wids(wids, bucket, sid, args.mode, 
-                                           args.metrics_optional)
 
-        # If at least one copy of gVCF + index are found, check cromwell status
-        # of most recent job ID to confirm job was successful
-        for wid in sorted(complete_wids, key=lambda wid: wid_priority[wid]):
+        # For all workflows except for read-metrics, we need to check the
+        # execution buckets for complete outputs and stage/cleanup
+        if args.mode != 'read-metrics':
+            
+            # Try to find workflows with full set of complete final outputs
+            complete_wids = find_complete_wids(wids, bucket, sid, args.mode, 
+                                               args.metrics_optional)
 
-            # The exception to this is if --unsafe is set, in which case the
-            # workflow is assumed to be successful
-            if not args.unsafe:
-                workflow_status = check_workflow_status(wid)
-            else:
-                workflow_status = 'succeeded'
+            # If at least one copy of gVCF + index are found, check cromwell status
+            # of most recent job ID to confirm job was successful
+            for wid in sorted(complete_wids, key=lambda wid: wid_priority[wid]):
 
-            # If job was successful but files have not been staged yet, relocate 
-            # files to output bucket and mark all temporary files for deletion
-            if workflow_status == 'succeeded':
-                # All workflows need to be staged except for read-metrics, 
-                # which stages itself in the WDL
-                if args.mode is not 'read-metrics':
+                # The exception to this is if --unsafe is set, in which case the
+                # workflow is assumed to be successful
+                if not args.unsafe:
+                    workflow_status = check_workflow_status(wid)
+                else:
+                    workflow_status = 'succeeded'
+
+                # If job was successful but files have not been staged yet, relocate 
+                # files to output bucket and mark all temporary files for deletion
+                if workflow_status == 'succeeded':
                     relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
-                collect_trash(wids, bucket, args.dumpster, args.mode, 
-                              args.sample_id, staging_bucket)
-                status = 'staged'
-                break
+                    collect_trash(wids, bucket, args.dumpster, args.mode, 
+                                  args.sample_id, staging_bucket)
+                    status = 'staged'
+                    break
 
-        # If at least one workflow was successful, no need to check others
-        if status == 'staged':
-            break
+            # If at least one workflow was successful, no need to check others
+            if status == 'staged':
+                break
 
         # If sample has not been staged, assume it is either running or failed
         # This can be determined by simply checking the status of the 

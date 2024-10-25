@@ -68,5 +68,10 @@
 		"feature" : "insert_size",
 		"equality" : ">",
 		"value" : "Q3+(7*MAD)"
+	},
+	"too many apparent aneuploidies" : {
+		"feature" : "apparent_aneuploidies",
+		"equality" : ">",
+		"value" : "1"
 	}
 }
