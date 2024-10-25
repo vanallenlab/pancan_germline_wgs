@@ -29,6 +29,11 @@
 		"equality" : "<",
 		"value" : "10"
 	},
+	"short read length" : {
+		"feature" : "read_length",
+		"equality" : "<",
+		"value" : "99"
+	},
 	"too young" : {
 		"feature" : "age",
 		"equality" : "<",
@@ -53,5 +58,15 @@
 		"feature" : "inconsistent_ab_het_rate",
 		"equality" : ">",
 		"value" : "max([Q3+(7*MAD), 0.15])"
+	},
+	"small insert size" : {
+		"feature" : "insert_size",
+		"equality" : "<",
+		"value" : "Q1+(7*MAD)"
+	},
+	"large insert size" : {
+		"feature" : "insert_size",
+		"equality" : ">",
+		"value" : "Q3+(7*MAD)"
 	}
 }

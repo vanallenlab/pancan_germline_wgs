@@ -148,6 +148,7 @@ qc.grid <- function(qc.df, primary.variable){
     pop <- as.character(explode.by.cancer(qc.df$cancer, qc.df$intake_qc_pop)$x)
     age <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$age)$x)
     coverage <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$mean_coverage)$x)
+    isize <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$insert_size)$x)
     wgd <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$wgd_score)$x)
   }else if(primary.variable %in% c("cohort", "batch")){
     cancer <- as.character(qc.df$single_cancer)
@@ -156,6 +157,7 @@ qc.grid <- function(qc.df, primary.variable){
     pop <- as.character(qc.df$intake_qc_pop)
     age <- as.numeric(qc.df$age)
     coverage <- as.numeric(qc.df$mean_coverage)
+    isize <- as.numeric(qc.df$insert_size)
     wgd <- as.numeric(qc.df$wgd_score)
     if(primary.variable == "batch"){
       prim <- as.character(qc.df$final_batch_assignment)
@@ -171,7 +173,7 @@ qc.grid <- function(qc.df, primary.variable){
     prim.titles <- rev(paste("Batch", 1:length(prim.order)))
     names(prim.titles) <- prim.order
   }
-  sec.order <- setdiff(c("cancer", "cohort", "sex", "pop", "age", "coverage"),
+  sec.order <- setdiff(c("cancer", "cohort", "sex", "pop", "age", "coverage", "isize"),
                        primary.variable)
   if(primary.variable == "batch"){
     sec.order <- setdiff(c(sec.order, "wgd"), "age")
@@ -266,6 +268,15 @@ qc.grid <- function(qc.df, primary.variable){
       xlims <- c(0, min(c(80, quantile(unlist(s.v), probs=0.999))))
       plot.type <- "ridge"
 
+    }else if(sec == "isize"){
+      s.v <- lapply(prim.order, function(p){
+        p.i <- as.numeric(isize[which(prim == p)])
+        p.i <- p.i[which(!is.na(p.i))]
+      })
+      s.title <- "Insert size (bp)"
+      xlims <- NULL
+      plot.type <- "ridge"
+
     }else if(sec == "wgd"){
       s.v <- lapply(prim.order, function(p){
         p.w <- as.numeric(wgd[which(prim == p)])
@@ -298,12 +309,7 @@ qc.grid <- function(qc.df, primary.variable){
         ridge.light <- sapply(cancer.palettes[prim.order], function(v){v["light1"]})
         ridge.border <- sapply(cancer.palettes[prim.order], function(v){v["dark2"]})
         median.color <- sapply(cancer.palettes[prim.order], function(v){v["light2"]})
-      }else if(primary.variable == "cohort"){
-        ridge.fill <- cohort.colors[prim.order]
-        ridge.light <- adjust.brightness(ridge.fill, 0.15)
-        ridge.border <- adjust.brightness(ridge.fill, -0.3)
-        median.color <- adjust.brightness(ridge.fill, 0.3)
-      }else if(primary.variable == "batch"){
+      }else{
         ridge.fill <- ridge.light <- ridge.border <- median.color <- NULL
       }
       ridgeplot(s.v, x.title=s.title, x.axis.side=3, xlims=xlims, y.axis=FALSE,
@@ -337,6 +343,9 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
+#              "pass_column" = NULL,
+#              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 # args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.post_qc_batching.tsv.gz",
 #              "pass_column" = c("global_qc_pass", "batch_qc_pass"),
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
@@ -381,7 +390,7 @@ if(!is.null(args$pass_column) & length(args$pass_column) > 0){
       height=fail.bar.pdf.dims[1], width=fail.bar.pdf.dims[2])
     stacked.barplot(cancer.names[explode.by.cancer(fail.df$cancer)$cancer],
                     cohort.names.short[explode.by.cancer(fail.df$cancer, fail.df$simple_cohort)$x],
-                    colors=cohort.cols, x.title="Samples failing QC",
+                    colors=cohort.cols, x.title="Samples failing QC per cancer type",
                     x.label.line=-0.85, x.axis.tck = -0.0125,
                     x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
                     major.legend=TRUE, major.legend.colors=cancer.key.cols, major.legend.xadj=-0.02,
@@ -393,7 +402,7 @@ if(!is.null(args$pass_column) & length(args$pass_column) > 0){
       height=fail.bar.pdf.dims[1], width=fail.bar.pdf.dims[2])
   stacked.barplot(cohort.names.short[explode.by.cancer(fail.df$cancer, fail.df$simple_cohort)$x],
                   cancer.names[explode.by.cancer(fail.df$cancer)$cancer],
-                  colors=cancer.key.cols, x.title="Samples failing QC",
+                  colors=cancer.key.cols, x.title="Samples failing QC per cohort",
                   x.label.line=-0.85, x.axis.tck = -0.0125,
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
                   major.legend=TRUE, major.legend.colors=cohort.cols, major.legend.xadj=-0.02,
@@ -498,6 +507,8 @@ for(metric.info in list(c("hq_hom", "High-qual. hom. GTs", "count"),
                         c("inconsistent_ab_het_rate", "Bad het. allele balance", "percent"),
                         c("mean_coverage", "Mean coverage", "other"),
                         c("median_coverage", "Median coverage", "other"),
+                        c("read_length", "Read length", "other"),
+                        c("insert_size", "Insert size", "other"),
                         c("wgd_score", "Dosage bias", "other"),
                         c("pct_genome_nondiploid", "Nondiploid genome frac.", "percent"),
                         c("age", "Age at intake", "count"),

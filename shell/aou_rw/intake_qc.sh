@@ -120,13 +120,16 @@ zcat data/dfci-g2c.intake_qc.all.tsv.gz > data/dfci-g2c.intake_qc.all.tsv
 code/scripts/make_batches.py \
   --match-on batching_sex \
   --match-on batching_pheno \
+  --batch-by batching_tissue \
+  --batch-by batching_read_length \
   --batch-by wgd_score \
+  --batch-by insert_size \
   --batch-by median_coverage \
   --global-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.global_qc_thresholds.json \
   --global-exemptions dfci-g2c.intake_qc.global_exemptions.tsv \
   --batch-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.batch_qc_thresholds.json \
   --custom-qc-fail-samples data/dfci-g2c.intake_qc.hard_fail.samples.list \
-  --batch-size 550 \
+  --batch-size 400 \
   --prefix g2c \
   --short-batch-names \
   --outfile data/dfci-g2c.intake_qc.all.post_qc_batching.tsv \

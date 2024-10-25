@@ -74,6 +74,17 @@ paste \
 | sort -Vk1,1 | cat <( echo -e "Sample\trd_median\trd_mean" ) - | gzip -c \
 > $TMPDIR/${COHORT}_cov/$COHORT.cov.tsv.gz
 
+# Concatenate read metrics
+mkdir $TMPDIR/${COHORT}_read
+gsutil -m cp \
+  ${BUCKET}/${COHORT}/gatk-sv/metrics/*.read_metrics.tsv \
+  $TMPDIR/${COHORT}_read/
+head -n1 $( find $TMPDIR/${COHORT}_read/ -name "*.tsv" | head -n1 ) \
+> $TMPDIR/${COHORT}_read/read_metrics.header
+cat $TMPDIR/${COHORT}_read/*.tsv | grep -v '^#Sample' | sed '/^$/d' \
+| sort -Vk1,1 | uniq | cat $TMPDIR/${COHORT}_read/read_metrics.header - | gzip -c \
+> $TMPDIR/${COHORT}_read/$COHORT.read_metrics.tsv.gz
+
 # Copy ploidy data and restrict to cohort of interest
 gsutil -m cp $PLOIDY $TMPDIR/all.ploidy.tsv.gz
 zcat $TMPDIR/all.ploidy.tsv.gz | head -n1 > $TMPDIR/$COHORT.ploidy.tsv
@@ -89,6 +100,7 @@ $SCRIPT_DIR/merge_cohort_intake_qc_components.R \
   --charr $TMPDIR/${COHORT}_charr/$COHORT.charr.tsv.gz \
   --demo $TMPDIR/${COHORT}_demo/$COHORT.demo.tsv.gz \
   --cov $TMPDIR/${COHORT}_cov/$COHORT.cov.tsv.gz \
+  --reads $TMPDIR/${COHORT}_read/$COHORT.read_metrics.tsv.gz \
   --ploidy $TMPDIR/$COHORT.ploidy.tsv.gz \
   --outfile $TMPDIR/$COHORT.intake_qc.tsv
 gzip -f $TMPDIR/$COHORT.intake_qc.tsv
@@ -103,6 +115,7 @@ rm -rf \
   $TMPDIR/${COHORT}_charr \
   $TMPDIR/${COHORT}_demo \
   $TMPDIR/${COHORT}_cov \
+  $TMPDIR/${COHORT}_read \
   $TMPDIR/all.ploidy.tsv.gz \
   $TMPDIR/$COHORT.ploidy.tsv.gz \
   $TMPDIR/$COHORT.intake_qc.tsv.gz

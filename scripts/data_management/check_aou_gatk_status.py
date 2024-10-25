@@ -25,7 +25,8 @@ from sys import stdout, stderr
 # WDL/Cromwell execution and output buckets
 wdl_names = {'gatk-hc' : 'HaplotypeCallerGvcf_GATK4',
              'gatk-sv' : 'GatherSampleEvidence',
-             'gvcf-pp' : 'PostprocessGvcf'}
+             'gvcf-pp' : 'PostprocessGvcf',
+             'read-metrics' : 'CalcReadPairProperties'}
 hc_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gatk-hc'] + '/{}/call-MergeGVCFs/**wgs_{}.g.{}',
            'dest' : '{}/dfci-g2c-inputs/aou/gatk-hc/{}.g.vcf.gz'}
 cov_fmts = {'src' : '{}/cromwell/outputs/' + wdl_names['gatk-sv'] + '/{}/call-CollectCounts/**{}.counts.tsv.gz',
@@ -69,7 +70,11 @@ sv_fmts = {'cov' : cov_fmts,
            'wham-metrics' : wham_metrics_fmts}
 pp_fmts = {'gvcf' : '{}/cromwell/outputs/' + wdl_names['gvcf-pp'] + '/{}/call-Step2/**{}.reblocked.g.{}',
            'dest' : '{}/dfci-g2c-inputs/aou/gatk-hc/reblocked/{}.reblocked.g.vcf.gz'}
-formats = {'gatk-hc' : hc_fmts, 'gatk-sv' : sv_fmts, 'gvcf-pp' : pp_fmts}
+read_fmts = {'dest' : '{}/dfci-g2c-inputs/aou/gatk-sv/metrics/{}.read_metrics.tsv'}
+formats = {'gatk-hc' : hc_fmts, 
+           'gatk-sv' : sv_fmts, 
+           'gvcf-pp' : pp_fmts,
+           'read-metrics' : read_fmts}
 sv_has_index = {'cov' : False,
                 'cov-metrics' : False,
                 'pe' : True,
@@ -104,12 +109,7 @@ def check_if_staged(bucket, sid, mode, metrics_optional=False):
     """
 
     # List of expected outputs depends on mode
-    if mode in 'gatk-hc gvcf-pp':
-        uri = formats[mode]['dest'].format(bucket, sid)
-        tbi_uri = uri + '.tbi'
-        uris = [uri, tbi_uri]
-
-    elif mode == 'gatk-sv':
+    if mode == 'gatk-sv':
         uris = []
         if metrics_optional:
             required_files = {k : v for k, v in sv_has_index.items() \
@@ -121,6 +121,12 @@ def check_if_staged(bucket, sid, mode, metrics_optional=False):
             uris.append(uri)
             if has_index:
                 uris.append(uri + '.tbi')
+
+    else:
+        uris = [formats[mode]['dest'].format(bucket, sid)]
+        if mode in 'gatk-hc gvcf-pp'.split():
+            tbi_uri = uri + '.tbi'
+            uris.append(tbi_uri)
 
     # Check for the presence of all expected URIs
     query = 'gsutil -m ls ' + ' '.join(uris)
@@ -304,7 +310,7 @@ def main():
     parser.add_argument('-s', '--sample-id', help='Sample ID', required=True)
     parser.add_argument('-m', '--mode', required=True, 
                         help='Check status for which GATK job?', 
-                        choices='gatk-hc gatk-sv gvcf-pp'.split())
+                        choices='gatk-hc gatk-sv gvcf-pp read-metrics'.split())
     parser.add_argument('-b', '--bucket', help='Root bucket [defaut: use ' +
                         '$WORKSPACE_BUCKET environment variable]')
     parser.add_argument('-o', '--staging-bucket', help='G2C output staging ' + 
@@ -408,7 +414,10 @@ def main():
             # If job was successful but files have not been staged yet, relocate 
             # files to output bucket and mark all temporary files for deletion
             if workflow_status == 'succeeded':
-                relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
+                # All workflows need to be staged except for read-metrics, 
+                # which stages itself in the WDL
+                if args.mode is not 'read-metrics':
+                    relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
                 collect_trash(wids, bucket, args.dumpster, args.mode, 
                               args.sample_id, staging_bucket)
                 status = 'staged'

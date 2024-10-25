@@ -57,6 +57,7 @@ melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz
 wham$TAB$BUCKET/$COHORT/wham/$SAMPLE.wham.vcf.gz
 demographics$TAB$BUCKET/$COHORT/demographics/$SAMPLE.txt
 charr$TAB$BUCKET/$COHORT/charr/$SAMPLE.txt
+read_metrics$TAB$BUCKET/$COHORT/gatk-sv/metrics/$SAMPLE.read_metrics.tsv
 EOF
 
 # Check which files are present in gs://

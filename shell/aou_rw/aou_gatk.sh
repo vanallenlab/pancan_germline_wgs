@@ -89,3 +89,18 @@ while read cancer; do
   submit_workflows gatk-sv $cancer
 done < cancers.list
 
+
+################
+# READ METRICS #
+################
+
+# Main loop for the submission and tracking of read metric collection workflows
+# Before launching, this code will check the status of each sample to determine eligibility
+# It will also update counts in the main sample progress tracker table
+while read cancer; do
+  check_status read-metrics $cancer
+  update_status_table read-metrics
+  cleanup_garbage
+  submit_workflows read-metrics $cancer
+done < cancers.list
+

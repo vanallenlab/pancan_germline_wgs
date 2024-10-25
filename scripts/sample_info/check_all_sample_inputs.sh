@@ -56,6 +56,7 @@ while read COHORT; do
   gsutil -m ls \
     $BUCKET/$COHORT/**.gz \
     $BUCKET/$COHORT/**.txt \
+    $BUCKET/$COHORT/**.read_metrics.tsv \
   1> $WRKDIR/$COHORT.objects_found 2> /dev/null || true
 
   echo -e "#sample\tmissing_inputs" > $WRKDIR/$COHORT.sample_status.tsv

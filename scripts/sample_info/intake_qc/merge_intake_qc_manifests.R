@@ -234,6 +234,8 @@ qc.df$simple_cohort <- simplify.cohorts(qc.df)
 qc.df$wgs_tissue[which(is.na(qc.df$wgs_tissue))] <- "unknown"
 qc.df$batching_tissue <- remap(as.character(grepl("blood", qc.df$wgs_tissue)),
                                c("TRUE" = "blood", "FALSE" = "other"))
+qc.df$batching_read_length <- remap(as.character(qc.df$read_length >= 140),
+                                    c("TRUE" = "ge140bp", "FALSE" = "lt140bp"))
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)
