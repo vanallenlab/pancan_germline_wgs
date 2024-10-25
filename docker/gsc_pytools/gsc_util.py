@@ -453,6 +453,11 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
             OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
         ])          
+  
+  if germline_context == "noncoding" and somatic_context == "coding":
+    cohort_suffix = cohort
+  else:
+    cohort_suffix = "final"
 
   if germline_context == "coding":
     # Convert the results to a DataFrame
@@ -463,7 +468,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        'OR_final', 'p_val_final', 'ci_OR_low_final', 'ci_OR_high_final', 'relevant_cancer'
+        f'OR_{cohort_suffix}', f'p_val_{cohort_suffix}', f'ci_OR_low_{cohort_suffix}', f'ci_OR_high_{cohort_suffix}', 'relevant_cancer'
     ])
   else:
     # Convert the results to a DataFrame
@@ -474,7 +479,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        'OR_final', 'p_val_final', 'ci_OR_low_final', 'ci_OR_high_final', 'relevant_cancer'
+        f'OR_{cohort_suffix}', f'p_val_{cohort_suffix}', f'ci_OR_low_{cohort_suffix}', f'ci_OR_high_{cohort_suffix}', 'relevant_cancer'
     ])
 
   # Eliminate duplicate rows based on all columns
