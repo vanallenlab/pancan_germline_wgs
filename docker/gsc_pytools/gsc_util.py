@@ -349,7 +349,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   # Step 2: Initialize covariates
   covariates = None
   if cohort == "HMF":
-    covariates=['male','pca_1','pca_2','pca_3','pca_4']
+    covariates=['male','pca_1','pca_2','pca_3','age','TMB','tumorPurity']
   elif cohort == "PROFILE":
     covariates=['male','pca_1','pca_2','pca_3','pca_4','late_stage']
 
