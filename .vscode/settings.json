@@ -1,0 +1,12 @@
+{
+    "docker.commands.build": [
+      {
+        "label": "Default build",
+        "template": "${containerCommand} build --pull --rm -f \"${dockerfile}\" -t ${tag} \"${context}\""
+      },
+      {
+        "label": "WES Branch",
+        "template": "${containerCommand} build --no-cache --build-arg REPO_HASH=wes_addenda --pull --rm -f \"${dockerfile}\" -t ${tag} \"${context}\""
+      }
+    ]
+}
