@@ -135,7 +135,7 @@ task ConcatVcfs {
                if outFormat == "u" then ".bcf" else (
                if outFormat == "b" then ".bcf.gz" else ".vcf")))
 
-  String out_filename = "~{out_prefix}.~{suf}"
+  String out_filename = "~{out_prefix}~{suf}"
 
   command <<<
     set -eu -o pipefail
@@ -143,9 +143,9 @@ task ConcatVcfs {
     bcftools concat \
       ~{bcftools_concat_options} \
       --file-list ~{write_lines(vcfs)} \
-      --threads ~{ceil(cpu_cores/2)}
+      --threads ~{ceil(cpu_cores/2)} \
     | bcftools view \
-      -O ~{outFormat}
+      -O ~{outFormat} \
       -o ~{out_filename} \
       --threads ~{floor(cpu_cores/2)}
 
