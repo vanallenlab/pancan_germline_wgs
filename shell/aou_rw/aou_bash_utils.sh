@@ -59,8 +59,8 @@ submit_workflows() {
     "read-metrics")
       wdl=~/code/wdl/pancan_germline_wgs/CalcReadPairProperties.wdl
       inputs_json_prefix=read_metrics
-      gate_width=100
-      gate_timeout=60m
+      gate_width=150
+      gate_timeout=30m
       workflow_name="Read metric collection"
       sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       ;;

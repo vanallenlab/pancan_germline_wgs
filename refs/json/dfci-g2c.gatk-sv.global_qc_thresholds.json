@@ -62,7 +62,7 @@
 	"small insert size" : {
 		"feature" : "insert_size",
 		"equality" : "<",
-		"value" : "Q1+(7*MAD)"
+		"value" : "Q1-(7*MAD)"
 	},
 	"large insert size" : {
 		"feature" : "insert_size",

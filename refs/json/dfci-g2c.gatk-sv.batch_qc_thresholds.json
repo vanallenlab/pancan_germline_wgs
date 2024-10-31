@@ -2,12 +2,12 @@
 	"high WGD" : {
 		"feature" : "wgd_score",
 		"equality" : ">",
-		"value" : "Q3+(6*MAD)"
+		"value" : "max([Q3+(6*MAD), 0.3])"
 	},
 	"low WGD" : {
 		"feature" : "wgd_score",
 		"equality" : "<",
-		"value" : "Q1-(6*MAD)"
+		"value" : "min([Q1-(6*MAD), -0.3])"
 	},
 	"high ref contamination in HQ homs" : {
 		"feature" : "mean_ref_ab_hom_alt",
@@ -17,12 +17,12 @@
 	"high rate of hets with bad allele balance" : {
 		"feature" : "inconsistent_ab_het_rate",
 		"equality" : ">",
-		"value" : "max([Q3+(6*MAD), 0.05])"
+		"value" : "max([Q3+(6*MAD), 0.1])"
 	},
 	"small insert size" : {
 		"feature" : "insert_size",
 		"equality" : "<",
-		"value" : "Q1+(6*MAD)"
+		"value" : "Q1-(6*MAD)"
 	},
 	"large insert size" : {
 		"feature" : "insert_size",

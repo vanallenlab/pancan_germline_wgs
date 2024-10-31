@@ -81,8 +81,10 @@ gsutil -m cp \
   $TMPDIR/${COHORT}_read/
 head -n1 $( find $TMPDIR/${COHORT}_read/ -name "*.tsv" | head -n1 ) \
 > $TMPDIR/${COHORT}_read/read_metrics.header
-cat $TMPDIR/${COHORT}_read/*.tsv | grep -v '^#Sample' | sed '/^$/d' \
-| sort -Vk1,1 | uniq | cat $TMPDIR/${COHORT}_read/read_metrics.header - | gzip -c \
+find $TMPDIR/${COHORT}_read/ -name "*.tsv" > $TMPDIR/${COHORT}_read/read.files.list
+cat $TMPDIR/${COHORT}_read/read.files.list | xargs -I {} cat {} \
+| grep -v '^#Sample' | sed '/^$/d' | sort -Vk1,1 | uniq \
+| cat $TMPDIR/${COHORT}_read/read_metrics.header - | gzip -c \
 > $TMPDIR/${COHORT}_read/$COHORT.read_metrics.tsv.gz
 
 # Copy ploidy data and restrict to cohort of interest

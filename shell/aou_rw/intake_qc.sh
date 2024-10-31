@@ -116,18 +116,18 @@ code/scripts/make_batches.py \
   --batch-by insert_size \
   --batch-by median_coverage \
   --global-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.global_qc_thresholds.json \
-  --global-exemptions dfci-g2c.intake_qc.global_exemptions.tsv \
+  --global-exemptions data/dfci-g2c.intake_qc.global_exemptions.tsv \
   --batch-qc-cutoffs code/refs/json/dfci-g2c.gatk-sv.batch_qc_thresholds.json \
-  --batch-exemptions dfci-g2c.intake_qc.batch_exemptions.tsv \
+  --batch-exemptions data/dfci-g2c.intake_qc.batch_exemptions.tsv \
   --custom-qc-fail-samples data/dfci-g2c.intake_qc.hard_fail.samples.list \
-  --batch-size 400 \
+  --batch-size 450 \
   --prefix g2c \
   --short-batch-names \
   --outfile data/dfci-g2c.intake_qc.all.post_qc_batching.tsv \
   --batch-names-tsv data/dfci-g2c.gatk-sv.batches.list \
   --batch-membership-tsv data/dfci-g2c.gatk-sv.batch_membership.tsv \
   --fail-reasons-log data/dfci-g2c.intake_qc.all.sample_failure_reasons.tsv \
-  --logfile data/dfci-g2c.intake_qc.all.post_qc_batching.log \
+  --logfile data/dfci-g2c.intake_qc.all.qc_and_batching.log \
   data/dfci-g2c.intake_qc.all.tsv
 gzip -f data/dfci-g2c.intake_qc.all.post_qc_batching.tsv
 
@@ -157,3 +157,15 @@ gsutil -m cp \
   data/tarballs/dfci-g2c.phase1.batch_qc_pass.plots.tar.gz \
   $MAIN_WORKSPACE_BUCKET/results/intake_qc/
 
+# Format batch info and stage in central google bucket for GATK-SV
+mkdir data/gatksv_batch_info
+sed '1d' data/dfci-g2c.gatk-sv.batches.list
+
+# Copy all other batching & QC files to results bucket for reference
+gsutil -m cp \
+  data/dfci-g2c.intake_qc.hard_fail.samples.list \
+  data/dfci-g2c.intake_qc.global_exemptions.tsv \
+  data/dfci-g2c.intake_qc.batch_exemptions.tsv \
+  data/dfci-g2c.intake_qc.all.sample_failure_reasons.tsv \
+  data/dfci-g2c.intake_qc.all.qc_and_batching.log \
+  $MAIN_WORKSPACE_BUCKET/results/intake_qc/

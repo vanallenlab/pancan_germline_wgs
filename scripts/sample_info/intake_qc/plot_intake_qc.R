@@ -51,7 +51,8 @@ grafpop.margin.bar <- function(qc.df, ordered.pops=NULL, label.cex=5.5/6){
     ordered.pops <- intersect(names(pop.colors), unique(qc.df$intake_qc_pop))
   }
   pop.k.df <- do.call("rbind", lapply(ordered.pops, function(pop){
-    data.frame("pop"=pop, rev(sort(table(qc.df$intake_qc_subpop[which(qc.df$intake_qc_pop == pop)]))))
+    data.frame("pop"=pop,
+               rev(sort(table(qc.df$intake_qc_subpop[which(qc.df$intake_qc_pop == pop)]))))
   }))
   colnames(pop.k.df) <- c("pop", "subpop", "n")
   pop.k.df$cumsum <- cumsum(pop.k.df$n)
@@ -138,8 +139,22 @@ plot.autosomal.ploidy <- function(qc.df, parmar=c(1.9, 2.1, 1, 0.5)){
   })
 }
 
-# Plot a matrix/grid of selected features vs. a categorical variable (cohort|cancer|batch)
-qc.grid <- function(qc.df, primary.variable){
+# Plot a matrix/grid of selected features vs. a categorical variable
+# Primary axis ~ (cohort|cancer|casecontrol|batch)
+qc.grid <- function(qc.df, primary.variable, top.axes=TRUE, x.tick.len=-0.025,
+                    top.y.margin=2.5, inner.margin=0.3, override.layout=FALSE){
+  # Configure oscillating greyscale for cohort colors on the fly
+  cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
+  cohort.colors <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+  names(cohort.colors) <- names(cohort.k)
+
+  #Filter data, if needed
+  if(primary.variable == "cancer"){
+    qc.df <- qc.df[which(qc.df$single_cancer != "control"), ]
+  }else if(primary.variable == "casecontrol"){
+    qc.df <- qc.df[which(qc.df$single_cancer != "unknown"), ]
+  }
+
   # Format primary and secondary variables
   if(primary.variable == "cancer"){
     prim <- cancer <- as.character(explode.by.cancer(qc.df$cancer)$cancer)
@@ -150,7 +165,7 @@ qc.grid <- function(qc.df, primary.variable){
     coverage <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$mean_coverage)$x)
     isize <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$insert_size)$x)
     wgd <- as.numeric(explode.by.cancer(qc.df$cancer, qc.df$wgd_score)$x)
-  }else if(primary.variable %in% c("cohort", "batch")){
+  }else if(primary.variable %in% c("casecontrol", "cohort", "batch")){
     cancer <- as.character(qc.df$single_cancer)
     prim <- cohort <- as.character(qc.df$simple_cohort)
     sex <- as.character(qc.df$inferred_sex)
@@ -161,54 +176,72 @@ qc.grid <- function(qc.df, primary.variable){
     wgd <- as.numeric(qc.df$wgd_score)
     if(primary.variable == "batch"){
       prim <- as.character(qc.df$final_batch_assignment)
+    }else if(primary.variable == "casecontrol"){
+      prim <- remap(cancer,
+                    c("control" = "control", "unknown" = "unknown"),
+                    default.value="all")
     }
   }else{
-    stop(paste("primary.variable ", primary.variable, " currently not supported", sep="`"))
+    stop(paste("primary.variable ", primary.variable,
+               " currently not supported", sep="`"))
   }
-  if(primary.variable %in% c("cancer", "cohort")){
+  if(primary.variable %in% c("cancer", "cohort", "casecontrol")){
     prim.order <- names(sort(table(prim)))
-    prim.titles <- list("cancer" = cancer.names, "cohort" = cohort.names.short)[[primary.variable]]
+    prim.titles <- list("cancer" = cancer.names,
+                        "casecontrol" = cancer.names,
+                        "cohort" = cohort.names.short)[[primary.variable]]
   }else{
-    prim.order <- sort(unique(sort(as.character(qc.df$final_batch_assignment))))
-    prim.titles <- rev(paste("Batch", 1:length(prim.order)))
+    prim.order <- sort(unique(as.character(prim)))
+    prim.titles <- gsub("^g2c-", "", prim.order)
     names(prim.titles) <- prim.order
   }
-  sec.order <- setdiff(c("cancer", "cohort", "sex", "pop", "age", "coverage", "isize"),
-                       primary.variable)
   if(primary.variable == "batch"){
-    sec.order <- setdiff(c(sec.order, "wgd"), "age")
+    sec.order <- c("cancer", "cohort", "sex", "pop", "wgd", "isize", "coverage")
+  }else{
+    sec.order <- setdiff(c("cancer", "cohort", "sex", "pop",
+                           "age", "coverage", "isize"),
+                         primary.variable)
+    if(primary.variable == "casecontrol"){
+      sec.order <- setdiff(sec.order, "cancer")
+    }
   }
 
-  # Configure oscillating greyscale for cohort colors on the fly
-  cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
-  cohort.colors <- greyscale.palette(length(cohort.k), oscillate=TRUE)
-  names(cohort.colors) <- names(cohort.k)
-
   # Prep plot layout
-  n.rows <- length(prim.order)
-  n.cols <- length(sec.order) + 1
-  layout(matrix(1:n.cols, nrow=1), widths=c(2, rep(1.4, n.rows-1)))
-  top.y.margin <- 2.5
-  inner.margin <- 0.3
+  if(!override.layout){
+    n.rows <- length(prim.order)
+    n.cols <- length(sec.order) + 1
+    layout(matrix(1:n.cols, nrow=1), widths=c(2, rep(1.4, n.rows-1)))
+  }
 
   # First panel is always simple barplot of total abundance per row + right margin labels
-  if(primary.variable == "cancer"){
+  if(primary.variable %in% c("cancer", "casecontrol")){
     prim.colors <- cancer.colors[prim.order]
     names(prim.colors) <- prim.titles[prim.order]
+    prim.name <- "Cancer type"
   }else if(primary.variable == "cohort"){
     prim.colors <- cohort.colors
     names(prim.colors) <- prim.titles[names(cohort.colors)]
+    prim.name <- "Cohort"
   }else if(primary.variable == "batch"){
     prim.colors <- rep("black", length(prim.titles))
     names(prim.colors) <- prim.titles
+    prim.name <- "Batch"
   }
   stacked.barplot(prim.titles[prim], color=prim.colors,
                   outer.borders=prim.colors[prim.titles[prim.order]],
                   x.axis.side=NA, orient="left",
+                  y.label.cex=if(primary.variable == "batch"){4/6}else{5/6},
                   custom.major.order=prim.titles[prim.order],
                   add.legend=FALSE, annotate.counts=TRUE,
-                  parmar=c(0.1, 3, top.y.margin, 4.5))
-  axis(3, at=mean(par("usr")[1:2]), tick=F, line=-0.8, labels="Genomes")
+                  end.label.cex=if(primary.variable == "batch"){4/6}else{5/6},
+                  parmar=c(0.1, 3, top.y.margin,
+                           if(primary.variable == "batch"){3}else{4.5}))
+  if(top.axes){
+    axis(3, at=par("usr")[1]+(0.925*diff(par("usr")[1:2])),
+         tick=F, line=-0.5, labels="Genomes", hadj=1, xpd=T)
+    axis(3, at=par("usr")[1]+(1.075*diff(par("usr")[1:2])),
+         tick=F, line=-0.5, labels=prim.name, hadj=0, xpd=T)
+  }
 
   for(sec in sec.order){
     # Get values for each secondary variable
@@ -224,7 +257,6 @@ qc.grid <- function(qc.df, primary.variable){
     }else if(sec == "cohort"){
       s.names <- cohort.names.short
       s.v <- s.names[cohort]
-      s.k <- sort(table(s.v), decreasing=TRUE)
       s.col <- cohort.colors
       names(s.col) <- s.names[names(cohort.colors)]
       s.title <- "Cohort"
@@ -264,7 +296,7 @@ qc.grid <- function(qc.df, primary.variable){
         p.c <- as.numeric(coverage[which(prim == p)])
         p.c <- p.c[which(!is.na(p.c))]
       })
-      s.title <- "WGS coverage (x)"
+      s.title <- if(primary.variable == "batch"){"Coverage"}else{"WGS coverage (x)"}
       xlims <- c(0, min(c(80, quantile(unlist(s.v), probs=0.999))))
       plot.type <- "ridge"
 
@@ -292,19 +324,24 @@ qc.grid <- function(qc.df, primary.variable){
       stacked.barplot(major.values=prim, minor.values=s.v, colors=s.col,
                       as.proportion=T, add.legend=F, add.major.label=F,
                       minor.labels.on.bars=TRUE, x.axis.side=NA,
-                      minor.label.letter.width=0.07, sort.minor=sort.minor,
-                      minor.label.cex=if(primary.variable == "batch"){4/6}else{5/6},
+                      minor.label.letter.width=0.08, sort.minor=sort.minor,
+                      custom.major.order=if(primary.variable == "batch"){rev(prim.order)}else{NULL},
+                      minor.label.cex=if(primary.variable == "batch"){3/6}else{5/6},
                       parmar=c(0.1, inner.margin, top.y.margin, inner.margin))
 
       if(sec == "sex"){
         abline(v=0.5, lty=3)
-        clean.axis(3, at=0.5, labels="50:50", title=s.title, title.line=0.3,
-                   label.line=-0.65)
+        if(top.axes){
+          clean.axis(3, at=0.5, labels="50:50", title=s.title, title.line=0.3,
+                     label.line=-0.65)
+        }
       }else{
-        axis(3, at=0.5, tick=F, line=-0.5, labels=s.title)
+        if(top.axes){
+          axis(3, at=0.5, tick=F, line=-0.5, labels=s.title)
+        }
       }
     }else if(plot.type == "ridge"){
-      if(primary.variable == "cancer"){
+      if(primary.variable %in% c("cancer", "casecontrol")){
         ridge.fill <- cancer.colors[prim.order]
         ridge.light <- sapply(cancer.palettes[prim.order], function(v){v["light1"]})
         ridge.border <- sapply(cancer.palettes[prim.order], function(v){v["dark2"]})
@@ -312,7 +349,8 @@ qc.grid <- function(qc.df, primary.variable){
       }else{
         ridge.fill <- ridge.light <- ridge.border <- median.color <- NULL
       }
-      ridgeplot(s.v, x.title=s.title, x.axis.side=3, xlims=xlims, y.axis=FALSE,
+      ridgeplot(s.v, x.title=s.title, x.axis.side=if(top.axes){3}else{NA},
+                max.x.ticks=4, x.tick.len=x.tick.len, xlims=xlims, y.axis=FALSE,
                 bw.adj=0.5, yaxs="i", hill.overlap=-0.1, hill.bottom=0.1,
                 border.lwd=1, fill=ridge.fill, fancy.light.fill=ridge.light,
                 border=ridge.border, fancy.median.color=median.color,
@@ -343,7 +381,7 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
+# args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.post_qc_batching.tsv.gz",
 #              "pass_column" = NULL,
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 # args <- list("qc_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.post_qc_batching.tsv.gz",
@@ -563,7 +601,8 @@ sapply(1:2, function(s){
                   minor.label.cex=4/6, parmar=bar.parmars[[s]])
   if(s==2){
     axis(4, at=par("usr")[3]-1.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
-         labels=paste(round(100 * frac.multi, 1), "% of cases have\nmultiple cancers"),
+         labels=paste(round(100 * frac.multi, 1),
+                      "% of cases have\nmultiple cancers", sep=""),
          xpd=T, col.axis=annot.color)
     axis(4, at=par("usr")[3]-4.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste("Mean = ", prettyNum(round(mean(cancer.k), 0), big.mark=","),
@@ -580,7 +619,8 @@ layout(matrix(1:2, nrow=2, ncol=1), heights=cohort.panel.height.ratio)
 sapply(1:2, function(s){
   subdf <- cohort.bar.subdfs[[s]]
   stacked.barplot(cohort.names.short[subdf$simple_cohort],
-                  cancer.names[subdf$cancer], colors=cancer.key.cols, inner.borders=cancer.key.cols,
+                  cancer.names[subdf$single_cancer], colors=cancer.key.cols,
+                  inner.borders=cancer.key.cols,
                   x.title=if(s==1){"Genomes per cohort"}else{""},
                   x.axis.tck=-0.025/cohort.panel.height.ratio[s], x.label.line=-0.85,
                   x.title.line=0, annotate.counts=TRUE, add.legend=FALSE,
@@ -615,37 +655,53 @@ surv.models <- lapply(c("IV", "III", "II", "I"), function(stage){
                   data=qc.df[which(qc.df$stage == stage), ]))
 })
 names(surv.models) <- c("IV", "III", "II", "I")
-surv.models[["no_stage"]] <- summary(survfit(Surv(years_left_censored, years_to_last_contact, abs(vital_status-1)) ~ 1,
-                                            data=qc.df[which(qc.df$cancer != "control" & !is.na(qc.df$stage)), ]))
-surv.models[["control"]] <- summary(survfit(Surv(years_left_censored, years_to_last_contact, abs(vital_status-1)) ~ 1,
+surv.models[["no_stage"]] <- summary(survfit(Surv(years_left_censored,
+                                                  years_to_last_contact,
+                                                  abs(vital_status-1)) ~ 1,
+                                            data=qc.df[which(qc.df$cancer != "control"
+                                                             & !is.na(qc.df$stage)), ]))
+surv.models[["control"]] <- summary(survfit(Surv(years_left_censored,
+                                                 years_to_last_contact,
+                                                 abs(vital_status-1)) ~ 1,
                               data=qc.df[which(qc.df$cancer == "control"), ]))
 # Note: uses hist.pdf.dims (this is intentional)
 pdf(paste(args$out_prefix, "km_surv_by_stage", "pdf", sep="."),
     height=hist.pdf.dims[1], width=hist.pdf.dims[2]+0.3)
 km.curve(surv.models,
-         colors=c(stage.colors[c("IV", "III", "II", "I")], cancer.colors[c("pancan", "control")]),
+         colors=c(stage.colors[c("IV", "III", "II", "I")],
+                  cancer.colors[c("pancan", "control")]),
          ci.alpha=0, title="Overall survival", y.title="", time.is.days=FALSE,
          legend.label.spacing=0.15, legend.label.cex=5/6,
-         legend.names=c(stage.names.long[names(surv.models)[1:4]], "Stage N.R.", "Controls"),
+         legend.names=c(stage.names.long[names(surv.models)[1:4]],
+                        "Stage N.R.", "Controls"),
          xlim=c(0, 8), x.tck=-0.025, x.label.line=-1, x.title.line=-0.25,
          km.lwd=4, parmar=c(1.75, 1.25, 1, 5))
 dev.off()
 
 
-# Summary grid of key metrics by cancer type & cohort
-sapply(c("cancer", "cohort"), function(primary.variable){
-  pdf(paste(args$out_prefix, "qc_grid", primary.variable, "pdf", sep="."),
-      height=if(primary.variable == "cancer"){4}else{2.5}, width=7.2)
-  qc.grid(qc.df, primary.variable)
-  dev.off()
-})
+# Summary grid of key metrics by cancer type
+pdf(paste(args$out_prefix, "qc_grid.cancer.pdf", sep="."), height=4.25, width=7.2)
+layout(matrix(c(1:7, rep(8, 7), 9:15), byrow=T, nrow=3),
+       heights=c(1, 0.1, 4.8), widths=c(2, rep(1.4, 6)))
+qc.grid(qc.df, "casecontrol", override.layout=T, x.tick.len=-0.06)
+prep.plot.area(0:1, 0:1, c(0, 0.75, 0, 0.3))
+abline(h=0.5, col="gray80")
+qc.grid(qc.df, "cancer", override.layout=T, top.axes=F, top.y.margin=0.1)
+dev.off()
+
+
+# Summary grid of key metrics by cohort
+pdf(paste(args$out_prefix, "qc_grid.cohort.pdf", sep="."), height=2.5, width=7.2)
+qc.grid(qc.df, "cohort")
+dev.off()
 
 
 # Summary grid of key metrics per batch
 if("final_batch_assignment" %in% colnames(qc.df)){
   # Full page layout for supplement
-  pdf(paste(args$out_prefix, "qc_grid.batch.portrait.pdf", sep="."),
+  pdf(paste(args$out_prefix, "qc_grid.batch.pdf", sep="."),
       height=9.5, width=7.2)
   qc.grid(qc.df, "batch")
   dev.off()
 }
+

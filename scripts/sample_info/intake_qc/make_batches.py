@@ -318,7 +318,8 @@ def main():
         branches = {k : [0] for k in args.batch_by}
         for key, value in zip(bb_categ, categ_values):
             branches[key] = [value]
-        n_samples = len(filter_samples(md, zip(bb_categ.keys(), categ_values)))
+        n_samples = len(filter_samples(md.drop(global_fails), 
+                                       zip(bb_categ.keys(), categ_values)))
         n_splits = np.prod([len(v) for v in branches.values()])
         prev_batch_size = current_batch_size = n_samples / n_splits
         while current_batch_size > args.batch_size:
@@ -344,14 +345,19 @@ def main():
     
     # Perform batching on parallel strata from above
     batch_name_template = args.prefix
+    if args.short_batch_names:
+        batch_name_template += '-'
     for bb in args.batch_by:
         if bb in bb_numeric:
             if args.short_batch_names:
-                batch_name_template += '-' + bb[0] + '{}'
+                batch_name_template += bb[0] + '{}'
             else:
                 batch_name_template += '-' + bb + '_{}'
         else:
-            batch_name_template += '-{}'
+            if args.short_batch_names:
+                batch_name_template += '{}'
+            else:
+                batch_name_template += '-{}'
     for strat, strat_ids in strata.items():
         for cv, branches in batch_trees.items():
             samples = filter_samples(md, zip(bb_categ.keys(), cv))
@@ -424,10 +430,13 @@ def main():
         md.loc[list(global_qc_fails), 'batch_qc_pass'] = None
         md.loc[list(batch_qc_fails), 'final_batch_assignment'] = None
         if not args.quiet:
+            n_after_global = md[~md['preqc_batch_assignment'].isna()].shape[0]
+            n_lost = len(batch_qc_fails)
             n_kept = md['batch_qc_pass'].sum()
-            msg = 'Batch-specific QC complete. Retained a total of {:,} ' + \
+            msg = 'Batch-specific QC complete.\n{:,} ({:.1f}%) samples failed ' + \
+                  'batch-specific QC for any reason.\nRetained a total of {:,} ' + \
                   'samples across all batches.\n\n'
-            log.write(msg.format(n_kept))
+            log.write(msg.format(n_lost, 100 * n_lost / n_after_global, n_kept))
             log.write('Final batch membership membership summary after QC:\n')
             summarize_batches(md['final_batch_assignment'], log)
 

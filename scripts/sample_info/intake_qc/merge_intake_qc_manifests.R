@@ -89,6 +89,17 @@ simplify.cohorts <- function(df, min.n=400, other.label="other"){
   sc.map[df$Cohort]
 }
 
+# Impute missing read length and insert size on a cohort-specific basis
+impute.rl.isize <- function(df){
+  imp.cols <- c("read_length", "insert_size")
+  df[, imp.cols] <- apply(df[, imp.cols], 2, as.numeric)
+  for(cohort in unique(df$Cohort)){
+    cidxs <- which(df$Cohort == cohort)
+    df[cidxs, imp.cols] <- impute.missing.values(df[cidxs, ], fill.columns=imp.cols)[, imp.cols]
+  }
+  return(df)
+}
+
 # Infer sex from X/Y ploidy estimates
 # Also assigns batching sex, which is simply based on chrX ploidy
 infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
@@ -239,13 +250,21 @@ other.df <- load.intake.tsv(args$non_aou_tsv)
 qc.df <- merge.qc.dfs(aou.df, other.df, args$include_samples,
                       args$id_prefix, args$suffix_length)
 
-# Simplify cohort assignment & tissue source (for batching)
+# Impute missing read length & insert size on a cohort-specific basis
+# (This is only necessary for a handful of samples; just 2 from AoU)
+qc.df <- impute.rl.isize(qc.df)
+
+# Simplify certain batching labels (cohort, tissue, read length)
 qc.df$simple_cohort <- simplify.cohorts(qc.df)
 qc.df$wgs_tissue[which(is.na(qc.df$wgs_tissue))] <- "unknown"
 qc.df$batching_tissue <- remap(as.character(grepl("blood", qc.df$wgs_tissue)),
                                c("TRUE" = "blood", "FALSE" = "other"))
 qc.df$batching_read_length <- remap(as.character(qc.df$read_length >= 140),
                                     c("TRUE" = "ge140bp", "FALSE" = "lt140bp"))
+
+# Due to non-blood samples being very sparse, mark all read lengths as ge140bp
+# to prevent very small batches from being formed
+qc.df$batching_read_length[which(qc.df$batching_tissue == "other")] <- "ge140"
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)

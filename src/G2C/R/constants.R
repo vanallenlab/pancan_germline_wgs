@@ -57,7 +57,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
   cancer.colors["control"] <- "#D6D6D6"
   cancer.colors["multiple"] <- cancer.colors["other"] <- cancer.colors["pancan"]
   cancer.colors[c("unknown", "not_specified", "NA")] <- "gray95"
-  cancer.colors["pancan"] <- "#C43825"
+  cancer.colors[c("pancan", "all")] <- "#C43825"
 
   # Visualize cancer colors to screen, if optioned
   if(plot.colors){
