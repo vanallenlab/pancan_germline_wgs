@@ -4,12 +4,12 @@
 \alias{load.constants}
 \title{Load study constants}
 \usage{
-load.constants(subset = "all", envir = .GlobalEnv)
+load.constants(subset, envir = .GlobalEnv)
 }
 \arguments{
 \item{envir}{Environment passed to \link[base:assign]{base::assign} [default: .GlobalEnv]}
 
-\item{susbet}{Vector of constant groups to load. See \code{Details} for options. [default: load all constants]}
+\item{susbet}{Vector of constant groups to load See \code{Details} for options.}
 }
 \description{
 Load a subset of constants used throughout G2C
@@ -20,7 +20,6 @@ Recognized values for \code{subset} include:
 \item \code{colors} : all color palettes used
 \item \code{scales} : all scales and scale labels
 \item \code{names} : names of various variables
-\item \code{other} : miscellaneous other constants
 \item \code{all} : load all constants
 }
 }

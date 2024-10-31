@@ -1,0 +1,77 @@
+{
+	"high WGD" : {
+		"feature" : "wgd_score",
+		"equality" : ">",
+		"value" : "max([Q3+(7*MAD), 0.5])"
+	},
+	"low WGD" : {
+		"feature" : "wgd_score",
+		"equality" : "<",
+		"value" : "min([min([Q1-(7*MAD)]), -0.5])"
+	},
+	"high median coverage" : {
+		"feature" : "median_coverage",
+		"equality" : ">",
+		"value" : "80"
+	},
+	"low median coverage" : {
+		"feature" : "median_coverage",
+		"equality" : "<",
+		"value" : "10"
+	},
+	"high mean coverage" : {
+		"feature" : "mean_coverage",
+		"equality" : ">",
+		"value" : "80"
+	},
+	"low mean coverage" : {
+		"feature" : "mean_coverage",
+		"equality" : "<",
+		"value" : "10"
+	},
+	"short read length" : {
+		"feature" : "read_length",
+		"equality" : "<",
+		"value" : "99"
+	},
+	"too young" : {
+		"feature" : "age",
+		"equality" : "<",
+		"value" : "18"
+	},
+	"high contamination" : {
+		"feature" : "charr",
+		"equality" : ">",
+		"value" : "max([Q3-(7*MAD), 0.03])"
+	},
+	"low HQ het rate" : {
+		"feature" : "hq_het_rate",
+		"equality" : "<",
+		"value" : "min([Q1-(7*MAD), 0.995])"
+	},
+	"high ref contamination in HQ homs" : {
+		"feature" : "mean_ref_ab_hom_alt",
+		"equality" : ">",
+		"value" : "max([Q3+(7*MAD), 0.01])"
+	},
+	"high rate of hets with bad allele balance" : {
+		"feature" : "inconsistent_ab_het_rate",
+		"equality" : ">",
+		"value" : "max([Q3+(7*MAD), 0.15])"
+	},
+	"small insert size" : {
+		"feature" : "insert_size",
+		"equality" : "<",
+		"value" : "Q1-(7*MAD)"
+	},
+	"large insert size" : {
+		"feature" : "insert_size",
+		"equality" : ">",
+		"value" : "Q3+(7*MAD)"
+	},
+	"too many apparent aneuploidies" : {
+		"feature" : "apparent_aneuploidies",
+		"equality" : ">",
+		"value" : "1"
+	}
+}

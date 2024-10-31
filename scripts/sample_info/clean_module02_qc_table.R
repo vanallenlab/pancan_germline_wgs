@@ -51,7 +51,9 @@ for(base.id in intersect(dup.ids, missing.nondip.ids)){
   df[id.idxs, "nondiploid_bins"] <- nondip
   idxs.to.drop <- c(idxs.to.drop, prev.nonna.idxs)
 }
-df <- df[-c(idxs.to.drop), ]
+if(length(idxs.to.drop) > 0){
+  df <- df[-c(idxs.to.drop), ]
+}
 
 # Find samples with missing WGD scores
 bad.wgd.ids <- df[which(df$wgd_score == "NaN" | is.na(df$wgd_score)), 1]

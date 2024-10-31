@@ -36,7 +36,7 @@ done
 . code/refs/aou_bash_utils.sh
 
 # Install necessary packages
-. code/refs/install_packages.sh
+. code/refs/install_packages.sh R
 
 # Prep GATK-SV dependencies
 cd code/wdl/gatk-sv && \

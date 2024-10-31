@@ -8,11 +8,12 @@
 # Helper bash functions for All of Us Researcher Workbench
 
 
-# Submit workflows for one cancer type and a single workflow (gatk-hc, gatk-sv, or gcnv-pp)
+# Submit workflows for one cancer type and a single workflow 
+# (gatk-hc, gatk-sv, gcnv-pp, or read-metrics)
 submit_workflows() {
   # Check inputs
   if [ $# -ne 2 ]; then
-    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) and cancer type as first two positional arguments"
+    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp|read-metrics) and cancer type as first two positional arguments"
   else
     wflow=$1
     cancer_sub=$2
@@ -54,6 +55,14 @@ submit_workflows() {
       | fgrep -wf - data/cram_paths/$cancer_sub.cram_paths.tsv \
       > $cancer_sub.$wflow.sids_to_submit.list
       sid_cram_list=$cancer_sub.$wflow.sids_to_submit.list
+      ;;
+    "read-metrics")
+      wdl=~/code/wdl/pancan_germline_wgs/CalcReadPairProperties.wdl
+      inputs_json_prefix=read_metrics
+      gate_width=150
+      gate_timeout=30m
+      workflow_name="Read metric collection"
+      sid_cram_list=~/data/cram_paths/$cancer_sub.cram_paths.tsv
       ;;
   esac
   if ! [ -e $status_tsv ]; then
@@ -115,10 +124,11 @@ submit_workflows() {
 }
 
 
-# Check sample status for one cancer type and a single workflow (gatk-hc, gatk-sv, or gcnv-pp)
+# Check sample status for one cancer type and a single workflow 
+# (gatk-hc, gatk-sv, gcnv-pp, or read-metrics)
 check_status() {
   if [ $# -ne 2 ]; then
-    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) and cancer type as first two positional arguments"
+    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp|read-metrics) and cancer type as first two positional arguments"
   else
     wflow=$1
     cancer_sub=$2
@@ -155,7 +165,7 @@ check_status() {
 # Update status table of sample progress
 update_status_table() {
   if [ $# -ne 1 ]; then
-    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp) as first positional argument"
+    echo "Must specify (gatk-hc|gatk-sv|gvcf-pp|read-metrics) as first positional argument"
   else
     wflow=$1
   fi

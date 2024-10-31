@@ -38,7 +38,7 @@ if [ -z $BUCKET ]; then
 fi
 
 if [ -z $TMPDIR ]; then
-  TMPDIR=`mtemp -d`
+  TMPDIR=`mktemp -d`
   RM_TMPDIR="true"
 else
   RM_TMPDIR="false"
@@ -57,6 +57,7 @@ melt$TAB$BUCKET/$COHORT/melt/$SAMPLE.melt.vcf.gz
 wham$TAB$BUCKET/$COHORT/wham/$SAMPLE.wham.vcf.gz
 demographics$TAB$BUCKET/$COHORT/demographics/$SAMPLE.txt
 charr$TAB$BUCKET/$COHORT/charr/$SAMPLE.txt
+read_metrics$TAB$BUCKET/$COHORT/gatk-sv/metrics/$SAMPLE.read_metrics.tsv
 EOF
 
 # Check which files are present in gs://

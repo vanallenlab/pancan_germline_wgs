@@ -7,6 +7,7 @@
 
 # Merge and harmonize AoU and non-AoU intake QC manifests
 # Also assigns G2C IDs to all samples
+# Also infers genetic sex for all samples (and assigns batching sex)
 # Also assigns provisional ancestry labels based on 1kG
 
 
@@ -17,13 +18,19 @@
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
 require(caret, quietly=TRUE)
+require(RLCtools, quietly=TRUE)
 
 
 ##################
 # Data Functions #
 ##################
 # Read & clean input .tsv
-load.intake.tsv <- function(tsv.in){
+load.intake.tsv <- function(tsv.in=NULL){
+  # If no tsv is specified, return empty data frame
+  if(is.null(tsv.in)){
+    return(data.frame())
+  }
+
   # Read data.frame
   df <- read.table(tsv.in, sep="\t", check.names=F, comment.char="", header=T)
 
@@ -51,8 +58,8 @@ load.intake.tsv <- function(tsv.in){
 }
 
 # Merge QC data.frames from AoU and non-AoU samples
-merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL,
-                         id.prefix="G2C", suffix.length=6){
+merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL, id.prefix="G2C",
+                         suffix.length=6, seed=2024){
   # Merge, sort, and deduplicate data
   df <- rbind(aou.df, other.df)
   df <- df[with(df, order(Cohort, Sample)), ]
@@ -65,7 +72,9 @@ merge.qc.dfs <- function(aou.df, other.df, pass_tsv=NULL,
   }
 
   # Add G2C IDs
-  df$G2C_id <- paste(id.prefix, formatC(1:nrow(df), width=suffix.length, flag="0"), sep="")
+  set.seed(seed)
+  id.nos <- sample(1:(10^suffix.length), nrow(df), replace=F)
+  df$G2C_id <- paste(id.prefix, formatC(id.nos, width=suffix.length, flag="0"), sep="")
 
   return(df)
 }
@@ -80,11 +89,26 @@ simplify.cohorts <- function(df, min.n=400, other.label="other"){
   sc.map[df$Cohort]
 }
 
+# Impute missing read length and insert size on a cohort-specific basis
+impute.rl.isize <- function(df){
+  imp.cols <- c("read_length", "insert_size")
+  df[, imp.cols] <- apply(df[, imp.cols], 2, as.numeric)
+  for(cohort in unique(df$Cohort)){
+    cidxs <- which(df$Cohort == cohort)
+    df[cidxs, imp.cols] <- impute.missing.values(df[cidxs, ], fill.columns=imp.cols)[, imp.cols]
+  }
+  return(df)
+}
+
 # Infer sex from X/Y ploidy estimates
+# Also assigns batching sex, which is simply based on chrX ploidy
 infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
   # Begin by estimating copy numbers for X/Y with simple rounding
   n.x <- round(df$chrX_CopyNumber)
   n.y <- round(df$chrY_CopyNumber)
+
+  # Assign batching sex as simply whether round(chrX) >= 2
+  df$batching_sex <- remap(as.character(n.x >= 2), c("TRUE" = "female", "FALSE" = "male"))
 
   # Clean up samples with non-binary sex complements
   check.idx <- which(n.x+n.y != 2)
@@ -104,6 +128,16 @@ infer.sex <- function(df, y.tolerance=0.15, x.tolerance=0.25){
   df[which(df$sex_karyotype == "X"), "sex_karyotype"] <- "XO"
 
   return(df)
+}
+
+# Compute number of apparent aneuploidies, defined as the residual of ploidy
+# point estimate (e.g., abs(2 - ploidy)) being >= (1 - tolerance)
+# This allows for a small degree of wiggle room without rounding up/down from 2.5/1.5, etc.
+count.aneuploidies <- function(df, tolerance=0.15){
+  autosome.cols <- paste("chr", 1:22, "_CopyNumber", sep="")
+  auto.aneu <- apply(df[, autosome.cols], 1, function(v){sum(abs(v - 2) >= 1 - tolerance)})
+  sex.aneu <- as.integer(!df$sex_karyotype %in% c("XX", "XY"))
+  auto.aneu + sex.aneu
 }
 
 # Assign provisional ancestries based on KNN clustering vs. HGSV samples
@@ -163,7 +197,8 @@ clean.output <- function(df, n.ploidy.bins=2711){
   }
 
   # Return columns in a specific order
-  cols.first <- c("G2C_id", "original_id", "cohort", "inferred_sex", "intake_qc_pop")
+  cols.first <- c("G2C_id", "original_id", "cohort", "inferred_sex",
+                  "batching_sex", "intake_qc_pop")
   pop.cols <- c(colnames(df)[grep("grafpop", colnames(df))],
                 colnames(df)[grep("pct_[A-Z]", colnames(df))],
                 "intake_qc_subpop")
@@ -178,10 +213,10 @@ clean.output <- function(df, n.ploidy.bins=2711){
 ###########
 # Parse command line arguments and options
 parser <- ArgumentParser(description="Merge intake QC manifests")
-parser$add_argument("--aou-tsv", metavar=".tsv", type="character", required=TRUE,
+parser$add_argument("--aou-tsv", metavar=".tsv", type="character",
                     help="Intake QC .tsv for AoU samples")
 parser$add_argument("--non-aou-tsv", metavar=".tsv", type="character",
-                    required=TRUE, help="Intake QC .tsv for non-AoU samples")
+                    help="Intake QC .tsv for non-AoU samples")
 parser$add_argument("--include-samples", metavar=".txt", type="character",
                     help="Optional list of sample IDs to include (i.e., exclude all others)")
 parser$add_argument("--hgsv-pop-assignments", metavar=".tsv", type="character",
@@ -199,8 +234,8 @@ parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
-#              "non_aou_tsv" = "~/scratch/dfci-g2c.intake_qc.non_aou.tsv.gz",
+# args <- list("aou_tsv" = NULL,
+#              "non_aou_tsv" = "~/scratch/dfci-g2c.intake_qc.local_test.wphenos.tsv",
 #              "include_samples" = NULL,
 #              "hgsv_pop_assignments" = "~/scratch/HGSV.ByrskaBishop.sample_populations.tsv",
 #              "id_prefix" = "G2C",
@@ -215,11 +250,27 @@ other.df <- load.intake.tsv(args$non_aou_tsv)
 qc.df <- merge.qc.dfs(aou.df, other.df, args$include_samples,
                       args$id_prefix, args$suffix_length)
 
-# Simplify cohort assignment
+# Impute missing read length & insert size on a cohort-specific basis
+# (This is only necessary for a handful of samples; just 2 from AoU)
+qc.df <- impute.rl.isize(qc.df)
+
+# Simplify certain batching labels (cohort, tissue, read length)
 qc.df$simple_cohort <- simplify.cohorts(qc.df)
+qc.df$wgs_tissue[which(is.na(qc.df$wgs_tissue))] <- "unknown"
+qc.df$batching_tissue <- remap(as.character(grepl("blood", qc.df$wgs_tissue)),
+                               c("TRUE" = "blood", "FALSE" = "other"))
+qc.df$batching_read_length <- remap(as.character(qc.df$read_length >= 140),
+                                    c("TRUE" = "ge140bp", "FALSE" = "lt140bp"))
+
+# Due to non-blood samples being very sparse, mark all read lengths as ge140bp
+# to prevent very small batches from being formed
+qc.df$batching_read_length[which(qc.df$batching_tissue == "other")] <- "ge140"
 
 # Infer sex from allosome ploidy
 qc.df <- infer.sex(qc.df)
+
+# Count number of apparent aneuploidies
+qc.df$apparent_aneuploidies <- count.aneuploidies(qc.df)
 
 # Assign provisional ancestry based on 1kG + grafpop distances, if optioned
 if(!is.null(args$hgsv_pop_assignments)){
