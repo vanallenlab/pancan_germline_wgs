@@ -48,8 +48,11 @@ gsutil -m cp -r \
   pancan_germline_wgs/refs \
   $rw_bucket/code/
 gsutil -m cp \
+  pancan_germline_wgs/shell/aou_rw/general_bash_utils.sh \
   pancan_germline_wgs/shell/aou_rw/aou_bash_utils.sh \
+  pancan_germline_wgs/shell/aou_rw/gatksv_bash_utils.sh \
   pancan_germline_wgs/shell/aou_rw/setup_sample_info.sh \
+  pancan_germline_wgs/shell/aou_rw/install_packages.sh \
   $rw_bucket/code/refs/
 
 # Clean up

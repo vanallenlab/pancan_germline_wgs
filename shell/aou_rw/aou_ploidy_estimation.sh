@@ -8,7 +8,7 @@
 # Shell code to run GATK-SV ploidy estimation & dosage bias scoring (module 02) on all AoU samples selected for G2C phase 1
 
 # Note that this code is designed to be run inside the AoU Researcher Workbench
-# See aou_bash_utils.sh for custom function definitions used below
+# See general_bash_utils.sh for custom function definitions used below
 
 
 #########
@@ -33,7 +33,7 @@ done
 
 # Source .bashrc and bash utility functions
 . ~/code/refs/dotfiles/aou.rw.bashrc
-. code/refs/aou_bash_utils.sh
+. code/refs/general_bash_utils.sh
 
 # Install necessary packages
 . code/refs/install_packages.sh R

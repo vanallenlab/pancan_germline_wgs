@@ -33,6 +33,7 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
 # Source .bashrc and bash utility functions
 . ~/code/refs/dotfiles/aou.rw.bashrc
+. code/refs/general_bash_utils.sh
 . code/refs/aou_bash_utils.sh
 
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket

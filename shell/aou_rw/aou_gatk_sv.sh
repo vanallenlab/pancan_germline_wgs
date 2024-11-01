@@ -8,7 +8,7 @@
 # Shell code to run GATK-SV cohort mode pipeline on G2C phase 1
 
 # Note that this code is designed to be run inside the AoU Researcher Workbench
-# See aou_bash_utils.sh for custom function definitions used below
+# See gatksv_bash_utils.sh for custom function definitions used below
 
 
 #########
@@ -20,6 +20,11 @@ export GPROJECT="vanallen-pancan-germline-wgs"
 export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
+for dir in cromshell cromshell/inputs cromshell/job_ids; do
+  if ! [ -e $dir ]; then
+    mkdir $dir
+  fi
+done
 
 # Copy necessary code to local disk
 gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
@@ -27,7 +32,8 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
 # Source .bashrc and bash utility functions
 . ~/code/refs/dotfiles/aou.rw.bashrc
-. code/refs/aou_bash_utils.sh
+. code/refs/general_bash_utils.sh
+. code/refs/gatksv_bash_utils.sh
 
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
@@ -36,7 +42,17 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
-# TBD
+# Create dependencies .zip for all GATK-SV module submissions
+cd code/wdl/gatk-sv && \
+zip gatksv.dependencies.zip *.wdl && \
+mv gatksv.dependencies.zip ~/ && \
+cd ~
+
+# Copy sample & batch information
+gsutil -m cp -r \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/batch_info \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
+  ~/
 
 
 ##################

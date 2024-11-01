@@ -19,8 +19,8 @@ export GPROJECT="vanallen-pancan-germline-wgs"
 export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
-for dir in data data/tarballs plots plots/raw_intake_qc plots/global_qc_pass \
-           plots/batch_qc_pass; do
+for dir in data data/tarballs data/gatksv_batch_info data/gatksv_batch_info/sample_lists \
+           plots plots/raw_intake_qc plots/global_qc_pass plots/batch_qc_pass; do
   if ! [ -e $dir ]; then mkdir $dir; fi
 done
 
@@ -30,9 +30,8 @@ for suffix in py R sh; do
   find code/ -name "*.${suffix}" | xargs -I {} chmod a+x {}
 done
 
-# Source .bashrc and bash utility functions
+# Source .bashrc
 . ~/code/refs/dotfiles/aou.rw.bashrc
-. code/refs/aou_bash_utils.sh
 
 # Install necessary packages
 . code/refs/install_packages.sh R
@@ -158,8 +157,26 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/results/intake_qc/
 
 # Format batch info and stage in central google bucket for GATK-SV
-mkdir data/gatksv_batch_info
-sed '1d' data/dfci-g2c.gatk-sv.batches.list
+sed '1d' data/dfci-g2c.gatk-sv.batches.list \
+> data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.list
+while read bid; do
+  awk -v bid=$bid '{ if ($1==bid) print $2 }' \
+    data/dfci-g2c.gatk-sv.batch_membership.tsv \
+  | sort -V | uniq \
+  > data/gatksv_batch_info/sample_lists/$bid.samples.list
+done < data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.list
+code/scripts/evenSplitter.R \
+  -S 5 --shuffle \
+  data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.list \
+  data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.
+for i in $( seq 1 5 ); do
+  cat data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.$i | sort -V \
+  > data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.w$i.list
+  rm data/gatksv_batch_info/dfci-g2c.gatk-sv.batches.$i
+done
+gsutil -m cp -r \
+  data/gatksv_batch_info \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/batch_info
 
 # Copy all other batching & QC files to results bucket for reference
 gsutil -m cp \
