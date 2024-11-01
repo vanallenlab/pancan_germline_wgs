@@ -14,14 +14,14 @@
 
 
 # Submit a single GATK-SV module for a single batch
-submit_module_batch() {
+submit_batch_module() {
    # Check inputs
   if [ $# -ne 2 ]; then
-    echo "Must specify 03-16 and batch ID as first two positional arguments"
+    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
     return
   else
-    export module_idx=$1
-    export BATCH=$2
+    export BATCH=$1
+    export module_idx=$2
   fi
 
   # Set constants
@@ -29,7 +29,7 @@ submit_module_batch() {
   batch_sid_list="batch_info/sample_lists/$BATCH.samples.list"
 
   # Make batch staging directory, if necessary
-  for dir in staging "staging/$BATCH" "staging/$BATCH/$module_idx"; do
+  for dir in staging "staging/$BATCH"; do
     if ! [ -e $dir ]; then
       mkdir ~/$dir
     fi
@@ -48,6 +48,8 @@ submit_module_batch() {
       module_name="TrainGCNV"
       wdl="code/wdl/gatk-sv/TrainGCNV.wdl"
       sub_name="${module_idx}-$module_name"
+      sub_dir="staging/$BATCH/$sub_name"
+      if ! [ -e $sub_dir ]; then mkdir $sub_dir; fi
       export SAMPLES=$( collapse_txt staging/$BATCH/$batch.samples.list )
       while read sid oid cohort; do
         if [ "$cohort" == "aou" ]; then
@@ -57,8 +59,8 @@ submit_module_batch() {
         fi
         echo "$gs_base/$cohort/gatk-sv/coverage/$oid.counts.tsv.gz"
       done < staging/$BATCH/$batch.sample_info.tsv \
-      > staging/$BATCH/$sub_name/$BATCH.cov.list
-      export COUNTS=$( collapse_txt staging/$BATCH/$sub_name/$BATCH.cov.list )
+      > $sub_dir/$BATCH.cov.list
+      export COUNTS=$( collapse_txt $sub_dir/$BATCH.cov.list )
       ;;
     
     *)

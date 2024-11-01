@@ -35,6 +35,9 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 . code/refs/general_bash_utils.sh
 . code/refs/gatksv_bash_utils.sh
 
+# Infer workspace number and save as environment variable
+export WN=$( get_workspace_number )
+
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
   -i code/refs/json/aou.cromwell_options.default.json \
@@ -59,4 +62,7 @@ gsutil -m cp -r \
 # 03 | TrainGCNV #
 ##################
 
-# TBD
+# Test submission; will need to formalize checking for complete output & staging 
+# etc before writing loop
+submit_batch_module $( head -n1 batch_info/dfci-g2c.gatk-sv.batches.w$WN.list ) 03
+
