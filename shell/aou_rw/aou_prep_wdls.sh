@@ -15,7 +15,7 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=g2c_intake_qc_batching
+export g2c_branch=gatksv
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git && \
 cd pancan_germline_wgs && \
 git checkout $g2c_branch && \
@@ -23,7 +23,7 @@ git pull && \
 cd ../
 
 # Clone GATK-SV repo & checkout release tag of interest
-export gatsv_tag=v0.26.8-beta
+export gatsv_tag=v1.0
 git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatsv_tag
 
 # Clone GATK-HC workflows repo & checkout release tag of interest
