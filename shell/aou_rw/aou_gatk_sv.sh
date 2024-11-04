@@ -20,7 +20,7 @@ export GPROJECT="vanallen-pancan-germline-wgs"
 export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
-for dir in cromshell cromshell/inputs cromshell/job_ids; do
+for dir in cromshell cromshell/inputs cromshell/job_ids cromshell/progress; do
   if ! [ -e $dir ]; then
     mkdir $dir
   fi
@@ -62,7 +62,16 @@ gsutil -m cp -r \
 # 03 | TrainGCNV #
 ##################
 
-# Test submission; will need to formalize checking for complete output & staging 
-# etc before writing loop
-submit_batch_module $( head -n1 batch_info/dfci-g2c.gatk-sv.batches.w$WN.list ) 03
-
+for iter in 1; do
+  while read bid; do
+    check_batch_module $bid 03
+    # TODO: check status of batch + workflow
+    # TODO: Update tracker
+    # If not started, failed, or doomed launch:
+    submit_batch_module $bid 03
+    # TODO: If Succeeded but not staged, stage
+    # If Running, do nothing
+  done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
+  # TODO: print tracker to screen
+  sleep 60m
+done

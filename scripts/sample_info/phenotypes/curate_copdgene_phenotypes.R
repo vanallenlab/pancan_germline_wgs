@@ -14,8 +14,8 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
-require(G2C, quietly=TRUE)
-G2C::load.constants("all")
+require(G2CR, quietly=TRUE)
+G2CR::load.constants("all")
 sex.map <- c("1" = "male", "2" = "female")
 tissue.map <- c("Blood" = "blood", "Nasal epithelial" = "nasal_epithelium")
 

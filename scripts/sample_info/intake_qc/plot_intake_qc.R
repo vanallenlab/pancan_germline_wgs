@@ -14,10 +14,10 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
-require(G2C, quietly=TRUE)
+require(G2CR, quietly=TRUE)
 require(survival, quietly=TRUE)
 require(vioplot, quietly=TRUE)
-G2C::load.constants("all")
+G2CR::load.constants("all")
 
 
 ##################

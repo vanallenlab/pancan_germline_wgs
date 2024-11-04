@@ -84,3 +84,30 @@ submit_batch_module() {
   eval $cmd | jq .id | tr -d '"' \
   >> cromshell/job_ids/$BATCH.$sub_name.job_ids.list
 }
+
+
+# Check the status of a GATK-SV module for a single batch
+# Also updates running tracker
+# Also manages submission or staging of outputs as needed
+check_batch_module() {
+   # Check inputs
+  if [ $# -ne 2 ]; then
+    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
+    return
+  else
+    export bid=$1
+    export module_idx=$2
+  fi
+
+  # Check to confirm tracker exists; if it doesn't, create it
+  tracker="cromshell/progress/gatksv.batch_modules.progress.tsv"
+  if ! [ -e $tracker ]; then touch $tracker; fi
+
+  # Manage & track submission for batch
+  ~/code/scripts/check_gatksv_batch_module_status.py \
+    --batch-id "$bid" \
+    --module-index "$module_idx" \
+    --staging-bucket "$MAIN_WORKSPACE_BUCKET" \
+    --tracker-tsv "$tracker" \
+    --update-tracker
+}
