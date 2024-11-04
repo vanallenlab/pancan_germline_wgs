@@ -29,11 +29,11 @@ for lang in "$@"; do
         Rscript -e "if(require('$lib') == FALSE){install.packages('$lib', repos='https://cloud.r-project.org')}"
       done
 
-      export rlctools_version=0.1
-      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('~/code/src/RLCtools_$rlctools_version.tar.gz', repos=NULL, type='source')"
+      export RLCtools_version=0.1
+      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('~/code/src/RLCtools_$RLCtools_version.tar.gz', repos=NULL, type='source')"
 
-      export g2c_version=0.1.0
-      Rscript -e "if(require('G2C') == TRUE){remove.packages('G2C')}; install.packages('~/code/src/G2C_$g2c_version.tar.gz', repos=NULL, type='source')"
+      export G2CR_version=0.2.0
+      Rscript -e "if(require('G2CR') == TRUE){remove.packages('G2CR')}; install.packages('~/code/src/G2CR_$G2CR_version.tar.gz', repos=NULL, type='source')"
       ;;
 
   esac
