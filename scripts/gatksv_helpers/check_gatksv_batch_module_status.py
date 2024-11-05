@@ -13,9 +13,11 @@ Manage submission of a single GATK-SV workflow for a single G2C batch
 
 # Import libraries
 import argparse
+import g2cpy
+import json
 import pandas as pd
 import subprocess
-from os import getenv, path
+from os import getenv, path, remove
 from re import sub
 from sys import stdout, stderr
 
@@ -24,184 +26,104 @@ from sys import stdout, stderr
 # Note that these definitions make strong assumptions about the structure of 
 # WDL/Cromwell execution and output buckets
 wdl_names = {'03' : 'TrainGCNV'}
-
-# expected_outputs = {'03' : outputs_03}
-
-
-
-# def check_if_staged(bucket, sid, mode, metrics_optional=False):
-#     """
-#     Returns true if a sample's outputs are found in the staging bucket
-#     """
-
-#     # List of expected outputs depends on mode
-#     if mode == 'gatk-sv':
-#         uris = []
-#         if metrics_optional:
-#             required_files = {k : v for k, v in sv_has_index.items() \
-#                               if sv_required.get(k, False)}
-#         else:
-#             required_files = sv_has_index
-#         for key, has_index in required_files.items():
-#             uri = formats[mode][key]['dest'].format(bucket, sid)
-#             uris.append(uri)
-#             if has_index:
-#                 uris.append(uri + '.tbi')
-
-#     else:
-#         uris = [formats[mode]['dest'].format(bucket, sid)]
-#         if mode in 'gatk-hc gvcf-pp'.split():
-#             tbi_uri = uri + '.tbi'
-#             uris.append(tbi_uri)
-
-#     # Check for the presence of all expected URIs
-#     query = 'gsutil -m ls ' + ' '.join(uris)
-#     query_res = subprocess.run(query, capture_output=True, shell=True, 
-#                                check=False, text=True)
-#     uris_found = query_res.stdout.rstrip().split('\n')
-
-#     # Return False unless every output is found in expected location
-#     return len(set(uris).intersection(set(uris_found))) == len(uris)
+output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
+output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
+output_json_fmt = '/'.join([output_bucket_fmt, output_json_fname_fmt])
+keep_03_outs = 'cohort_contig_ploidy_model_tar cohort_gcnv_model_tars'.split()
+keep_output_keys = {'03' : keep_03_outs}
 
 
-# def find_gvcfs(workflow_ids, bucket, sid, uri_fmt=formats['gatk-hc']['gvcf'],
-#                suffix='vcf.gz'):
-#     """
-#     Attempts to find output gVCFs for a list of workflow_ids
-#     """
+def check_if_staged(bucket, bid, module_index):
+    """
+    Returns true if an outputs .json file is found in the expected location
 
-#     # If no workflow IDs are provided, return empty list
-#     # This is simply to avoid nested if statements later in the script
-#     if len(workflow_ids) == 0:
-#         return []
+    Note that we bookkeep GATK-SV module outputs using a reserved .json file,
+    which should *only* be present if the module was successful and all of the 
+    module outputs were able to be staged in --staging-bucket.
+    """
 
-#     # Find GCP URIs for all final output gVCFs
-#     expected_gvcfs = {uri_fmt.format(bucket, wid, sid, suffix) : wid \
-#                       for wid in workflow_ids}
-#     gvcf_query = 'gsutil -m ls ' + ' '.join(expected_gvcfs.keys())
-#     gvcf_query_res = subprocess.run(gvcf_query, capture_output=True, 
-#                                     shell=True, check=False, text=True)
-#     gvcfs_found = gvcf_query_res.stdout.rstrip().split('\n')
-
-#     # Extract workflow IDs for gVCFs found, if any
-#     return [uri.split('/')[6] for uri in gvcfs_found if uri.startswith('gs://')]
+    return g2cpy.check_gcp_uris([output_json_fmt.format(bucket, module_index, bid)])
 
 
-# def find_sv_files(workflow_ids, bucket, sid, uri_fmt):
-#     """
-#     Attempts to find one specific SV output file for a list of workflow_ids
-#     """
+def relocate_outputs(workflow_id, staging_bucket, bid, module_index, 
+                     action='cp', timeout=30, max_retries=20, verbose=False):
+    """
+    Relocate final output files for a module to a permanent storage location
+    """
 
-#     # If no workflow IDs are provided, return empty list
-#     # This is simply to avoid nested if statements later in the script
-#     if len(workflow_ids) == 0:
-#         return []
+    msg = 'Relocating {} to {}\n'
 
-#     # Find GCP URIs for all final output files
-#     expected_uris = {uri_fmt.format(bucket, wid, sid) : wid \
-#                      for wid in workflow_ids}
-#     query = 'gsutil -m ls ' + ' '.join(expected_uris.keys())
-#     query_res = subprocess.run(query, capture_output=True, shell=True, 
-#                                check=False, text=True)
-#     uris_found = query_res.stdout.rstrip().split('\n')
+    wdl_name = wdl_names[module_index]
 
-#     # Extract workflow IDs for output files found, if any
-#     return [uri.split('/')[6] for uri in uris_found if uri.startswith('gs://')]
+    # Use cromshell list-outputs to get and read a melted dict-like .txt of outputs
+    crom_query = 'cromshell --no_turtle -t ' + str(timeout) + \
+                 ' --machine_processable list-outputs ' + workflow_id
+    attempts = 0
+    while attempts < max_retries:
+        crom_query_res = subprocess.run(crom_query, capture_output=True, shell=True, 
+                                        check=False, text=True).stdout
+        if crom_query_res != '':
+            break
+        else:
+            attempts += 1
+        if attempts == max_retries:
+            msg = 'cromshell list-outputs failed after {:,} retries with {:,}s timeout'
+            exit(msg.format(max_retries, timeout))
 
+    # Iterate over each output mentioned by cromwell and move each to staging_bucket
+    # While relocating output files, build an outputs .json to reflect their new locations
+    outputs_dict = {}
+    keep_keys = keep_output_keys[module_index]
+    for entry in crom_query_res.rstrip().split('\n'):
 
-# def find_complete_wids(workflow_ids, bucket, sid, mode, metrics_optional=False):
-#     """
-#     Find the subset of workflow_ids that have fully complete expected output files
-#     """
+        key, src_uri = sub('^' + wdl_name + '\.', '', entry).split(': ')
+    
+        if key not in keep_keys:
+            continue
+    
+        # Format destination URI to keep nested structure of subworkflows
+        # but to remove all arbitrary Cromwell hashes
+        dest_parts = [sub('^call-', '', x) for x in src_uri.split('/') 
+                      if x.startswith('call-') or x.startswith('shard-')]
+        dest_prefix = output_bucket_fmt.format(staging_bucket, module_index, bid)
+        dest_uri = '/'.join([dest_prefix] + dest_parts + [path.basename(src_uri)])
+        
+        # Stage output
+        g2cpy.relocate_uri(src_uri, dest_uri, verbose=verbose)
 
-#     if mode in 'gatk-hc gvcf-pp'.split():
-#         wids_with_gvcf = find_gvcfs(workflow_ids, bucket, sid, 
-#                                     uri_fmt=formats[mode]['gvcf'])
-#         wids_with_tbi = find_gvcfs(wids_with_gvcf, bucket, sid, 
-#                                    uri_fmt=formats[mode]['gvcf'],
-#                                    suffix='vcf.gz.tbi')
-#         return wids_with_tbi
+        # Update outputs .json
+        if key not in outputs_dict.keys():
+            outputs_dict[key] = list()
+        outputs_dict[key].append(dest_uri)
 
-#     elif mode == 'gatk-sv':
-#         surviving_wids = workflow_ids
-#         if metrics_optional:
-#             required_files = {k : v for k, v in sv_has_index.items() \
-#                               if sv_required.get(k, False)}
-#         else:
-#             required_files = sv_has_index
-#         for key in required_files.keys():
-#             surviving_wids = find_sv_files(surviving_wids, bucket, sid, 
-#                                            formats[mode][key]['src'])
-#         return surviving_wids
-
-#     elif mode == 'read-metrics':
-#         return []
-
-
-# def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, 
-#                      action='cp', verbose=False):
-#     """
-#     Relocate final output files for a sample to permanent storage location
-#     """
-
-#     msg = 'Relocating {} to {}\n'
-
-#     if mode in 'gatk-hc gvcf-pp'.split():
-#         # Relocate gVCF
-#         src_gvcf = formats[mode]['gvcf'].format(bucket, workflow_id, sid, 'vcf.gz')
-#         dest_gvcf = formats[mode]['dest'].format(staging_bucket, sid)
-#         if verbose:
-#             stdout.write(msg.format(src_gvcf, dest_gvcf))
-#         subprocess.run(' '.join(['gsutil -m', action, src_gvcf, dest_gvcf]), shell=True)
-
-#         # Relocate tabix index
-#         src_tbi = src_gvcf + '.tbi'
-#         dest_tbi = dest_gvcf + '.tbi'
-#         if verbose:
-#             stdout.write(msg.format(src_tbi, dest_tbi))
-#         subprocess.run(' '.join(['gsutil -m', action, src_tbi, dest_tbi]), shell=True)
-
-#     elif mode == 'gatk-sv':
-#         for key, has_index in sv_has_index.items():
-#             src_uri = formats[mode][key]['src'].format(bucket, workflow_id, sid)
-#             dest_uri = formats[mode][key]['dest'].format(staging_bucket, sid)
-#             if verbose:
-#                 stdout.write(msg.format(src_uri, dest_uri))
-#             subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
-#             if has_index:
-#                 subprocess.run(' '.join(['gsutil -m', action, src_uri + '.tbi', 
-#                                          dest_uri + '.tbi']), shell=True)
+    # Write updated output .json to file and copy that file into staging_bucket
+    for key in outputs_dict.keys():
+        if len(outputs_dict[key]) == 0:
+            outputs_dict[key] = outputs_dict[key][0]
+    json_fout = output_json_fname_fmt.format('', module_index, bid)
+    with open(json_fout, 'w') as fout:
+        json.dump(outputs_dict, fout)
+    json_out_uri = output_json_fmt.format(staging_bucket, module_index, bid)
+    g2cpy.relocate_uri(json_fout, json_out_uri)
+    remove(json_fout)
 
 
-# def collect_trash(workflow_ids, bucket, dumpster_path, mode, sample_id, 
-#                   staging_bucket):
-#     """
-#     Add all execution files associated with execution of workflow_ids to the list
-#     of files to be deleted
-#     """
+def collect_trash(workflow_ids, bucket, wdl_name, dumpster_path):
+    """
+    Add all execution files associated with execution of workflow_ids to the list
+    of files to be deleted (the "dumpster")
+    """
 
-#     # Write gsutil-compliant search strings for identifying files to delete
-#     ex_fmt = '{}/cromwell/execution/{}/{}/**'
-#     ex_uris = [ex_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
-#     out_fmt = '{}/cromwell/outputs/{}/{}/**'
-#     out_uris = [out_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
-#     all_uris = ex_uris + out_uris
+    # Write gsutil-compliant search strings for identifying files to delete
+    ex_fmt = '{}/cromwell/execution/{}/{}/**'
+    ex_uris = [ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    out_fmt = '{}/cromwell/outputs/{}/{}/**'
+    out_uris = [out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    all_uris = ex_uris + out_uris
 
-#     # For reblocked gVCFs *only*, add staged raw gVCF to dumpster
-#     # As of Feb 7, 2024, it was determined that only reblocked gVCFs are necessary
-#     if mode == 'gvcf-pp':
-#         raw_gvcf_uri = formats['gatk-hc']['dest'].format(staging_bucket, sample_id)
-#         all_uris += [raw_gvcf_uri, raw_gvcf_uri + '.tbi']
-
-#     # Find list of all files present in execution or output buckets
-#     # and mark those files for deletion by writing their URIs to the dumpster
-#     garbage_raw = subprocess.run('gsutil -m ls ' + ' '.join(all_uris), 
-#                                  check=False, capture_output=True, 
-#                                  shell=True, text=True).stdout
-#     with open(dumpster_path, 'a') as fout:
-#         for uri in garbage_raw.rstrip().split('\n'):
-#             if uri.startswith('gs://'):
-#                 fout.write(uri + '\n')
+    # Find list of all files present in execution or output buckets
+    # and mark those files for deletion by writing their URIs to the dumpster
+    g2cpy.collect_gcp_garbage(all_uris, dumpster_path)
 
 
 def main():
@@ -213,14 +135,14 @@ def main():
              formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-b', '--batch-id', help='Batch ID', required=True)
     parser.add_argument('-m', '--module-index', required=True, help='Module number')
-    parser.add_argument('-b', '--bucket', help='Root bucket [defaut: use ' +
+    parser.add_argument('--bucket', help='Root bucket [defaut: use ' +
                         '$WORKSPACE_BUCKET environment variable]')
     parser.add_argument('-o', '--staging-bucket', help='G2C output staging ' + 
                         'bucket [defaut: same value as --bucket]')
-    parser.add_argument('-t', '--tracker-tsv', help='Three-column .tsv of batch ' +
+    parser.add_argument('-t', '--status-tsv', help='Three-column .tsv of batch ' +
                         'ID, workflow name, and last known status')
-    parser.add_argument('-u', '--update-tracker', default=False, action='store_true',
-                        help='Update --tracker-tsv instead of printing status to stdout')
+    parser.add_argument('-u', '--update-status-tsv', default=False, action='store_true',
+                        help='Update --status-tsv instead of printing status to stdout')
     parser.add_argument('-r', '--base-directory', default='/home/jupyter',
                         help='Base directory for exectuion. Used to satisfy ' +
                         'assumptions about the locations of Cromshell log files ' + 
@@ -246,16 +168,23 @@ def main():
         staging_bucket = bucket
 
     # Default status is always "not_started"
-    sid = args.sample_id
+    bid = args.batch_id
     status = 'not_started'
+
+    # Confirm that module is recognized
+    wdl_name = wdl_names.get(args.module_index)
+    if wdl_name is None:
+        msg = 'Module index {} is not currently supported. Exiting.'
+        exit(msg.format(args.module_index))
+    module_name = '-'.join([args.module_index, wdl_name])
 
     # If --status-tsv is provided, read last known sample status and use that 
     # information to  speed up the downstream checks
     if args.status_tsv is not None:
-        status_tsv = pd.read_csv(args.status_tsv, sep='\t', header=None, 
-                                 names='sample_id status'.split())
+        status_tsv = pd.read_csv(args.status_tsv, sep='\t', header=None, dtype=str, 
+                                 names='batch_id module status'.split())
         status_tsv = status_tsv.astype(str)
-        tsv_hit = status_tsv.sample_id == sid
+        tsv_hit = (status_tsv.batch_id == bid) & (status_tsv.module == args.module_index)
         if tsv_hit.sum() == 1:
             status = status_tsv.loc[tsv_hit, 'status'].values[0]
     else:
@@ -269,15 +198,15 @@ def main():
         # If so, nothing more needs to be done
         if status == 'staged':
             break
-        if check_if_staged(staging_bucket, sid, args.mode, args.metrics_optional):
+        if check_if_staged(staging_bucket, bid, args.module_index):
             status = 'staged'
-            break                
+            break
 
         # Second, check if sample has any previous workflow submissions
         # If not, sample has not yet been started and can be reported as such
         workflow_ids_fmt = '{}/cromshell/job_ids/{}.{}.job_ids.list'
-        workflow_ids_path = workflow_ids_fmt.format(args.base_directory, sid, 
-                                                    sub('-', '_', args.mode))
+        workflow_ids_path = workflow_ids_fmt.format(args.base_directory, bid, 
+                                                    module_name)
         if status in 'not_started unknown'.split() \
         and not path.isfile(workflow_ids_path):
             status = 'not_started'
@@ -287,60 +216,34 @@ def main():
         # through the possible intermediate states
 
         # Read ordered list of workflow IDs
-        # Order matters because we want to keep the *most recent* complete workflow
         with open(workflow_ids_path) as fin:
             wids = [line.rstrip() for line in fin.readlines()]
-            wid_priority = {wid : i + 1 for i, wid in enumerate(wids[::-1])}
 
-        # For all workflows except for read-metrics, we need to check the
-        # execution buckets for complete outputs and stage/cleanup
-        if args.mode != 'read-metrics':
-            
-            # Try to find workflows with full set of complete final outputs
-            complete_wids = find_complete_wids(wids, bucket, sid, args.mode, 
-                                               args.metrics_optional)
+        # Update status according to most recent workflow
+        wid = wids[-1]
+        status = g2cpy.check_workflow_status(wid)
 
-            # If at least one copy of gVCF + index are found, check cromwell status
-            # of most recent job ID to confirm job was successful
-            for wid in sorted(complete_wids, key=lambda wid: wid_priority[wid]):
+        # If most recent workflow was successful, stage outputs and clear all 
+        # files from Cromwell execution & output buckets
+        if status == 'succeeded':
+            relocate_outputs(wid, staging_bucket, bid, args.module_index)
+            status = 'staged'
+            collect_trash(wids, bucket, wdl_name, args.dumpster)
 
-                # The exception to this is if --unsafe is set, in which case the
-                # workflow is assumed to be successful
-                if not args.unsafe:
-                    workflow_status = check_workflow_status(wid)
-                else:
-                    workflow_status = 'succeeded'
-
-                # If job was successful but files have not been staged yet, relocate 
-                # files to output bucket and mark all temporary files for deletion
-                if workflow_status == 'succeeded':
-                    relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
-                    collect_trash(wids, bucket, args.dumpster, args.mode, 
-                                  args.sample_id, staging_bucket)
-                    status = 'staged'
-                    break
-
-            # If at least one workflow was successful, no need to check others
-            if status == 'staged':
-                break
-
-        # If sample has not been staged, assume it is either running or failed
-        # This can be determined by simply checking the status of the 
-        # highest priority workflow
-        status = check_workflow_status(wids[-1])
+        # Exit loop after processing most recent workflow ID
         break
 
     # Report status depending on value of --update-status
-    if args.update_status and status_tsv is not None:
-        if (status_tsv.sample_id == sid).sum() > 0:
-            status_tsv.loc[status_tsv.sample_id == sid, 'status'] = status
+    if args.update_status_tsv and status_tsv is not None:
+        if tsv_hit.sum() > 0:
+            status_tsv.loc[tsv_hit, 'status'] = status
         else:
-            status_tsv.loc[status_tsv.shape[0], :] = [sid, status]
+            status_tsv.loc[status_tsv.shape[0], :] = [bid, args.module_index, status]
         status_tsv.to_csv(args.status_tsv, sep='\t', na_rep='NA', 
                           header=False, index=False)
     if args.always_print_status_to_stdout \
-    or not (args.update_status and status_tsv is not None):
-        stdout.write('{}\t{}\n'.format(sid, status))
+    or not (args.update_status_tsv and status_tsv is not None):
+        stdout.write('\t'.join([bid, args.module_index, status]) + '\n')
 
 
 if __name__ == '__main__':

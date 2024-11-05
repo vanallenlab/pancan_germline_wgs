@@ -31,6 +31,9 @@ for suffix in py R; do
   find code/ -name "*.${suffix}" | xargs -I {} chmod a+x {}
 done
 
+# Install necessary packages
+. code/refs/install_packages.sh python
+
 # Source .bashrc and bash utility functions
 . ~/code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh

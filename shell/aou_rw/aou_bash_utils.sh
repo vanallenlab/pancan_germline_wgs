@@ -208,3 +208,4 @@ update_status_table() {
   done < ~/cancers.list
   sort -Vk1,3 ~/cromshell/progress/gatk.sample_progress.summary.tsv
 }
+

@@ -30,6 +30,9 @@ done
 gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 
+# Install necessary packages
+. code/refs/install_packages.sh python
+
 # Source .bashrc and bash utility functions
 . ~/code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
@@ -62,16 +65,26 @@ gsutil -m cp -r \
 # 03 | TrainGCNV #
 ##################
 
-for iter in 1; do
+for iter in $( seq 1 5 ); do
   while read bid; do
     check_batch_module $bid 03
-    # TODO: check status of batch + workflow
-    # TODO: Update tracker
-    # If not started, failed, or doomed launch:
-    submit_batch_module $bid 03
-    # TODO: If Succeeded but not staged, stage
-    # If Running, do nothing
   done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
-  # TODO: print tracker to screen
+  cat cromshell/progress/gatksv.batch_modules.progress.tsv
+  cleanup_garbage
   sleep 60m
 done
+
+
+############################
+# 04 | GatherBatchEvidence #
+############################
+
+for iter in $1; do
+  while read bid; do
+    check_batch_module $bid 04
+  done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
+  cat cromshell/progress/gatksv.batch_modules.progress.tsv
+  cleanup_garbage
+  sleep 60m
+done
+

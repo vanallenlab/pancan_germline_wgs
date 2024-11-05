@@ -13,7 +13,7 @@
 # subsets of libraries (i.e., which languages) should be installed
 if [ $# -eq 0 ]; then
   echo -e "Error: at least one positional argument must be supplied to install_packages.sh"
-  echo -e "Current options include: R"
+  echo -e "Current options include: R, python"
   exit 1
 fi
 
@@ -25,16 +25,31 @@ for lang in "$@"; do
 
     # Install R libraries
     R)
+
+      # Install all R libraries distributed via CRAN
       for lib in argparse optparse beeswarm bedr caret EQL vioplot DescTools; do
         Rscript -e "if(require('$lib') == FALSE){install.packages('$lib', repos='https://cloud.r-project.org')}"
       done
 
+      # Install RLCtools
       export RLCtools_version=0.1
       Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('~/code/src/RLCtools_$RLCtools_version.tar.gz', repos=NULL, type='source')"
 
+      # Install G2C companion library
       export G2CR_version=0.2.0
       Rscript -e "if(require('G2CR') == TRUE){remove.packages('G2CR')}; install.packages('~/code/src/G2CR_$G2CR_version.tar.gz', repos=NULL, type='source')"
       ;;
+
+    # Install python packages
+    python)
+      
+      # Ensure pip is up to date
+      pip install --upgrade pip
+
+      # Install G2C companion package
+      cd ~/code/src/g2cpy && \
+      pip install --config-settings editable_mode=compat -e . && \
+      cd -
 
   esac
 done
