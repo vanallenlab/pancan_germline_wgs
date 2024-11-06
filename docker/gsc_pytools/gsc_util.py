@@ -351,7 +351,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   if cohort == "HMF":
     covariates=['male','pca_1','pca_2','pca_3','age','TMB','tumorPurity','primary']
   elif cohort == "PROFILE":
-    covariates=['male','pca_1','pca_2','pca_3','pca_4','late_stage']
+    covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary','late_stage']
 
   # Alternate slate of covariates for hormone sensitive cancers
   covariates_hsc = [cov for cov in covariates if cov != 'male'] 
