@@ -13,6 +13,86 @@
 # sourced before this file is used
 
 
+# Check the status of a GATK-SV module for a single batch
+# Also updates running tracker
+# Also manages submission or staging of outputs as needed
+check_batch_module() {
+   # Check inputs
+  if [ $# -ne 2 ]; then
+    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
+    return
+  else
+    export bid=$1
+    export module_idx=$2
+  fi
+
+  # Check to confirm tracker exists; if it doesn't, create it
+  tracker="cromshell/progress/gatksv.batch_modules.progress.tsv"
+  if ! [ -e $tracker ]; then touch $tracker; fi
+
+  # Update status of most recent submission for batch
+  ~/code/scripts/check_gatksv_batch_module_status.py \
+    --batch-id "$bid" \
+    --module-index "$module_idx" \
+    --staging-bucket "$MAIN_WORKSPACE_BUCKET" \
+    --status-tsv "$tracker" \
+    --update-status
+
+  # Process batch based on reported status
+  status=$( awk -v bid="$bid" -v midx="$module_idx" \
+              '{ if ($1==bid && $2==midx) print $3 }' \
+              $tracker )
+  if [ -z $status ]; then
+    echo -e "Failed getting status of batch '$bid' for module '$module_idx'. Exiting."
+    return
+  fi
+  case "$status" in
+    not_started|failed|doomed|unknown)
+      echo -e "Submitting GATK-SV module $module_idx for batch $bid"
+      submit_batch_module "$bid" "$module_idx"
+      ;;
+  esac
+}
+
+
+# Loop to manage submissions & progress tracking for a GATK-SV module for all batches
+module_submission_routine_all_batches() {
+   # Check input
+  if [ $# -ne 1 ]; then
+    echo "Must specify [03-08,10] as only positional argument"
+    return
+  else
+    export module_idx=$1
+  fi
+
+  WN=$( get_workspace_number )
+
+  _count_remaining() {
+    awk -v midx=$1 '{ if ($2==midx && $3!="staged") print }' \
+      cromshell/progress/gatksv.batch_modules.progress.tsv | wc -l
+  }
+
+  while [ $( _count_remaining $module_idx ) -gt 0 ]; do
+    while read bid; do
+      echo -e "Checking status of $bid for GATK-SV module $module_idx"
+      check_batch_module $bid 03
+    done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
+    echo -e "Finished checking status of all batches for GATK-SV module $module_idx"
+    echo -e "Status of all batches for all GATK-SV modules:"
+    cat cromshell/progress/gatksv.batch_modules.progress.tsv
+    echo -e "Cleaning up unnecessary Cromwell execution & output files"
+    cleanup_garbage
+    if [ $( _count_remaining $module_idx ) -eq 0 ]; then
+      break
+    fi
+    echo -e "Waiting 60 minutes before checking progress..."
+    sleep 60m
+  done
+
+  echo -e "All batches finished for GATK-SV module $module_idx. Ending monitor routine."
+}
+
+
 # Submit a single GATK-SV module for a single batch
 submit_batch_module() {
    # Check inputs
@@ -40,6 +120,10 @@ submit_batch_module() {
       ;;
     04)
       module_name="GatherBatchEvidence"
+      prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/03/$BATCH/$BATCH.gatksv_module_03.outputs.json
+      if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
+        echo "Module 04 requires the outputs from module 03 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+      fi
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
@@ -102,6 +186,12 @@ submit_batch_module() {
       export MANTA_VCFS=$( collapse_txt $sub_dir/$BATCH.manta.list )
       export MELT_VCFS=$( collapse_txt $sub_dir/$BATCH.melt.list )
       export WHAM_VCFS=$( collapse_txt $sub_dir/$BATCH.wham.list )
+      export PLOIDY_MODEL=$( gsutil cat $prev_module_outputs_json \
+                             | jq .cohort_contig_ploidy_model_tar \
+                             | awk '{ if ($1 ~ /gs/) print $1 }' )
+      export GCNV_MODEL_TARS=$( gsutil cat $prev_module_outputs_json \
+                                | jq .cohort_gcnv_model_tars \
+                                | paste -s - -d\ | tr -s ' ' )
       ;;
 
     *)
@@ -126,43 +216,3 @@ submit_batch_module() {
   >> cromshell/job_ids/$BATCH.$sub_name.job_ids.list
 }
 
-
-# Check the status of a GATK-SV module for a single batch
-# Also updates running tracker
-# Also manages submission or staging of outputs as needed
-check_batch_module() {
-   # Check inputs
-  if [ $# -ne 2 ]; then
-    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
-    return
-  else
-    export bid=$1
-    export module_idx=$2
-  fi
-
-  # Check to confirm tracker exists; if it doesn't, create it
-  tracker="cromshell/progress/gatksv.batch_modules.progress.tsv"
-  if ! [ -e $tracker ]; then touch $tracker; fi
-
-  # Update status of most recent submission for batch
-  ~/code/scripts/check_gatksv_batch_module_status.py \
-    --batch-id "$bid" \
-    --module-index "$module_idx" \
-    --staging-bucket "$MAIN_WORKSPACE_BUCKET" \
-    --status-tsv "$tracker" \
-    --update-status
-
-  # Process batch based on reported status
-  status=$( awk -v bid="$bid" -v midx="$module_idx" \
-              '{ if ($1==bid && $2==midx) print $3 }' \
-              $tracker )
-  if [ -z $status ]; then
-    echo -e "Failed getting status of batch '$bid' for module '$module_idx'. Exiting."
-    return
-  fi
-  case "$status" in
-    "not_started|failed|doomed|unknown")
-      submit_batch_module "$bid" "$module_idx"
-      ;;
-  esac
-}

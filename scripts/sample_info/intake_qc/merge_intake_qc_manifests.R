@@ -9,6 +9,7 @@
 # Also assigns G2C IDs to all samples
 # Also infers genetic sex for all samples (and assigns batching sex)
 # Also assigns provisional ancestry labels based on 1kG
+# Also generates cohort .ped file required by GATK-SV
 
 
 #########
@@ -207,6 +208,16 @@ clean.output <- function(df, n.ploidy.bins=2711){
   df[, c(cols.first, pop.cols, ploidy.cols, other.cols)]
 }
 
+# Create a .ped file from merged sample metadata manifest
+make.ped <- function(df){
+  data.frame("fid" = df$G2C_id,
+             "iid" = df$G2C_id,
+             "pid" = 0,
+             "mid" = 0,
+             "sex" = remap(df$sex_karyotype, c("XX" = 2, "XY" = 1), default.value=0),
+             "pheno"= 0)
+}
+
 
 ###########
 # RScript #
@@ -231,6 +242,8 @@ parser$add_argument("-n", "--suffix-length", metavar="integer", type="numeric",
                     default=6, help="Length of integer suffixes for G2C IDs")
 parser$add_argument("--out-tsv", metavar=".tsv", type="character", required=TRUE,
                     help="Path to output .tsv")
+parser$add_argument("--out-ped", metavar=".ped", type="character",
+                    help="Path to optional output .ped file")
 args <- parser$parse_args()
 
 # # DEV:
@@ -240,7 +253,8 @@ args <- parser$parse_args()
 #              "hgsv_pop_assignments" = "~/scratch/HGSV.ByrskaBishop.sample_populations.tsv",
 #              "id_prefix" = "G2C",
 #              "suffix_length" = 6,
-#              "out_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv")
+#              "out_tsv" = "~/scratch/dfci-g2c.intake_qc.merged.test.tsv",
+#              "out_ped" = "~/scratch/dfci-g2c.intake_qc.merged.test.ped")
 
 # Load AoU and non-AoU .tsvs
 aou.df <- load.intake.tsv(args$aou_tsv)
@@ -281,4 +295,10 @@ if(!is.null(args$hgsv_pop_assignments)){
 df.out <- clean.output(qc.df)
 colnames(df.out)[1] <- paste("#", colnames(df.out)[1], sep="")
 write.table(df.out, args$out_tsv, col.names=T, row.names=F, quote=F, sep="\t")
+
+# Reformat qc.df to .ped and write to --out-ped, if optioned
+if(!is.null(args$out_ped)){
+  ped.out <- make.ped(qc.df)
+  write.table(ped.out, args$out_ped, col.names=F, row.names=F, sep="\t", quote=F)
+}
 

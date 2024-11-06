@@ -41,7 +41,7 @@
 	"GatherBatchEvidence.mei_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
 	"GatherBatchEvidence.melt_vcfs" : $MELT_VCFS,
 	"GatherBatchEvidence.min_svsize" : 50,
-	"GatherBatchEvidence.ped_file" : "${workspace.cohort_ped_file}",
+	"GatherBatchEvidence.ped_file" : "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
 	"GatherBatchEvidence.ploidy_sample_psi_scale" : 0.001,
 	"GatherBatchEvidence.primary_contigs_fai" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
 	"GatherBatchEvidence.ref_copy_number_autosomal_contigs" : 2,

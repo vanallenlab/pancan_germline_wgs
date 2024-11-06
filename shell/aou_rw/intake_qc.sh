@@ -72,13 +72,19 @@ code/scripts/merge_intake_qc_manifests.R \
   --hgsv-pop-assignments data/HGSV.ByrskaBishop.sample_populations.tsv \
   --id-prefix G2C \
   --suffix-length 6 \
-  --out-tsv data/dfci-g2c.intake_qc.all.tsv
+  --out-tsv data/dfci-g2c.intake_qc.all.tsv \
+  --out-ped data/dfci-g2c.all_samples.ped
 gzip -f data/dfci-g2c.intake_qc.all.tsv
 
 # Copy merged manifest to main workspace bucket
 gsutil -m cp \
   data/dfci-g2c.intake_qc.all.tsv.gz \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs/intake_qc/
+
+# Copy .ped file to GATK-SV bucket
+gsutil -m cp \
+  data/dfci-g2c.all_samples.ped \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/
 
 # Generate initial QC plots prior to batching
 code/scripts/plot_intake_qc.R \

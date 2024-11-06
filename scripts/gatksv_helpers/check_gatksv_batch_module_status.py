@@ -98,7 +98,7 @@ def relocate_outputs(workflow_id, staging_bucket, bid, module_index,
 
     # Write updated output .json to file and copy that file into staging_bucket
     for key in outputs_dict.keys():
-        if len(outputs_dict[key]) == 0:
+        if len(outputs_dict[key]) == 1:
             outputs_dict[key] = outputs_dict[key][0]
     json_fout = output_json_fname_fmt.format('', module_index, bid)
     with open(json_fout, 'w') as fout:

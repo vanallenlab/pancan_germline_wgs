@@ -65,26 +65,12 @@ gsutil -m cp -r \
 # 03 | TrainGCNV #
 ##################
 
-for iter in $( seq 1 5 ); do
-  while read bid; do
-    check_batch_module $bid 03
-  done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
-  cat cromshell/progress/gatksv.batch_modules.progress.tsv
-  cleanup_garbage
-  sleep 60m
-done
+module_submission_routine_all_batches 03
 
 
 ############################
 # 04 | GatherBatchEvidence #
 ############################
 
-for iter in $1; do
-  while read bid; do
-    check_batch_module $bid 04
-  done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
-  cat cromshell/progress/gatksv.batch_modules.progress.tsv
-  cleanup_garbage
-  sleep 60m
-done
+module_submission_routine_all_batches 04
 

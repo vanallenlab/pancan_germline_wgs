@@ -15,8 +15,13 @@ cleanup_garbage() {
   if [ -e ~/uris_to_delete.list ]; then
     gsutil -m cp ~/uris_to_delete.list $garbage_uri
     rm ~/uris_to_delete.list
-    echo -e "{\"DeleteGcpObjects.uri_list\": \"$garbage_uri\"}" \
-    > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+    cat << EOF | sed 's/\t//g' | paste -s -d\ > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+{
+  "DeleteGcpObjects.uri_list" : "$garbage_uri",
+  "DeleteGcpObjects.n_cpu" : 2,
+  "DeleteGcpObjects.uris_per_shard" : 100000
+}
+EOF
     cromshell --no_turtle -t 120 -mc submit \
       --options-json ~/code/refs/json/aou.cromwell_options.default.json \
       ~/code/wdl/pancan_germline_wgs/DeleteGcpObjects.wdl \
