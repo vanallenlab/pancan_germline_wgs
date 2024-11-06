@@ -32,7 +32,7 @@ def plot_germline_frequencies(data,
 
         # Filter the DataFrame for the current cancer type
         filtered_data = data[data['cancer_type'] == cancer_type]
-
+        print(cancer_type)
         # Extract HMF and PROFILE frequencies
         x = filtered_data[hmf_col].values.reshape(-1, 1)
         y = filtered_data[profile_col].values
@@ -181,8 +181,6 @@ def plot_volcano(df,
     
     # Display legend
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    plt.xlim(left=-20)  # Set the left side limit to -20 while keeping the right side unchanged
 
     # Save plot to file
     plt.tight_layout()
