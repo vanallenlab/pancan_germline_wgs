@@ -38,6 +38,16 @@ check_batch_module() {
     --status-tsv "$tracker" \
     --update-status
 
+  # Get module-specific parameters
+  case $module_idx in
+    03)
+      gate=1
+      ;;
+    04)
+      gate=40
+      ;;
+  esac
+
   # Process batch based on reported status
   status=$( awk -v bid="$bid" -v midx="$module_idx" \
               '{ if ($1==bid && $2==midx) print $3 }' \
@@ -50,6 +60,8 @@ check_batch_module() {
     not_started|failed|doomed|unknown)
       echo -e "Submitting GATK-SV module $module_idx for batch $bid"
       submit_batch_module "$bid" "$module_idx"
+      echo -e "Waiting $gate minutes before continuing to avoid choking Cromwell server..."
+      sleep ${gate}m
       ;;
   esac
 }
@@ -66,20 +78,30 @@ module_submission_routine_all_batches() {
   fi
 
   WN=$( get_workspace_number )
+  batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
+  tracker=cromshell/progress/gatksv.batch_modules.progress.tsv
 
   _count_remaining() {
-    awk -v midx=$1 '{ if ($2==midx && $3!="staged") print }' \
-      cromshell/progress/gatksv.batch_modules.progress.tsv | wc -l
+    if [ -e $tracker ]; then
+      incomplete=$( awk -v midx=$1 '{ if ($2==midx && $3!="staged") print }' \
+                      $tracker | wc -l )
+      missing=$( awk -v midx=$1 '{ if ($2==midx) print $1 }' $tracker \
+                 | fgrep -wvf - $batches_list | wc -l )
+    else
+      incomplete=0
+      missing=$( cat $batches_list | wc -l )
+    fi
+    echo $(( $incomplete + $missing ))
   }
 
   while [ $( _count_remaining $module_idx ) -gt 0 ]; do
     while read bid; do
       echo -e "Checking status of $bid for GATK-SV module $module_idx"
-      check_batch_module $bid 03
+      check_batch_module $bid $module_idx
     done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
     echo -e "Finished checking status of all batches for GATK-SV module $module_idx"
     echo -e "Status of all batches for all GATK-SV modules:"
-    cat cromshell/progress/gatksv.batch_modules.progress.tsv
+    cat $tracker
     echo -e "Cleaning up unnecessary Cromwell execution & output files"
     cleanup_garbage
     if [ $( _count_remaining $module_idx ) -eq 0 ]; then
@@ -145,7 +167,6 @@ submit_batch_module() {
 
     03)
       wdl="code/wdl/gatk-sv/TrainGCNV.wdl"
-      export SAMPLES=$( collapse_txt staging/$BATCH/$batch.samples.list )
       while read sid oid cohort; do
         if [ "$cohort" == "aou" ]; then
           gs_base="$MAIN_WORKSPACE_BUCKET/dfci-g2c-inputs"
@@ -155,14 +176,18 @@ submit_batch_module() {
         echo "$gs_base/$cohort/gatk-sv/coverage/$oid.counts.tsv.gz"
       done < staging/$BATCH/$batch.sample_info.tsv \
       > $sub_dir/$BATCH.cov.list
-      export COUNTS=$( collapse_txt $sub_dir/$BATCH.cov.list )
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "GatherBatchEvidence.counts" : $( collapse_txt $sub_dir/$BATCH.cov.list ),
+    "GatherBatchEvidence.samples" : $( collapse_txt staging/$BATCH/$batch.samples.list )
+}
+EOF
       ;;
 
     04)
       wdl="code/wdl/gatk-sv/GatherBatchEvidence.wdl"
-      export SAMPLES=$( collapse_txt staging/$BATCH/$batch.samples.list )
-      for suf in cov.list; do
-        lfile="$sub_dir/${BATCH}$suf"
+      for suf in cov.list pe.list sr.list sd.list manta.list melt.list wham.list; do
+        lfile="$sub_dir/${BATCH}.$suf"
         if [ -e $lfile ]; then rm $lfile; fi
       done
       while read sid oid cohort; do
@@ -179,19 +204,24 @@ submit_batch_module() {
         echo "$gs_base/$cohort/melt/$oid.melt.vcf.gz" >> $sub_dir/$BATCH.melt.list
         echo "$gs_base/$cohort/wham/$oid.wham.vcf.gz" >> $sub_dir/$BATCH.wham.list
       done < staging/$BATCH/$batch.sample_info.tsv
-      export COUNTS=$( collapse_txt $sub_dir/$BATCH.cov.list )
-      export PESR_DISC=$( collapse_txt $sub_dir/$BATCH.pe.list )
-      export PESR_SD=$( collapse_txt $sub_dir/$BATCH.sd.list )
-      export PESR_SPLIT=$( collapse_txt $sub_dir/$BATCH.sd.list )
-      export MANTA_VCFS=$( collapse_txt $sub_dir/$BATCH.manta.list )
-      export MELT_VCFS=$( collapse_txt $sub_dir/$BATCH.melt.list )
-      export WHAM_VCFS=$( collapse_txt $sub_dir/$BATCH.wham.list )
-      export PLOIDY_MODEL=$( gsutil cat $prev_module_outputs_json \
-                             | jq .cohort_contig_ploidy_model_tar \
-                             | awk '{ if ($1 ~ /gs/) print $1 }' )
-      export GCNV_MODEL_TARS=$( gsutil cat $prev_module_outputs_json \
-                                | jq .cohort_gcnv_model_tars \
-                                | paste -s - -d\ | tr -s ' ' )
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "GatherBatchEvidence.PE_files" : $( collapse_txt $sub_dir/$BATCH.pe.list ),
+    "GatherBatchEvidence.SD_files" : $( collapse_txt $sub_dir/$BATCH.sd.list ),
+    "GatherBatchEvidence.SR_files" : $( collapse_txt $sub_dir/$BATCH.sr.list ),
+    "GatherBatchEvidence.contig_ploidy_model_tar" : $( gsutil cat $prev_module_outputs_json \
+                                                       | jq .cohort_contig_ploidy_model_tar \
+                                                       | awk '{ if ($1 ~ /gs/) print $1 }' ),
+    "GatherBatchEvidence.counts" : $( collapse_txt $sub_dir/$BATCH.cov.list ),
+    "GatherBatchEvidence.gcnv_model_tars" : $( gsutil cat $prev_module_outputs_json \
+                                               | jq .cohort_gcnv_model_tars \
+                                               | paste -s - -d\ | tr -s ' ' ),
+    "GatherBatchEvidence.manta_vcfs" : $( collapse_txt $sub_dir/$BATCH.manta.list ),
+    "GatherBatchEvidence.melt_vcfs" : $( collapse_txt $sub_dir/$BATCH.melt.list ),
+    "GatherBatchEvidence.samples" : $( collapse_txt staging/$BATCH/$batch.samples.list ),
+    "GatherBatchEvidence.wham_vcfs" : $( collapse_txt $sub_dir/$BATCH.wham.list )
+}
+EOF
       ;;
 
     *)
@@ -203,9 +233,11 @@ submit_batch_module() {
 
   # Format input .json
   ~/code/scripts/envsubst.py \
-    -i code/refs/json/dfci-g2c.gatk-sv.$sub_name.inputs.template.json \
-  | sed 's/\t//g' | paste -s -d\ \
-  > cromshell/inputs/$BATCH.$sub_name.inputs.json
+    -i code/refs/json/gatk-sv/dfci-g2c.gatk-sv.$sub_name.inputs.template.json \
+  | ~/code/scripts/update_json.py \
+    -i stdin \
+    -u $sub_dir/$BATCH.$sub_name.updates.json \
+    -o cromshell/inputs/$BATCH.$sub_name.inputs.json
 
   # Submit job and add job ID to list of jobs for this sample
   cmd="cromshell --no_turtle -t 120 -mc submit"

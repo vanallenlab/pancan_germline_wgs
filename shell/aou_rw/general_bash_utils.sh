@@ -15,7 +15,7 @@ cleanup_garbage() {
   if [ -e ~/uris_to_delete.list ]; then
     gsutil -m cp ~/uris_to_delete.list $garbage_uri
     rm ~/uris_to_delete.list
-    cat << EOF | sed 's/\t//g' | paste -s -d\ > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
+    cat << EOF | sed -e 's/\ //g' | paste -s -d\ > ~/cromshell/inputs/empty_dumpster.$dt_fmt.inputs.json
 {
   "DeleteGcpObjects.uri_list" : "$garbage_uri",
   "DeleteGcpObjects.n_cpu" : 2,
@@ -48,7 +48,7 @@ get_workspace_number() {
       echo 4
       ;;
     "gs://fc-secure-c61bace1-e344-452d-8902-49ddad15e5e7")
-      echo 4
+      echo 5
       ;;
     *)
       echo "UNKNOWN"
@@ -66,3 +66,25 @@ collapse_txt() {
   fi
   awk -v ORS='",' '{ print "\""$1 }' $1 | sed 's/,$//g' | awk '{ print "["$1"]" }'
 }
+
+
+# Find all Cromwell return code files with non-zero exit status within a given bucket prefix
+# This is sometimes a useful alternative when cromshell continues to timeout
+# due to a Cromwell server being overloaded
+check_cromwell_return_codes() {
+   # Check inputs
+  if [ $# -ne 1 ]; then
+    echo "Must pass a gs:// bucket prefix as only input"
+    return
+  fi
+  bucket_prefix=$( echo $1 | sed 's/\/$//g' )
+  while read uri; do
+    rc=$( gsutil cat $uri )
+    if [ $rc != "0" ]; then
+      echo -e "\n\n$rc\t$uri\n"
+    fi
+  done < <( gsutil -m ls $bucket_prefix/**rc 2>/dev/null \
+            | fgrep -v memory_retry_rc )
+  echo -e "Finished checking all return codes"
+}
+

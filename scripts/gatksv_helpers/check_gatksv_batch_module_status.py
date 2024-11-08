@@ -25,12 +25,19 @@ from sys import stdout, stderr
 # Set global constants
 # Note that these definitions make strong assumptions about the structure of 
 # WDL/Cromwell execution and output buckets
-wdl_names = {'03' : 'TrainGCNV'}
+wdl_names = {'03' : 'TrainGCNV',
+             '04' : 'GatherBatchEvidence'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
 output_json_fmt = '/'.join([output_bucket_fmt, output_json_fname_fmt])
 keep_03_outs = 'cohort_contig_ploidy_model_tar cohort_gcnv_model_tars'.split()
-keep_output_keys = {'03' : keep_03_outs}
+keep_04_outs = 'merged_BAF merged_BAF_index merged_SR merged_SR_index merged_PE ' + \
+               'merged_PE_index merged_bincov merged_bincov_index ' + \
+               'combined_ped_file merged_dels merged_dups median_cov ' + \
+               'std_manta_vcf_tar std_melt_vcf_tar std_wham_vcf_tar manta_tloc'
+keep_04_outs = keep_04_outs.split()
+keep_output_keys = {'03' : keep_03_outs,
+                    '04' : keep_04_outs}
 
 
 def check_if_staged(bucket, bid, module_index):
@@ -218,6 +225,11 @@ def main():
         # Read ordered list of workflow IDs
         with open(workflow_ids_path) as fin:
             wids = [line.rstrip() for line in fin.readlines()]
+
+        # Check to make sure at least one workflow ID is reported
+        if len(wids) == 0:
+            status = 'not_started'
+            break
 
         # Update status according to most recent workflow
         wid = wids[-1]
