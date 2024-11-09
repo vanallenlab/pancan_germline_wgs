@@ -57,7 +57,7 @@ check_batch_module() {
     return
   fi
   case "$status" in
-    not_started|failed|doomed|unknown)
+    not_started|failed|doomed)
       echo -e "Submitting GATK-SV module $module_idx for batch $bid"
       submit_batch_module "$bid" "$module_idx"
       echo -e "Waiting $gate minutes before continuing to avoid choking Cromwell server..."
@@ -98,12 +98,11 @@ module_submission_routine_all_batches() {
     while read bid; do
       echo -e "Checking status of $bid for GATK-SV module $module_idx"
       check_batch_module $bid $module_idx
+      cleanup_garbage
     done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
     echo -e "Finished checking status of all batches for GATK-SV module $module_idx"
     echo -e "Status of all batches for all GATK-SV modules:"
     cat $tracker
-    echo -e "Cleaning up unnecessary Cromwell execution & output files"
-    cleanup_garbage
     if [ $( _count_remaining $module_idx ) -eq 0 ]; then
       break
     fi
@@ -204,6 +203,11 @@ EOF
         echo "$gs_base/$cohort/melt/$oid.melt.vcf.gz" >> $sub_dir/$BATCH.melt.list
         echo "$gs_base/$cohort/wham/$oid.wham.vcf.gz" >> $sub_dir/$BATCH.wham.list
       done < staging/$BATCH/$batch.sample_info.tsv
+      if [ -e cromshell/job_ids/$BATCH.$sub_name.job_ids.list ]; then
+        n_prev_subs=$( cat cromshell/job_ids/$BATCH.$sub_name.job_ids.list | wc -l )
+      else
+        n_prev_subs=0
+      fi
       cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
 {
     "GatherBatchEvidence.PE_files" : $( collapse_txt $sub_dir/$BATCH.pe.list ),
@@ -218,6 +222,7 @@ EOF
                                                | paste -s - -d\ | tr -s ' ' ),
     "GatherBatchEvidence.manta_vcfs" : $( collapse_txt $sub_dir/$BATCH.manta.list ),
     "GatherBatchEvidence.melt_vcfs" : $( collapse_txt $sub_dir/$BATCH.melt.list ),
+    "GatherBatchEvidence.runtime_attr_case" : { "mem_gb" : $(( 20 + (4 * $n_prev_subs ) )) },
     "GatherBatchEvidence.samples" : $( collapse_txt staging/$BATCH/$batch.samples.list ),
     "GatherBatchEvidence.wham_vcfs" : $( collapse_txt $sub_dir/$BATCH.wham.list )
 }

@@ -83,8 +83,7 @@ check_cromwell_return_codes() {
     if [ $rc != "0" ]; then
       echo -e "\n\n$rc\t$uri\n"
     fi
-  done < <( gsutil -m ls $bucket_prefix/**rc 2>/dev/null \
-            | fgrep -v memory_retry_rc )
+  done < <( gsutil -m ls $bucket_prefix/**rc 2>/dev/null )
   echo -e "Finished checking all return codes"
 }
 

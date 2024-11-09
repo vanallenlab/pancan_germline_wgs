@@ -16,7 +16,7 @@ from re import sub
 from sys import stdout, stderr
 
 
-def check_workflow_status(workflow_id, max_retries=20, timeout=5):
+def check_workflow_status(workflow_id, max_retries=20, timeout=30):
     """
     Ping Cromwell server to check status of a single workflow
     """

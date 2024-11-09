@@ -47,7 +47,7 @@
 	"GatherBatchEvidence.ref_copy_number_autosomal_contigs" : 2,
 	"GatherBatchEvidence.ref_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 	"GatherBatchEvidence.rename_samples" : true,
-	"GatherBatchEvidence.runtime_attr_case" : {"mem_gb" : 20},
+	"GatherBatchEvidence.runtime_attr_case" : "TBD",
 	"GatherBatchEvidence.run_matrix_qc" : false,
 	"GatherBatchEvidence.samples" : "TBD",
 	"GatherBatchEvidence.sd_locs_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
