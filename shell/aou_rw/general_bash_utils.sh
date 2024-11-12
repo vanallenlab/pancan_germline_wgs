@@ -81,9 +81,10 @@ check_cromwell_return_codes() {
   while read uri; do
     rc=$( gsutil cat $uri )
     if [ $rc != "0" ]; then
-      echo -e "\n\n$rc\t$uri\n"
+      echo -e "$rc\t$uri"
     fi
-  done < <( gsutil -m ls $bucket_prefix/**rc 2>/dev/null )
+  done < <( gsutil -m ls $bucket_prefix/**rc 2>/dev/null \
+            | fgrep -v memory_retry_rc | fgrep -v cacheCopy )
   echo -e "Finished checking all return codes"
 }
 

@@ -44,7 +44,7 @@ check_batch_module() {
       gate=1
       ;;
     04)
-      gate=40
+      gate=30
       ;;
   esac
 
@@ -102,7 +102,7 @@ module_submission_routine_all_batches() {
     done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
     echo -e "Finished checking status of all batches for GATK-SV module $module_idx"
     echo -e "Status of all batches for all GATK-SV modules:"
-    cat $tracker
+    report_gatksv_status $module_idx
     if [ $( _count_remaining $module_idx ) -eq 0 ]; then
       break
     fi
@@ -111,6 +111,20 @@ module_submission_routine_all_batches() {
   done
 
   echo -e "All batches finished for GATK-SV module $module_idx. Ending monitor routine."
+}
+
+
+# Helper function to report progress for a single module for all batches
+report_gatksv_status() {
+  # Optional first argument: module index
+  tracker="cromshell/progress/gatksv.batch_modules.progress.tsv"
+  if [ -e $tracker ]; then
+    if [ $# -eq 0 ]; then
+      cat $tracker
+    else
+      awk -v query=$1 -v FS="\t" -v OFS="\t" '{ if ($2==query) print }' $tracker
+    fi
+  fi
 }
 
 
@@ -164,6 +178,9 @@ submit_batch_module() {
   # Set workflow-specific parameters
   case $module_idx in
 
+    #############
+    # MODULE 03 #
+    #############
     03)
       wdl="code/wdl/gatk-sv/TrainGCNV.wdl"
       while read sid oid cohort; do
@@ -183,8 +200,13 @@ submit_batch_module() {
 EOF
       ;;
 
+    #############
+    # MODULE 04 #
+    #############
     04)
       wdl="code/wdl/gatk-sv/GatherBatchEvidence.wdl"
+
+      # Build necessary input arrays
       for suf in cov.list pe.list sr.list sd.list manta.list melt.list wham.list; do
         lfile="$sub_dir/${BATCH}.$suf"
         if [ -e $lfile ]; then rm $lfile; fi
@@ -203,11 +225,8 @@ EOF
         echo "$gs_base/$cohort/melt/$oid.melt.vcf.gz" >> $sub_dir/$BATCH.melt.list
         echo "$gs_base/$cohort/wham/$oid.wham.vcf.gz" >> $sub_dir/$BATCH.wham.list
       done < staging/$BATCH/$batch.sample_info.tsv
-      if [ -e cromshell/job_ids/$BATCH.$sub_name.job_ids.list ]; then
-        n_prev_subs=$( cat cromshell/job_ids/$BATCH.$sub_name.job_ids.list | wc -l )
-      else
-        n_prev_subs=0
-      fi
+
+      # Begin building .json template updates
       cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
 {
     "GatherBatchEvidence.PE_files" : $( collapse_txt $sub_dir/$BATCH.pe.list ),
@@ -222,7 +241,70 @@ EOF
                                                | paste -s - -d\ | tr -s ' ' ),
     "GatherBatchEvidence.manta_vcfs" : $( collapse_txt $sub_dir/$BATCH.manta.list ),
     "GatherBatchEvidence.melt_vcfs" : $( collapse_txt $sub_dir/$BATCH.melt.list ),
-    "GatherBatchEvidence.runtime_attr_case" : { "mem_gb" : $(( 20 + (4 * $n_prev_subs ) )) },
+EOF
+
+      # Get smart about resubmissions: try to determine failure mode and 
+      # increase memory for just that failing job
+      if [ -e cromshell/job_ids/$BATCH.$sub_name.job_ids.list ]; then
+        n_prev_subs=$( cat cromshell/job_ids/$BATCH.$sub_name.job_ids.list | wc -l )
+      else
+        n_prev_subs=0
+      fi
+      if [ $n_prev_subs -gt 0 ]; then
+        last_sub_id=$( tail -n1 cromshell/job_ids/$BATCH.$sub_name.job_ids.list )
+        check_cromwell_return_codes \
+          $WORKSPACE_BUCKET/cromwell/execution/$module_name/$last_sub_id \
+        > $sub_dir/$BATCH.$last_sub_id.fail_rcs.list
+  
+        # gCNV case mode
+        gcnv_ram=$( jq '."GatherBatchEvidence.runtime_attr_case"' \
+                      cromshell/inputs/$BATCH.$sub_name.inputs.json \
+                    | fgrep mem_gb | awk '{ print $NF }' )
+        gcnv_fails=$( fgrep gCNV $sub_dir/$BATCH.$last_sub_id.fail_rcs.list | wc -l )
+        if [ $gcnv_fails -gt 0 ] || [ ! -z $gcnv_ram ]; then
+          # Get previous cn.MOPS NormalR1 memory
+          if [ -z $gcnv_ram ]; then
+            gcnv_ram=48
+          fi
+          if [ $gcnv_fails -gt 0 ]; then
+            # Increment prior memory by +4 GB up to max permitted of 64GB
+            gcnv_ram=$(( $gcnv_ram + 4 ))
+          fi
+          if [ $gcnv_ram -gt 32 ]; then
+            gcnv_ram=32
+            echo -e "WARNING: module $module_idx for $BATCH is requesting more memory for cn.MOPS but has already been attempted at max allowed value (32GB)"
+          fi
+          cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
+    "GatherBatchEvidence.runtime_attr_case" : { "mem_gb" : $gcnv_ram },
+EOF
+        fi
+
+        # cn.MOPS
+        cnmops_ram=$( jq '."GatherBatchEvidence.cnmops_sample3_runtime_attr"' \
+                          cromshell/inputs/$BATCH.$sub_name.inputs.json \
+                    | fgrep mem_gb | awk '{ print $NF }' )
+        cnmops_fails=$( fgrep CNMOPS $sub_dir/$BATCH.$last_sub_id.fail_rcs.list | wc -l )
+        if [ $cnmops_fails -gt 0 ] || [ ! -z $cnmops_ram ]; then
+          # Get previous cn.MOPS NormalR1 memory
+          if [ -z $cnmops_ram ]; then
+            cnmops_ram=48
+          fi
+          if [ $cnmops_fails -gt 0 ]; then
+            # Increment prior memory by +4 GB up to max permitted of 64GB
+            cnmops_ram=$(( $cnmops_ram + 4 ))
+          fi
+          if [ $cnmops_ram -gt 64 ]; then
+            cnmops_ram=64
+            echo -e "WARNING: module $module_idx for $BATCH is requesting more memory for cn.MOPS but has already been attempted at max allowed value (64GB)"
+          fi
+          cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
+    "GatherBatchEvidence.cnmops_sample3_runtime_attr" : { "mem_gb" : $cnmops_ram },
+EOF
+        fi
+      fi
+
+      # Finish building .json template updates
+      cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
     "GatherBatchEvidence.samples" : $( collapse_txt staging/$BATCH/$batch.samples.list ),
     "GatherBatchEvidence.wham_vcfs" : $( collapse_txt $sub_dir/$BATCH.wham.list )
 }
