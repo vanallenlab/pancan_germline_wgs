@@ -119,7 +119,8 @@ def plot_volcano(df,
                  criteria_col="criteria", 
                  cancer_type_col="cancer_type",
                  germline_context="germline_risk_allele",
-                 save_path="volcano_plot.png"):
+                 figure_title="Insert Title Here",
+                 save_path="insert_path_here.png"):
 
     # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
     df_clean = df.dropna(subset=[p_col, or_col])
@@ -175,12 +176,25 @@ def plot_volcano(df,
         plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Set plot labels and title
-    plt.xlabel('log2(OR_combined)')
-    plt.ylabel('-log10(p_val_combined)')
-    plt.title('Volcano Plot with Bonferroni and Nominal Significance')
+    plt.xlabel('log2(OR)')
+    plt.ylabel('-log10(p)')
+    plt.title(f'{figure_title}')
     
     # Display legend
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    # Add a custom legend for cancer_type (colors)
+    color_handles = [plt.Line2D([0], [0], marker='o', color='w', label=cancer, 
+                                markerfacecolor=color, markersize=10) 
+                     for cancer, color in colors.items()]
+    plt.legend(handles=color_handles, title="Cancer Type", bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    # Add a separate custom legend for criteria (shapes) below the cancer_type legend
+    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria, markersize=10)
+                     for criteria, shape in shapes.items()]
+    plt.legend(handles=shape_handles, title="Criteria", bbox_to_anchor=(1.05, 0.75), loc='upper left')
+
+    # Set x-axis limit and add vertical dashed line at x=0
+    plt.xlim(left=-20)  # Limit the left side of the x-axis to -20
+    plt.axvline(x=0, color='gray', linestyle='--', alpha=0.3)  # Light dashed line
 
     # Save plot to file
     plt.tight_layout()
