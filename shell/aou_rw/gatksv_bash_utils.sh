@@ -41,10 +41,19 @@ check_batch_module() {
   # Get module-specific parameters
   case $module_idx in
     03)
+      sub_name="03-TrainGCNV"
       gate=1
+      max_resub=3
       ;;
     04)
+      sub_name="04-GatherBatchEvidence"
       gate=30
+      max_resub=15
+      ;;
+    05)
+      sub_name="05-ClusterBatch"
+      gate=1
+      max_resub=2
       ;;
   esac
 
@@ -56,12 +65,22 @@ check_batch_module() {
     echo -e "Failed getting status of batch '$bid' for module '$module_idx'. Exiting."
     return
   fi
+  jid_list=~/cromshell/job_ids/$bid.$sub_name.job_ids.list
+  if [ -e $jid_list ]; then
+    n_prev_subs=$( cat $jid_list | wc -l )
+  else
+    n_prev_subs=0
+  fi
   case "$status" in
-    not_started|failed|doomed)
-      echo -e "Submitting GATK-SV module $module_idx for batch $bid"
-      submit_batch_module "$bid" "$module_idx"
-      echo -e "Waiting $gate minutes before continuing to avoid choking Cromwell server..."
-      sleep ${gate}m
+    not_started|failed|doomed|aborted)
+      if [ $n_prev_subs -le $max_resub ]; then
+        echo -e "Submitting GATK-SV module $module_idx for batch $bid"
+        submit_batch_module "$bid" "$module_idx"
+        echo -e "Waiting $gate minutes before continuing to avoid choking Cromwell server..."
+        sleep ${gate}m
+      else
+        echo -e "Batch $bid has hit the maximum of $max_resub submissions for GATK-SV module $module_idx. Not submitting a new workflow for this batch."
+      fi
       ;;
   esac
 }
@@ -143,6 +162,15 @@ submit_batch_module() {
   g2c_mfst="dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz"
   batch_sid_list="batch_info/sample_lists/$BATCH.samples.list"
 
+  # For modules after 03, check to ensure that the previous module has been staged
+  if [ $module_idx -gt 03 ]; then
+    prev_idx="0$(( $module_idx - 1 ))"
+    prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
+    if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
+      echo "Module $module_idx requires the outputs from module $prev_idx to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+    fi
+  fi
+
   # Make batch staging directory, if necessary
   for dir in staging "staging/$BATCH"; do
     if ! [ -e $dir ]; then
@@ -155,10 +183,9 @@ submit_batch_module() {
       ;;
     04)
       module_name="GatherBatchEvidence"
-      prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/03/$BATCH/$BATCH.gatksv_module_03.outputs.json
-      if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
-        echo "Module 04 requires the outputs from module 03 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
-      fi
+      ;;
+    05)
+      module_name="ClusterBatch"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
@@ -272,7 +299,7 @@ EOF
           fi
           if [ $gcnv_ram -gt 32 ]; then
             gcnv_ram=32
-            echo -e "WARNING: module $module_idx for $BATCH is requesting more memory for cn.MOPS but has already been attempted at max allowed value (32GB)"
+            echo -e "WARNING: module $module_idx for $BATCH is requesting more memory for GATK-gCNV but has already been attempted at max allowed value (32GB)"
           fi
           cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
     "GatherBatchEvidence.runtime_attr_case" : { "mem_gb" : $gcnv_ram },
@@ -298,7 +325,7 @@ EOF
             echo -e "WARNING: module $module_idx for $BATCH is requesting more memory for cn.MOPS but has already been attempted at max allowed value (64GB)"
           fi
           cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
-    "GatherBatchEvidence.cnmops_sample3_runtime_attr" : { "mem_gb" : $cnmops_ram },
+    "GatherBatchEvidence.cnmops_sample3_runtime_attr" : { "mem_gb" : $cnmops_ram , "boot_disk_gb" : 20, "disk_gb" : 100 },
 EOF
         fi
       fi
@@ -307,6 +334,22 @@ EOF
       cat << EOF >> $sub_dir/$BATCH.$sub_name.updates.json
     "GatherBatchEvidence.samples" : $( collapse_txt staging/$BATCH/$batch.samples.list ),
     "GatherBatchEvidence.wham_vcfs" : $( collapse_txt $sub_dir/$BATCH.wham.list )
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 05 #
+    #############
+    05)
+      wdl="code/wdl/gatk-sv/ClusterBatch.wdl"
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "ClusterBatch.del_bed" : $( gsutil cat $prev_module_outputs_json | jq .merged_dels ),
+    "ClusterBatch.dup_bed" : $( gsutil cat $prev_module_outputs_json | jq .merged_dups ),
+    "ClusterBatch.manta_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_manta_vcf_tar ),
+    "ClusterBatch.melt_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_melt_vcf_tar ),
+    "ClusterBatch.wham_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_wham_vcf_tar )
 }
 EOF
       ;;

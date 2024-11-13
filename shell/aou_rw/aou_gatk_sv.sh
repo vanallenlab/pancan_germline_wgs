@@ -74,3 +74,10 @@ module_submission_routine_all_batches 03
 
 module_submission_routine_all_batches 04
 
+
+#####################
+# 05 | ClusterBatch #
+#####################
+
+module_submission_routine_all_batches 05
+

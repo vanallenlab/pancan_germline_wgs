@@ -26,7 +26,8 @@ from sys import stdout, stderr
 # Note that these definitions make strong assumptions about the structure of 
 # WDL/Cromwell execution and output buckets
 wdl_names = {'03' : 'TrainGCNV',
-             '04' : 'GatherBatchEvidence'}
+             '04' : 'GatherBatchEvidence',
+             '05' : 'ClusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
 output_json_fmt = '/'.join([output_bucket_fmt, output_json_fname_fmt])
@@ -36,8 +37,15 @@ keep_04_outs = 'manta_tloc median_cov merged_BAF merged_BAF_index merged_PE ' + 
                'merged_bincov_index merged_dels merged_dups std_manta_vcf_tar ' + \
                'std_melt_vcf_tar std_wham_vcf_tar'
 keep_04_outs = keep_04_outs.split()
+keep_05_outs = 'clustered_depth_vcf clustered_depth_vcf_index clustered_manta_vcf ' + \
+               'clustered_manta_vcf_index clustered_melt_vcf ' + \
+               'clustered_melt_vcf_index clustered_wham_vcf ' + \
+               'clustered_wham_vcf_index clustered_outlier_samples_with_reason ' + \
+               'clustered_sv_count_plots metrics_file_clusterbatch'
+keep_05_outs = keep_05_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
-                    '04' : keep_04_outs}
+                    '04' : keep_04_outs,
+                    '05' : keep_05_outs}
 
 
 def check_if_staged(bucket, bid, module_index):
