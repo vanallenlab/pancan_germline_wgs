@@ -32,7 +32,9 @@ def plot_germline_frequencies(data,
 
         # Filter the DataFrame for the current cancer type
         filtered_data = data[data['cancer_type'] == cancer_type]
-        print(cancer_type)
+        print(f"{cancer_type}: has {len(data)} rows")
+
+
         # Extract HMF and PROFILE frequencies
         x = filtered_data[hmf_col].values.reshape(-1, 1)
         y = filtered_data[profile_col].values
@@ -142,7 +144,7 @@ def plot_volcano(df,
     # Plot points with different shapes and colors
     for criteria_val, shape in shapes.items():
         for cancer_type, color in colors.items():
-            subset = df[(df[criteria_col] == criteria_val) & (df[cancer_type_col] == cancer_type)]
+            subset = df[(df[criteria_col] == criteria_val) & (df[cancer_type_col] == cancer_type) & (df['log2_OR'] > -20)]
             plt.scatter(subset['log2_OR'], subset['log10_p'], 
                         marker=shape, color=color, label=f"{criteria_val}-{cancer_type}", alpha=0.7)
     
@@ -181,19 +183,25 @@ def plot_volcano(df,
     plt.title(f'{figure_title}')
     
     # Display legend
-    # Add a custom legend for cancer_type (colors)
+    # Create custom legend handles for cancer_type (colors)
     color_handles = [plt.Line2D([0], [0], marker='o', color='w', label=cancer, 
                                 markerfacecolor=color, markersize=10) 
-                     for cancer, color in colors.items()]
-    plt.legend(handles=color_handles, title="Cancer Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # Add a separate custom legend for criteria (shapes) below the cancer_type legend
-    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria, markersize=10)
-                     for criteria, shape in shapes.items()]
-    plt.legend(handles=shape_handles, title="Criteria", bbox_to_anchor=(1.05, 0.75), loc='upper left')
+                    for cancer, color in colors.items()]
 
-    # Set x-axis limit and add vertical dashed line at x=0
-    plt.xlim(left=-20)  # Limit the left side of the x-axis to -20
+    # Add the color legend to the axis
+    color_legend = ax.legend(handles=color_handles, title="Cancer Type", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # Add the color legend to the plot
+    ax.add_artist(color_legend)
+
+    # Create custom legend handles for criteria (shapes)
+    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria, markersize=10)
+                    for criteria, shape in shapes.items()]
+
+    # Add the shape legend separately
+    shape_legend = ax.legend(handles=shape_handles, title="Criteria", bbox_to_anchor=(1.05, 0.75), loc='upper left')
+
+    # Add vertical dashed line at x=0
     plt.axvline(x=0, color='gray', linestyle='--', alpha=0.3)  # Light dashed line
 
     # Save plot to file
