@@ -124,7 +124,7 @@ def plot_volcano(df,
                  figure_title="Insert Title Here",
                  save_path="insert_path_here.png"):
 
-    # Drop rows where either the HMF or PROFILE frequency is missing (NaN)
+    # Drop rows where either p-value or OR is NaN
     df_clean = df.dropna(subset=[p_col, or_col])
     df = df_clean
     
@@ -132,82 +132,61 @@ def plot_volcano(df,
     df['log10_p'] = -np.log10(df[p_col])
     df['log2_OR'] = np.log2(df[or_col])
     
-    # Set up point shapes based on 'criteria' and colors based on 'cancer_type'
-    shapes = {'known_ppi': 'o', 'same_gene': 's', 'protein_complex':'h','ligand_receptor':'^',
-            'known_ppi;ligand_receptor':'*','known_ppi;protein_complex':'d'}  # Example shapes for criteria
+    # Define shapes and colors
+    shapes = {'known_ppi': 'o', 'same_gene': 's', 'protein_complex': 'h', 
+              'ligand_receptor': '^', 'known_ppi;ligand_receptor': '*', 
+              'known_ppi;protein_complex': 'd'}
     colors = {'Breast': 'red', 'Prostate': 'blue', 'Colorectal': 'green', 
               'Lung': 'purple', 'Kidney': 'orange', 'Pancancer': 'black'}
     
-    # Create figure and axes
-    plt.figure(figsize=(10, 8))
-    
-    # Plot points with different shapes and colors
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Plot points
     for criteria_val, shape in shapes.items():
         for cancer_type, color in colors.items():
-            subset = df[(df[criteria_col] == criteria_val) & (df[cancer_type_col] == cancer_type) & (df['log2_OR'] > -20)]
-            plt.scatter(subset['log2_OR'], subset['log10_p'], 
-                        marker=shape, color=color, label=f"{criteria_val}-{cancer_type}", alpha=0.7)
-    
-    # Add Bonferroni and nominal significance lines
-    bonferroni_threshold = -np.log10(0.05 / len(df))  # Bonferroni threshold
-    nominal_threshold = -np.log10(0.05)  # Nominal significance threshold
-    rejected, pvals_corrected = fdrcorrection(df[p_col], alpha=0.05, method='indep', is_sorted=False)
+            subset = df[(df[criteria_col] == criteria_val) & 
+                        (df[cancer_type_col] == cancer_type) & 
+                        (df['log2_OR'] > -20)]
+            ax.scatter(subset['log2_OR'], subset['log10_p'], 
+                       marker=shape, color=color, alpha=0.7)
 
-    # We calculate the highest corrected p-value that is still below the alpha threshold (0.05)
-    # Check if any values are rejected and handle the case where none are
-    if rejected.any():  # If any p-values are below the FDR threshold
+    # Add significance thresholds
+    bonferroni_threshold = -np.log10(0.05 / len(df))
+    nominal_threshold = -np.log10(0.05)
+    rejected, pvals_corrected = fdrcorrection(df[p_col], alpha=0.05)
+    if rejected.any():
         fdr_threshold = -np.log10(pvals_corrected[rejected].max())
-        plt.axhline(y=fdr_threshold, color='green', linestyle='--', label=f'FDR Threshold: {-np.log10(fdr_threshold):.2f}')
-    else:
-        fdr_threshold = -np.log10(0.05)  # Or set it to a default value, e.g., np.nan
+        ax.axhline(y=fdr_threshold, color='green', linestyle='--', label=f'FDR Threshold')
+    ax.axhline(y=bonferroni_threshold, color='red', linestyle='--', label=f'Bonferroni')
+    ax.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal')
 
-    # Optionally, print a warning if no p-values passed the FDR threshold
-    if fdr_threshold is None:
-        print("Warning: No p-values passed the FDR threshold.")
-        
-    plt.axhline(y=bonferroni_threshold, color='red', linestyle='--', label=f"Bonferroni Significance (p = {round(0.05 / len(df),7)})")
-    plt.axhline(y=nominal_threshold, color='blue', linestyle='--', label='Nominal Significance (p=0.05)')
-    
-    # Label points above Bonferroni threshold
+    # Annotate points above Bonferroni
     significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        if pd.notna(row[germline_context]):  # Check if germline_context is NOT NaN
-            label_text = f"({row[germline_context]} ,{row['somatic_gene']})"
-        else:
-            label_text = f"({row['germline_gene']} ,{row['somatic_gene']})"
-        plt.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
+        label_text = f"({row.get(germline_context, 'NA')}, {row['somatic_gene']})"
+        ax.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
-    # Set plot labels and title
-    plt.xlabel('log2(OR)')
-    plt.ylabel('-log10(p)')
-    plt.title(f'{figure_title}')
-    
-    # Display legend
-    # Create custom legend handles for cancer_type (colors)
-    color_handles = [plt.Line2D([0], [0], marker='o', color='w', label=cancer, 
-                                markerfacecolor=color, markersize=10) 
-                    for cancer, color in colors.items()]
-
-    # Add the color legend to the axis
-    color_legend = ax.legend(handles=color_handles, title="Cancer Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    # Add the color legend to the plot
+    # Add legends
+    color_handles = [plt.Line2D([0], [0], marker='o', color='w', 
+                                markerfacecolor=color, label=cancer) 
+                     for cancer, color in colors.items()]
+    color_legend = ax.legend(handles=color_handles, title="Cancer Type", 
+                             bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.add_artist(color_legend)
 
-    # Create custom legend handles for criteria (shapes)
-    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria, markersize=10)
-                    for criteria, shape in shapes.items()]
-
-    # Add the shape legend separately
-    shape_legend = ax.legend(handles=shape_handles, title="Criteria", bbox_to_anchor=(1.05, 0.75), loc='upper left')
-
-    # Add vertical dashed line at x=0
-    plt.axvline(x=0, color='gray', linestyle='--', alpha=0.3)  # Light dashed line
-
-    # Save plot to file
+    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria) 
+                     for criteria, shape in shapes.items()]
+    shape_legend = ax.legend(handles=shape_handles, title="Criteria", 
+                             bbox_to_anchor=(1.05, 0.75), loc='upper left')
+    
+    # Labels, title, and save
+    ax.set_xlabel('log2(OR)')
+    ax.set_ylabel('-log10(p)')
+    ax.set_title(figure_title)
     plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
+    fig.savefig(save_path)
+    plt.close(fig)
 
 
 def plot_p_values(data, 
