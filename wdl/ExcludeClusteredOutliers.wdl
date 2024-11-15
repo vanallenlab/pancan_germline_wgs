@@ -13,11 +13,15 @@ workflow ExcludeClusteredOutliers {
   input {
     File del_bed
     File dup_bed
+
     File manta_vcf_tar
     File melt_vcf_tar
     File wham_vcf_tar
+    
     File exclude_samples_list
+    
     String linux_docker
+    String sv_base_mini_docker
   }
 
   # Exclude samples from depth-based CNV BED files
@@ -25,13 +29,13 @@ workflow ExcludeClusteredOutliers {
     input:
       bed = del_bed,
       exclude_samples_list = exclude_samples_list,
-      docker = linux_docker
+      docker = sv_base_mini_docker
   }
   call ExcludeOutliersFromDepthBed as CleanDupBed {
     input:
       bed = dup_bed,
       exclude_samples_list = exclude_samples_list,
-      docker = linux_docker
+      docker = sv_base_mini_docker
   }
 
   # Exclude samples from PE/SR-based SV VCF tarballs
@@ -114,7 +118,9 @@ task ExcludeOutliersFromVcfTarball {
     tar -xzvf ~{tarball}
 
     while read sid; do
-      rm *.$sid.vcf.gz
+      if [ $( find ./ -name "*.$sid.vcf.gz" | wc -l ) -gt 0 ]; then
+        rm -v *.$sid.vcf.gz
+      fi
     done < ~{exclude_samples_list}
 
     tar -czvf ~{output_tarball} ./*
