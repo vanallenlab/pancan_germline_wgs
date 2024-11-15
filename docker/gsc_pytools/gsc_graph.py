@@ -271,3 +271,55 @@ def plot_p_values(data,
     plt.savefig(save_path)
     plt.close()
 
+def plot_gwas_subplots(df, save_path='gwas_subplots.png'):
+    df = df[(df['relevant_cancer'] == 1) | (df['relevant_cancer'] == 2)]
+    # Convert p-values to -log10 scale for plotting
+    df['-log10_p_val_HMF'] = -np.log10(df['p_val_HMF'])
+    df['log2OR'] = np.log2(df['OR_HMF'])
+    # Extract chromosome position as integer from `germline_risk_allele`
+    df['chrom_position'] = df['germline_risk_allele'].apply(lambda x: int(x.split(':')[1].split('-')[0]))
+
+    # Group by cancer_type, germline_gene, and somatic_gene
+    grouped = df.groupby(['cancer_type', 'germline_gene', 'somatic_gene'])
+
+    # Calculate nominal and Bonferroni thresholds
+    nominal_threshold = -np.log10(0.05)
+
+    # Set up the plot grid
+    num_plots = len(grouped)
+    fig, axes = plt.subplots(nrows=(num_plots // 3) + 1, ncols=3, figsize=(15, 5 * (num_plots // 3 + 1)))
+    axes = axes.flatten()
+
+    for i, (name, group) in enumerate(grouped):
+        cancer_type, germline_gene, somatic_gene = name
+        print(cancer_type)
+        # Calculate Bonferroni threshold for the current group
+        bonferroni_threshold = -np.log10(0.05 / len(group))
+
+        # Plot on the i-th subplot
+        ax = axes[i]
+        ax.scatter(group['chrom_position'], group['-log10_p_val_HMF'], color='b', s=10, alpha=0.6)
+        #ax.scatter(group['chrom_position'], group['log2OR'], color='b', s=10, alpha=0.6)
+        ax.axhline(nominal_threshold, color='green', linestyle='--', label='Nominal p=0.05')
+        ax.axhline(bonferroni_threshold, color='red', linestyle='-', label='Bonferroni Corrected')
+
+        # Set plot titles and labels
+        title = ""
+        if cancer_type == "Pancancer":
+            title = f"{germline_gene} Noncoding and {somatic_gene} Coding Convergence: Pancancer"
+        else:
+            title = f"{germline_gene} Noncoding and {somatic_gene} Coding Convergence: {cancer_type}"
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("Chromosome Position")
+        ax.set_ylabel("-log10(p)")
+        ax.legend()
+
+    # Remove any extra subplots in the grid
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    # Adjust layout and save the figure
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    print(f"Figure saved to {save_path}")
