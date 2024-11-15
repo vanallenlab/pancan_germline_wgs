@@ -27,7 +27,10 @@ from sys import stdout, stderr
 # WDL/Cromwell execution and output buckets
 wdl_names = {'03' : 'TrainGCNV',
              '04' : 'GatherBatchEvidence',
-             '05' : 'ClusterBatch'}
+             '05' : 'ClusterBatch',
+             '05B' : 'ExcludeClusteredOutliers',
+             '05C' : 'ClusterBatch'}
+module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
 output_json_fmt = '/'.join([output_bucket_fmt, output_json_fname_fmt])
@@ -43,9 +46,15 @@ keep_05_outs = 'clustered_depth_vcf clustered_depth_vcf_index clustered_manta_vc
                'clustered_wham_vcf_index clustered_outlier_samples_with_reason ' + \
                'clustered_sv_counts clustered_sv_count_plots metrics_file_clusterbatch'
 keep_05_outs = keep_05_outs.split()
+keep_05B_outs = 'del_bed_cleaned dup_bed_cleaned manta_vcf_tar_cleaned ' + \
+                'melt_vcf_tar_cleaned wham_vcf_tar_cleaned'
+keep_05B_outs = keep_05B_outs.split()
+keep_05C_outs = keep_05_outs
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
-                    '05' : keep_05_outs}
+                    '05' : keep_05_outs,
+                    '05B' : keep_05B_outs,
+                    '05C' : keep_05C_outs}
 
 
 def check_if_staged(bucket, bid, module_index):
@@ -191,7 +200,9 @@ def main():
     if wdl_name is None:
         msg = 'Module index {} is not currently supported. Exiting.'
         exit(msg.format(args.module_index))
-    module_name = '-'.join([args.module_index, wdl_name])
+    module_name = module_alt_name.get(args.module_index, None)
+    if module_name is None:
+        module_name = '-'.join([args.module_index, wdl_name])
 
     # If --status-tsv is provided, read last known sample status and use that 
     # information to  speed up the downstream checks

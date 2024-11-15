@@ -123,7 +123,7 @@ task ExcludeOutliersFromVcfTarball {
       fi
     done < ~{exclude_samples_list}
 
-    tar -czvf ~{output_tarball} ./*
+    tar -czvf ../~{output_tarball} ./*
   >>>
 
   output {

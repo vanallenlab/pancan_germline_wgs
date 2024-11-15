@@ -35,7 +35,7 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 . code/refs/install_packages.sh python
 
 # Source .bashrc and bash utility functions
-. ~/code/refs/dotfiles/aou.rw.bashrc
+. code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 . code/refs/gatksv_bash_utils.sh
 
@@ -188,7 +188,12 @@ module_submission_routine_all_batches 05B
 
 # Note: this is not a canonical GATK-SV module and was instituted specifically for G2C
 
-# TODO: implement this
-# module_submission_routine_all_batches 05C
+module_submission_routine_all_batches 05C
 
+
+#############################
+# 06 | GenerateBatchMetrics #
+#############################
+
+module_submission_routine_all_batches 06
 

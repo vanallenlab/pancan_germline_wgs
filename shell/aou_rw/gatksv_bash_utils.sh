@@ -60,6 +60,16 @@ check_batch_module() {
       gate=0
       max_resub=1
       ;;
+    05C)
+      sub_name="05C-ReclusterBatch"
+      gate=2
+      max_resub=2
+      ;;
+    06)
+      sub_name="06-GenerateBatchMetrics"
+      gate=30
+      max_resub=3
+      ;;
   esac
 
   # Process batch based on reported status
@@ -105,6 +115,17 @@ module_submission_routine_all_batches() {
   batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
   tracker=cromshell/progress/gatksv.batch_modules.progress.tsv
 
+  # Customize gate duration for certain short-running workflows
+  outer_gate=60
+  case $module_idx in
+    05|05C)
+      outer_gate=30
+      ;;
+    05B)
+      outer_gate=10
+      ;;
+  esac
+
   _count_remaining() {
     if [ -e $tracker ]; then
       incomplete=$( awk -v midx=$1 '{ if ($2==midx && $3!="staged") print }' \
@@ -130,8 +151,8 @@ module_submission_routine_all_batches() {
     if [ $( _count_remaining $module_idx ) -eq 0 ]; then
       break
     fi
-    echo -e "Waiting 60 minutes before checking progress..."
-    sleep 60m
+    echo -e "Waiting $outer_gate minutes before checking progress again..."
+    sleep ${outer_gate}m
   done
 
   echo -e "All batches finished for GATK-SV module $module_idx. Ending monitor routine."
@@ -168,24 +189,35 @@ submit_batch_module() {
   batch_sid_list="batch_info/sample_lists/$BATCH.samples.list"
 
   # For modules after 03, check to ensure that the previous module has been staged
-  if [[ "$module_idx" =~ ^[0-9]+$ ]]; then
-    if [ $module_idx -gt 03 ]; then
-      prev_idx="0$(( $module_idx - 1 ))"
-    fi
-  else
-    case $module_idx in
-      05B)
-        prev_idx="04"
-        ;;
-      05C)
-        prev_idx="05B"
-        ;;
-    esac
-  fi
+  case $module_idx in
+    05B)
+      prev_idx="04"
+      ;;
+    05C)
+      prev_idx="05B"
+      ;;
+    06)
+      prev_idx="05C"
+      ;;
+    *)
+      prev_idx="0$(( $module_idx - 1 ))"    
+      ;;
+  esac
   prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
   if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
     echo "Module $module_idx requires the outputs from module $prev_idx to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
   fi
+
+  # Some modules require multiple prior outputs; these extra outputs are checked here
+  case $module_idx in
+    06)
+      # Also requires 04 output
+      module_04_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/04/$BATCH/$BATCH.gatksv_module_04.outputs.json
+      if [ $( gsutil ls $module_04_outputs_json | wc -l ) -lt 1 ]; then
+        echo "Module $module_idx requires the outputs from module 04 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+      fi
+      ;;
+  esac
 
   # Make batch staging directory, if necessary
   for dir in staging "staging/$BATCH"; do
@@ -206,6 +238,12 @@ submit_batch_module() {
     05B)
       module_name="ExcludeClusteredOutliers"
       ;;
+    05C)
+      module_name="ReclusterBatch"
+      ;;
+    06)
+      module_name="GenerateBatchMetrics"
+      ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
       return
@@ -222,6 +260,7 @@ submit_batch_module() {
   > staging/$BATCH/$batch.samples.list
 
   # Set workflow-specific parameters
+  json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.$sub_name.inputs.template.json
   case $module_idx in
 
     #############
@@ -373,7 +412,6 @@ EOF
 EOF
       ;;
 
-
     ##############
     # MODULE 05B #
     ##############
@@ -390,6 +428,45 @@ EOF
 EOF
       ;;
 
+    ##############
+    # MODULE 05C #
+    ##############
+    05C)
+      wdl="code/wdl/gatk-sv/ClusterBatch.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.05-ClusterBatch.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "ClusterBatch.del_bed" : $( gsutil cat $prev_module_outputs_json | jq .del_bed_cleaned ),
+    "ClusterBatch.dup_bed" : $( gsutil cat $prev_module_outputs_json | jq .dup_bed_cleaned ),
+    "ClusterBatch.manta_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .manta_vcf_tar_cleaned ),
+    "ClusterBatch.melt_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .melt_vcf_tar_cleaned ),
+    "ClusterBatch.wham_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .wham_vcf_tar_cleaned )
+}
+EOF
+      ;;
+
+
+    #############
+    # MODULE 06 #
+    #############
+    06)
+      wdl="code/wdl/gatk-sv/GenerateBatchMetrics.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.06-GenerateBatchMetrics.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "GenerateBatchMetrics.baf_metrics" : $( gsutil cat $module_04_outputs_json | jq .merged_BAF ),
+    "GenerateBatchMetrics.coveragefile" : $( gsutil cat $module_04_outputs_json | jq .merged_bincov ),
+    "GenerateBatchMetrics.depth_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_depth_vcf ),
+    "GenerateBatchMetrics.discfile" : $( gsutil cat $module_04_outputs_json | jq .merged_PE ),
+    "GenerateBatchMetrics.manta_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_manta_vcf ),
+    "GenerateBatchMetrics.medianfile" : $( gsutil cat $module_04_outputs_json | jq .median_cov ),
+    "GenerateBatchMetrics.melt_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_melt_vcf ),
+    "GenerateBatchMetrics.splitfile" : $( gsutil cat $module_04_outputs_json | jq .merged_SR ),
+    "GenerateBatchMetrics.wham_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_wham_vcf )
+}
+EOF
+      ;;
+
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
       return
@@ -399,7 +476,7 @@ EOF
 
   # Format input .json
   ~/code/scripts/envsubst.py \
-    -i code/refs/json/gatk-sv/dfci-g2c.gatk-sv.$sub_name.inputs.template.json \
+    -i $json_input_template \
   | ~/code/scripts/update_json.py \
     -i stdin \
     -u $sub_dir/$BATCH.$sub_name.updates.json \
