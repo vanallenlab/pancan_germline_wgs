@@ -52,8 +52,13 @@ check_batch_module() {
       ;;
     05)
       sub_name="05-ClusterBatch"
-      gate=1
+      gate=2
       max_resub=2
+      ;;
+    05B)
+      sub_name="05B-ExcludeClusteredOutliers"
+      gate=0
+      max_resub=1
       ;;
   esac
 
@@ -163,12 +168,23 @@ submit_batch_module() {
   batch_sid_list="batch_info/sample_lists/$BATCH.samples.list"
 
   # For modules after 03, check to ensure that the previous module has been staged
-  if [ $module_idx -gt 03 ]; then
-    prev_idx="0$(( $module_idx - 1 ))"
-    prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
-    if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
-      echo "Module $module_idx requires the outputs from module $prev_idx to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+  if [[ "$module_idx" =~ ^[0-9]+$ ]]; then
+    if [ $module_idx -gt 03 ]; then
+      prev_idx="0$(( $module_idx - 1 ))"
     fi
+  else
+    case $module_idx in
+      05B)
+        prev_idx="04"
+        ;;
+      05C)
+        prev_idx="05B"
+        ;;
+    esac
+  fi
+  prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
+  if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
+    echo "Module $module_idx requires the outputs from module $prev_idx to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
   fi
 
   # Make batch staging directory, if necessary
@@ -186,6 +202,9 @@ submit_batch_module() {
       ;;
     05)
       module_name="ClusterBatch"
+      ;;
+    05B)
+      module_name="ExcludeClusteredOutliers"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
@@ -350,6 +369,23 @@ EOF
     "ClusterBatch.manta_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_manta_vcf_tar ),
     "ClusterBatch.melt_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_melt_vcf_tar ),
     "ClusterBatch.wham_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_wham_vcf_tar )
+}
+EOF
+      ;;
+
+
+    ##############
+    # MODULE 05B #
+    ##############
+    05B)
+      wdl="code/wdl/pancan_germline_wgs/ExcludeClusteredOutliers.wdl"
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "ExcludeClusteredOutliers.del_bed" : $( gsutil cat $prev_module_outputs_json | jq .merged_dels ),
+    "ExcludeClusteredOutliers.dup_bed" : $( gsutil cat $prev_module_outputs_json | jq .merged_dups ),
+    "ExcludeClusteredOutliers.manta_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_manta_vcf_tar ),
+    "ExcludeClusteredOutliers.melt_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_melt_vcf_tar ),
+    "ExcludeClusteredOutliers.wham_vcf_tar" : $( gsutil cat $prev_module_outputs_json | jq .std_wham_vcf_tar )
 }
 EOF
       ;;

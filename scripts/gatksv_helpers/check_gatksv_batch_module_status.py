@@ -41,7 +41,7 @@ keep_05_outs = 'clustered_depth_vcf clustered_depth_vcf_index clustered_manta_vc
                'clustered_manta_vcf_index clustered_melt_vcf ' + \
                'clustered_melt_vcf_index clustered_wham_vcf ' + \
                'clustered_wham_vcf_index clustered_outlier_samples_with_reason ' + \
-               'clustered_sv_count_plots metrics_file_clusterbatch'
+               'clustered_sv_counts clustered_sv_count_plots metrics_file_clusterbatch'
 keep_05_outs = keep_05_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,

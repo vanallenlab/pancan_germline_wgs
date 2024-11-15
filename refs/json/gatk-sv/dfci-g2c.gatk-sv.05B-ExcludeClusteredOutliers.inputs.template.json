@@ -1,0 +1,9 @@
+{
+  "ExcludeClusteredOutliers.del_bed": "TBD",
+  "ExcludeClusteredOutliers.dup_bed": "TBD",
+  "ExcludeClusteredOutliers.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list",
+  "ExcludeClusteredOutliers.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "ExcludeClusteredOutliers.manta_vcf_tar": "TBD",
+  "ExcludeClusteredOutliers.melt_vcf_tar": "TBD",
+  "ExcludeClusteredOutliers.wham_vcf_tar": "TBD"
+}
