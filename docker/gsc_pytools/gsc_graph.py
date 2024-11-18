@@ -120,8 +120,8 @@ def plot_volcano(df,
                  or_col="OR_combined", 
                  criteria_col="criteria", 
                  cancer_type_col="cancer_type",
-                 germline_context="germline_risk_allele",
-                 figure_title="Insert Title Here",
+                 germline_event="germline_risk_allele",
+                 figure_title="Volcano Plot of Germline Somatic Convergences",
                  save_path="insert_path_here.png"):
 
     # Drop rows where either p-value or OR is NaN
@@ -164,7 +164,7 @@ def plot_volcano(df,
     # Annotate points above Bonferroni
     significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        label_text = f"({row.get(germline_context, 'NA')}, {row['somatic_gene']})"
+        label_text = f"({row.get(germline_event, germline_gene)}, {row['somatic_gene']})"
         ax.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Add legends
@@ -179,6 +179,19 @@ def plot_volcano(df,
                      for criteria, shape in shapes.items()]
     shape_legend = ax.legend(handles=shape_handles, title="Criteria", 
                              bbox_to_anchor=(1.05, 0.75), loc='upper left')
+    ax.add_artist(shape_legend)
+
+    # Add vertical dashed line at x=0
+    ax.axvline(x=0, color='gray', linestyle='--', alpha=0.7, label='x=0')
+
+    # Dashed lines legend
+    line_handles = [
+        plt.Line2D([0], [0], color='red', linestyle='--', label='Bonferroni'),
+        plt.Line2D([0], [0], color='blue', linestyle='--', label='Nominal'),
+        plt.Line2D([0], [0], color='green', linestyle='--', label='Benjamini-Hochberg'),
+        plt.Line2D([0], [0], color='gray', linestyle='--', label='x=0')
+    ]
+    ax.legend(handles=line_handles, title="Significance Lines", loc='lower left')
     
     # Labels, title, and save
     ax.set_xlabel('log2(OR)')
