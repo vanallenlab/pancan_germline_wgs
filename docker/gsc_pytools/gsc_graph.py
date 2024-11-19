@@ -164,7 +164,9 @@ def plot_volcano(df,
     # Annotate points above Bonferroni
     significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        label_text = f"({row.get(germline_event, 'germline_gene')}, {row['somatic_gene']})"
+        # Get the value from germline_event, fallback to 'germline_gene' if germline_event is NA or NaN
+        germline_value = row[germline_event] if pd.notna(row[germline_event]) else row['germline_gene']
+        label_text = f"({germline_value}, {row['somatic_gene']})"
         ax.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Add legends
@@ -191,7 +193,11 @@ def plot_volcano(df,
         plt.Line2D([0], [0], color='green', linestyle='--', label='Benjamini-Hochberg'),
         plt.Line2D([0], [0], color='gray', linestyle='--', label='x=0')
     ]
-    ax.legend(handles=line_handles, title="Significance Lines", loc='lower left')
+
+    # Use a separate legend for lines
+    line_legend = ax.legend(handles=line_handles, title="Significance Lines", 
+                        bbox_to_anchor=(1.05, 0.5), loc='upper left')
+    ax.add_artist(line_legend)
     
     # Labels, title, and save
     ax.set_xlabel('log2(OR)')
@@ -199,8 +205,11 @@ def plot_volcano(df,
     ax.set_title(figure_title)
     plt.tight_layout()
     fig.savefig(save_path)
-    plt.close(fig)
+    plt.show()
+    #plt.close(fig)
 
+df = pd.read_csv("final_gsc_sheet.tsv",sep='\t')
+plot_volcano(df)
 
 def plot_p_values(data, 
                   hmf_col='p_val_HMF', 
