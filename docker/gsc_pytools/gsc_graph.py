@@ -164,7 +164,7 @@ def plot_volcano(df,
     # Annotate points above Bonferroni
     significant_points = df[df['log10_p'] > nominal_threshold]
     for _, row in significant_points.iterrows():
-        label_text = f"({row.get(germline_event, germline_gene)}, {row['somatic_gene']})"
+        label_text = f"({row.get(germline_event, 'germline_gene')}, {row['somatic_gene']})"
         ax.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
     # Add legends
