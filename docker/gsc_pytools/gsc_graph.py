@@ -169,35 +169,60 @@ def plot_volcano(df,
         label_text = f"({germline_value}, {row['somatic_gene']})"
         ax.text(row['log2_OR'], row['log10_p'], label_text, fontsize=8, ha='right')
 
-    # Add legends
-    color_handles = [plt.Line2D([0], [0], marker='o', color='w', 
-                                markerfacecolor=color, label=cancer) 
-                     for cancer, color in colors.items()]
-    color_legend = ax.legend(handles=color_handles, title="Cancer Type", 
-                             bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.add_artist(color_legend)
+    # # Add legends
+    # color_handles = [plt.Line2D([0], [0], marker='o', color='w', 
+    #                             markerfacecolor=color, label=cancer) 
+    #                  for cancer, color in colors.items()]
+    # color_legend = ax.legend(handles=color_handles, title="Cancer Type", 
+    #                          bbox_to_anchor=(1.05, 1), loc='upper left')
+    # ax.add_artist(color_legend)
 
-    shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria) 
-                     for criteria, shape in shapes.items()]
-    shape_legend = ax.legend(handles=shape_handles, title="Criteria", 
-                             bbox_to_anchor=(1.05, 0.75), loc='upper left')
-    ax.add_artist(shape_legend)
+    # shape_handles = [plt.Line2D([0], [0], marker=shape, color='k', label=criteria) 
+    #                  for criteria, shape in shapes.items()]
+    # shape_legend = ax.legend(handles=shape_handles, title="Criteria", 
+    #                          bbox_to_anchor=(1.05, 0.75), loc='upper left')
+    # ax.add_artist(shape_legend)
 
     # Add vertical dashed line at x=0
     ax.axvline(x=0, color='gray', linestyle='--', alpha=0.7, label='x=0')
 
-    # Dashed lines legend
+    # # # Dashed lines legend
+    # # line_handles = [
+    # #     plt.Line2D([0], [0], color='red', linestyle='--', label='Bonferroni'),
+    # #     plt.Line2D([0], [0], color='blue', linestyle='--', label='Nominal'),
+    # #     plt.Line2D([0], [0], color='green', linestyle='--', label='Benjamini-Hochberg'),
+    # #     plt.Line2D([0], [0], color='gray', linestyle='--', label='x=0')
+    # # ]
+
+    # # # Use a separate legend for lines
+    # # line_legend = ax.legend(handles=line_handles, title="Significance Lines", 
+    # #                     bbox_to_anchor=(1.05, 0.5), loc='upper left')
+    # # ax.add_artist(line_legend)
+
+    # Add point legends (color and shape combined)
+    color_handles = [
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color, label=cancer) 
+        for cancer, color in colors.items()
+    ]
+    shape_handles = [
+        plt.Line2D([0], [0], marker=shape, color='k', label=criteria) 
+        for criteria, shape in shapes.items()
+    ]
+    
+    # Add line legend for thresholds
     line_handles = [
         plt.Line2D([0], [0], color='red', linestyle='--', label='Bonferroni'),
         plt.Line2D([0], [0], color='blue', linestyle='--', label='Nominal'),
-        plt.Line2D([0], [0], color='green', linestyle='--', label='Benjamini-Hochberg'),
-        plt.Line2D([0], [0], color='gray', linestyle='--', label='x=0')
+        plt.Line2D([0], [0], color='green', linestyle='--', label='FDR Threshold'),
+        plt.Line2D([0], [0], color='gray', linestyle='--', label='x=0'),
     ]
 
-    # Use a separate legend for lines
-    line_legend = ax.legend(handles=line_handles, title="Significance Lines", 
-                        bbox_to_anchor=(1.05, 0.5), loc='upper left')
-    ax.add_artist(line_legend)
+    # Create a combined legend outside the plot
+    fig.legend(handles=color_handles + shape_handles + line_handles,
+               title="Legend", loc='center right', bbox_to_anchor=(1.3, 0.5))
+
+    # Adjust layout to give room for the legend
+    plt.subplots_adjust(right=0.75)
     
     # Labels, title, and save
     ax.set_xlabel('log2(OR)')
@@ -205,11 +230,9 @@ def plot_volcano(df,
     ax.set_title(figure_title)
     plt.tight_layout()
     fig.savefig(save_path)
-    plt.show()
-    #plt.close(fig)
+    plt.close(fig)
 
-df = pd.read_csv("final_gsc_sheet.tsv",sep='\t')
-plot_volcano(df)
+
 
 def plot_p_values(data, 
                   hmf_col='p_val_HMF', 
