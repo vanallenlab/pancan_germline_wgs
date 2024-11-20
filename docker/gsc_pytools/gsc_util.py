@@ -1,12 +1,10 @@
 import pandas as pd
-import statsmodels.api as sm
-from scipy.stats import fisher_exact
+# import statsmodels.api as sm
+# from scipy.stats import fisher_exact
 import numpy as np
-from firthlogist import FirthLogisticRegression
-import scipy.stats as stats
+# from firthlogist import FirthLogisticRegression
+# import scipy.stats as stats
 
-import statsmodels.api as sm
-import numpy as np
 
 # Assuming FirthLogisticRegression is already imported or defined elsewhere
 # You may need to implement this if it's not available.
@@ -492,3 +490,49 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
 
   # Write the DataFrame to a TSV file
   output_df.to_csv(output_file, sep='\t', index=False)
+
+def process_and_merge_profile_tables(variant_table_pathway, gene_table_pathway):
+    """
+    Process variant and gene tables by filtering columns based on suffixes, merging them,
+    and adjusting '-s' columns based on '-g' column values.
+
+    Parameters:
+    - variant_table: DataFrame containing variant data.
+    - gene_table: DataFrame containing gene data.
+
+    Returns:
+    - DataFrame: The processed and merged table.
+    """
+
+    variant_table = pd.read_csv(variant_table_pathway,sep='\t')
+    gene_table = pd.read_csv(gene_table_pathway,sep='\t')
+
+    # Step 1: Process column names
+    # Remove '-s' and '-g' suffixes for comparison
+    variant_columns = [col for col in variant_table.columns if col != 'patient_id' and (col.endswith('-s') or col.endswith('-g'))]
+    gene_columns = [col for col in gene_table.columns if col != 'patient_id' and (col.endswith('-s') or col.endswith('-g'))]
+
+    variant_base_columns = [col.rsplit('-', 1)[0] for col in variant_columns]
+    gene_base_columns = [col.rsplit('-', 1)[0] for col in gene_columns]
+
+    # Step 2: Find common base columns
+    common_columns = list(set(variant_base_columns).intersection(set(gene_base_columns)))
+
+    # Step 3: Create filtered_gene_columns and filter gene_table
+    filtered_gene_columns = [col + '-g' for col in common_columns] + ['patient_id']
+    filtered_gene_table = gene_table[filtered_gene_columns]
+
+    # Step 4: Merge filtered_gene_table with variant_table
+    merged_table = variant_table.merge(filtered_gene_table, on='patient_id', how='inner')
+
+    # Step 5: Adjust '-s' columns based on '-g' columns
+    for col in common_columns:
+        s_col = col + '-s'
+        g_col = col + '-g'
+        if s_col in merged_table.columns and g_col in merged_table.columns:
+            # Change values in '-s' column to 0 if the corresponding '-g' column has a 1
+            merged_table.loc[(merged_table[g_col] == 1) & (merged_table[s_col] > 0), s_col] = 0
+
+    merged_table.to_csv("profile_table.tsv",sep='\t',index=False)
+    return
+
