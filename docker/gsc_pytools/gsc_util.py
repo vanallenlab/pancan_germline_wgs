@@ -353,8 +353,9 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   elif cohort == "PROFILE":
     covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary','late_stage']
 
-  # Alternate slate of covariates for hormone sensitive cancers
+  # Alternate slate of covariates for hormone sensitive cancers and pancancer
   covariates_hsc = [cov for cov in covariates if cov != 'male'] 
+  covariates_pancancer = covariates + ['Breast_Diagnosis','Colorectal_Diagnosis','Kidney_Diagnosis','Lung_Diagnosis','Prostate_Diagnosis']
   
   # Step 3: Prepare Suffixes
   germline_suffix = None
@@ -404,6 +405,10 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_hsc)
         filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_hsc)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_hsc)
+      elif cancer_type == "Pancancer":
+        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_pancancer)
+        filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_pancancer)
+        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_pancancer)       
       else:
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates)
         filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
