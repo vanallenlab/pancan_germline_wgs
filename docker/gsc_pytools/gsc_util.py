@@ -526,12 +526,41 @@ def process_and_merge_profile_tables(variant_table_pathway, gene_table_pathway):
     merged_table = variant_table.merge(filtered_gene_table, on='patient_id', how='inner')
 
     # Step 5: Adjust '-s' columns based on '-g' columns
+    conversion_stats = []  # To store stats for each column
     for col in common_columns:
         s_col = col + '-s'
         g_col = col + '-g'
         if s_col in merged_table.columns and g_col in merged_table.columns:
-            # Change values in '-s' column to 0 if the corresponding '-g' column has a 1
+            # Get initial count of values > 0 in the s_col
+            initial_s_col_count = (merged_table[s_col] > 0).sum()
+
+            # Perform the conversion
             merged_table.loc[(merged_table[g_col] == 1) & (merged_table[s_col] > 0), s_col] = 0
+
+            # Get the count of values converted to 0
+            converted_count = initial_s_col_count - (merged_table[s_col] > 0).sum()
+
+            # Calculate percentage of converted values
+            if initial_s_col_count > 0:
+                conversion_percentage = (converted_count / initial_s_col_count) * 100
+            else:
+                conversion_percentage = 0.0
+
+            # Append stats to the list
+            conversion_stats.append({
+                "s_col": s_col,
+                "g_col": g_col,
+                "converted_count": converted_count,
+                "initial_s_col_count": initial_s_col_count,
+                "conversion_percentage": conversion_percentage
+            })
+
+    # Print stats for each column
+    for stats in conversion_stats:
+        print(f"Column: {stats['s_col']} | "
+              f"Converted: {stats['converted_count']} out of {stats['initial_s_col_count']} "
+              f"({stats['conversion_percentage']:.2f}%)")
+
 
     merged_table.to_csv("profile_table.tsv",sep='\t',index=False)
     return
