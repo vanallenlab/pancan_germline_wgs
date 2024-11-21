@@ -1,9 +1,9 @@
 import pandas as pd
-# import statsmodels.api as sm
-# from scipy.stats import fisher_exact
+import statsmodels.api as sm
+from scipy.stats import fisher_exact
 import numpy as np
-# from firthlogist import FirthLogisticRegression
-# import scipy.stats as stats
+from firthlogist import FirthLogisticRegression
+import scipy.stats as stats
 
 
 # Assuming FirthLogisticRegression is already imported or defined elsewhere
