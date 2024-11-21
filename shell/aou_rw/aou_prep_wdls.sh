@@ -8,6 +8,8 @@
 # Code to copy all necessary WDLs and other Cromwell-related files (e.g., 
 # input .json templates) to AoU RW bucket (as RW has no internet access)
 
+# See aou_prep_libs.sh for libraries & tools to be executed on RW terminal directly
+
 # Note that this code is designed to be run *locally* (not on RW)
 
 # Set up local working directory
@@ -16,15 +18,11 @@ cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
 export g2c_branch=gatksv
-git clone git@github.com:vanallenlab/pancan_germline_wgs.git && \
-cd pancan_germline_wgs && \
-git checkout $g2c_branch && \
-git pull && \
-cd ../
+git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
-export gatsv_tag=v1.0
-git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatsv_tag
+export gatksv_tag=v1.0
+git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
 
 # Clone GATK-HC workflows repo & checkout release tag of interest
 export gatkhc_tag=2.3.1
@@ -47,13 +45,6 @@ gsutil -m cp -r \
   wdl \
   pancan_germline_wgs/refs \
   $rw_bucket/code/
-gsutil -m cp \
-  pancan_germline_wgs/shell/aou_rw/general_bash_utils.sh \
-  pancan_germline_wgs/shell/aou_rw/aou_bash_utils.sh \
-  pancan_germline_wgs/shell/aou_rw/gatksv_bash_utils.sh \
-  pancan_germline_wgs/shell/aou_rw/setup_sample_info.sh \
-  pancan_germline_wgs/shell/aou_rw/install_packages.sh \
-  $rw_bucket/code/refs/
 
 # Clean up
 cd ~

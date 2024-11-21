@@ -46,8 +46,18 @@ for lang in "$@"; do
       # Ensure pip is up to date
       pip install --upgrade pip
 
-      # Install G2C companion package
+      # Install various public python packages
+      for pkg in Cython; do
+        pip install $pkg
+      done
+
+      # Install G2C companion package from source
       cd ~/code/src/g2cpy && \
+      pip install --config-settings editable_mode=compat -e . && \
+      cd -
+
+      # Install svtk from source
+      cd ~/code/src/svtk && \
       pip install --config-settings editable_mode=compat -e . && \
       cd -
 
