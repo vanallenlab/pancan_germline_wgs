@@ -70,6 +70,11 @@ check_batch_module() {
       gate=30
       max_resub=3
       ;;
+    07)
+      sub_name="07-FilterBatchSites"
+      gate=20
+      max_resub=2
+      ;;
   esac
 
   # Process batch based on reported status
@@ -217,6 +222,13 @@ submit_batch_module() {
         echo "Module $module_idx requires the outputs from module 04 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
       fi
       ;;
+    07)
+      # Also requires 05C output
+      module_05C_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/$BATCH/$BATCH.gatksv_module_05C.outputs.json
+      if [ $( gsutil ls $module_05C_outputs_json | wc -l ) -lt 1 ]; then
+        echo "Module $module_idx requires the outputs from module 05C to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+      fi
+      ;;
   esac
 
   # Make batch staging directory, if necessary
@@ -243,6 +255,9 @@ submit_batch_module() {
       ;;
     06)
       module_name="GenerateBatchMetrics"
+      ;;
+    07)
+      module_name="FilterBatchSites"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
@@ -463,6 +478,25 @@ EOF
     "GenerateBatchMetrics.melt_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_melt_vcf ),
     "GenerateBatchMetrics.splitfile" : $( gsutil cat $module_04_outputs_json | jq .merged_SR ),
     "GenerateBatchMetrics.wham_vcf" : $( gsutil cat $prev_module_outputs_json | jq .clustered_wham_vcf )
+}
+EOF
+      ;;
+
+
+    #############
+    # MODULE 07 #
+    #############
+    07)
+      wdl="code/wdl/gatk-sv/FilterBatchSites.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.07-FilterBatchSites.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "FilterBatchSites.depth_vcf": $( gsutil cat $module_05C_outputs_json | jq .clustered_depth_vcf ),
+    "FilterBatchSites.evidence_metrics": $( gsutil cat $prev_module_outputs_json | jq .metrics ),
+    "FilterBatchSites.evidence_metrics_common": $( gsutil cat $prev_module_outputs_json | jq .metrics_common ),
+    "FilterBatchSites.manta_vcf": $( gsutil cat $module_05C_outputs_json | jq .clustered_manta_vcf ),
+    "FilterBatchSites.melt_vcf": $( gsutil cat $module_05C_outputs_json | jq .clustered_melt_vcf ),
+    "FilterBatchSites.wham_vcf": $( gsutil cat $module_05C_outputs_json | jq .clustered_wham_vcf )
 }
 EOF
       ;;

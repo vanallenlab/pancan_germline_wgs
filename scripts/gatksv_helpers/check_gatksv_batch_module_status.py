@@ -30,7 +30,8 @@ wdl_names = {'03' : 'TrainGCNV',
              '05' : 'ClusterBatch',
              '05B' : 'ExcludeClusteredOutliers',
              '05C' : 'ClusterBatch',
-             '06' : 'GenerateBatchMetrics'}
+             '06' : 'GenerateBatchMetrics',
+             '07' : 'FilterBatchSites'}
 module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
@@ -52,6 +53,10 @@ keep_05B_outs = 'del_bed_cleaned dup_bed_cleaned manta_vcf_tar_cleaned ' + \
 keep_05B_outs = keep_05B_outs.split()
 keep_05C_outs = keep_05_outs
 keep_06_outs = 'metrics metrics_common metrics_file_batchmetrics'.split()
+keep_07_outs = 'sites_filtered_melt_vcf sites_filtered_wham_vcf cutoffs ' + \
+               'sites_filtered_sv_counts sites_filtered_manta_vcf ' + \
+               'sites_filtered_depth_vcf scores'
+keep_07_outs = keep_07_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
                     '05' : keep_05_outs,
