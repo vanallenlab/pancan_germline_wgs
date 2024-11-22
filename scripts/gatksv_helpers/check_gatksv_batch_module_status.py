@@ -29,7 +29,8 @@ wdl_names = {'03' : 'TrainGCNV',
              '04' : 'GatherBatchEvidence',
              '05' : 'ClusterBatch',
              '05B' : 'ExcludeClusteredOutliers',
-             '05C' : 'ClusterBatch'}
+             '05C' : 'ClusterBatch',
+             '06' : 'GenerateBatchMetrics'}
 module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
@@ -50,11 +51,13 @@ keep_05B_outs = 'del_bed_cleaned dup_bed_cleaned manta_vcf_tar_cleaned ' + \
                 'melt_vcf_tar_cleaned wham_vcf_tar_cleaned'
 keep_05B_outs = keep_05B_outs.split()
 keep_05C_outs = keep_05_outs
+keep_06_outs = 'metrics metrics_common metrics_file_batchmetrics'.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
                     '05' : keep_05_outs,
                     '05B' : keep_05B_outs,
-                    '05C' : keep_05C_outs}
+                    '05C' : keep_05C_outs,
+                    '06' : keep_06_outs}
 
 
 def check_if_staged(bucket, bid, module_index):
