@@ -294,3 +294,54 @@ gsutil -m cp \
 # Launch workflows to remove outlier samples from filtered VCFs for each batch
 module_submission_routine_all_batches 08
 
+
+########################
+# 09 | MergeBatchSites #
+########################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Refresh staging directory for this module
+if [ -e staging/09 ]; then rm -rf staging/09; fi; mkdir staging/09
+
+# Get GS URIs for all batch PESR and RD VCFs
+while read bid; do
+  mod08_output_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/08/$bid/$bid.gatksv_module_08.outputs.json
+  gsutil cat $mod08_output_json | jq .outlier_filtered_pesr_vcf | tr -d '"' >> staging/09/pesr_vcfs.list
+  gsutil cat $mod08_output_json | jq .outlier_filtered_depth_vcf | tr -d '"' >> staging/09/depth_vcfs.list
+done < batch_info/dfci-g2c.gatk-sv.batches.list
+
+# Prep input .json
+cat << EOF > cromshell/inputs/dfci-g2c.v1.09-MergeBatchSites.inputs.json
+{
+    "MergeBatchSites.cohort": "dfci-g2c.v1",
+    "MergeBatchSites.depth_vcfs": $( collapse_txt staging/09/depth_vcfs.list ),
+    "MergeBatchSites.pesr_vcfs": $( collapse_txt staging/09/pesr_vcfs.list ),
+    "MergeBatchSites.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
+    "MergeBatchSites.runtime_attr_merge_pesr" : { "disk_gb" : 25 }
+}
+EOF
+
+# Submit to Cromwell
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip gatksv.dependencies.zip \
+  code/wdl/gatk-sv/MergeBatchSites.wdl \
+  cromshell/inputs/dfci-g2c.v1.09-MergeBatchSites.inputs.json \
+| jq .id | tr -d '"' >> cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list
+
+# Monitor submission
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list )
+
+# Once complete, stage outputs
+# TODO: implement this
+
+
+######################
+# 10 | GenotypeBatch #
+######################
+
+
+
+
+

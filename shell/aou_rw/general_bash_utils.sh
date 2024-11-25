@@ -88,3 +88,27 @@ check_cromwell_return_codes() {
   echo -e "Finished checking all return codes"
 }
 
+
+# Simple routine to monitor a single Cromwell workflow
+monitor_workflow() {
+  # Check inputs
+  if [ $# -lt 1 ]; then
+    echo "Must provide workflow ID as first positional argument"
+    return 2
+  fi
+  if [ $# -ge 2 ]; then
+    monitor_gate=$2
+  else
+    monitor_gate=5
+  fi
+
+  # Endless loop
+  while true; do
+    echo -e "\n\n\n\n"
+    date
+    cromshell -t 120 --no_turtle counts -x $1
+    echo -e "Waiting $monitor_gate minutes before checking again...\n"
+    sleep ${monitor_gate}m
+  done
+}
+

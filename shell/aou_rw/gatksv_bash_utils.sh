@@ -80,6 +80,11 @@ check_batch_module() {
       gate=1
       max_resub=2
       ;;
+    04)
+      sub_name="10-GenotypeBatch"
+      gate=45
+      max_resub=2
+      ;;
   esac
 
   # Process batch based on reported status
@@ -211,8 +216,11 @@ submit_batch_module() {
     06)
       prev_idx="05C"
       ;;
+    10)
+      prev_idx="08"
+      ;;
     *)
-      prev_idx="0$(( $module_idx - 1 ))"    
+      prev_idx="0$(( 10#$module_idx - 1 ))"    
       ;;
   esac
   prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
@@ -236,6 +244,20 @@ submit_batch_module() {
       module_05C_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/$BATCH/$BATCH.gatksv_module_05C.outputs.json
       if [ $( gsutil ls $module_05C_outputs_json | wc -l ) -lt 1 ]; then
         echo "Module $module_idx requires the outputs from module 05C to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+        return 126
+      fi
+      ;;
+    10)
+      # Also requires 04 output
+      module_04_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/04/$BATCH/$BATCH.gatksv_module_04.outputs.json
+      if [ $( gsutil ls $module_04_outputs_json | wc -l ) -lt 1 ]; then
+        echo "Module $module_idx requires the outputs from module 04 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+        return 126
+      fi
+      # Also requires 07 output
+      module_07_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/07/$BATCH/$BATCH.gatksv_module_07.outputs.json
+      if [ $( gsutil ls $module_07_outputs_json | wc -l ) -lt 1 ]; then
+        echo "Module $module_idx requires the outputs from module 07 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
         return 126
       fi
       ;;
@@ -272,6 +294,9 @@ submit_batch_module() {
     08)
       module_name="FilterBatchSamples"
       ;;
+    10)
+      module_name="GenotypeBatch"
+      ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
       return 2
@@ -290,6 +315,7 @@ submit_batch_module() {
   # Set workflow-specific parameters
   json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.$sub_name.inputs.template.json
   case $module_idx in
+
 
     #############
     # MODULE 03 #
@@ -312,6 +338,7 @@ submit_batch_module() {
 }
 EOF
       ;;
+
 
     #############
     # MODULE 04 #
@@ -424,6 +451,7 @@ EOF
 EOF
       ;;
 
+
     #############
     # MODULE 05 #
     #############
@@ -440,6 +468,7 @@ EOF
 EOF
       ;;
 
+
     ##############
     # MODULE 05B #
     ##############
@@ -455,6 +484,7 @@ EOF
 }
 EOF
       ;;
+
 
     ##############
     # MODULE 05C #
@@ -527,6 +557,26 @@ EOF
     "FilterBatchSamples.manta_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_manta_vcf ),
     "FilterBatchSamples.melt_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_melt_vcf ),
     "FilterBatchSamples.wham_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_wham_vcf )
+}
+EOF
+      ;;
+
+
+    #############
+    # MODULE 10 #
+    #############
+    10)
+      wdl="code/wdl/gatk-sv/GenotypeBatch.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.10-GenotypeBatch.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "GenotypeBatch.batch_depth_vcf": $( gsutil cat $prev_module_outputs_json | jq .outlier_filtered_depth_vcf ),
+    "GenotypeBatch.batch_pesr_vcf": $( gsutil cat $prev_module_outputs_json | jq .outlier_filtered_pesr_vcf ),
+    "GenotypeBatch.coveragefile": $( gsutil cat $module_04_outputs_json | jq .merged_bincov ),
+    "GenotypeBatch.discfile": $( gsutil cat $module_04_outputs_json | jq .merged_PE ),
+    "GenotypeBatch.medianfile": $( gsutil cat $module_04_outputs_json | jq .median_cov ),
+    "GenotypeBatch.rf_cutoffs": $( gsutil cat $module_07_outputs_json | jq .cutoffs ),
+    "GenotypeBatch.splitfile": $( gsutil cat $module_04_outputs_json | jq .merged_SR )
 }
 EOF
       ;;

@@ -32,7 +32,8 @@ wdl_names = {'03' : 'TrainGCNV',
              '05C' : 'ClusterBatch',
              '06' : 'GenerateBatchMetrics',
              '07' : 'FilterBatchSites',
-             '08' : 'FilterBatchSamples'}
+             '08' : 'FilterBatchSamples',
+             '10' : 'GenotypeBatch'}
 module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
@@ -62,6 +63,15 @@ keep_08_outs = 'outlier_filtered_depth_vcf outlier_filtered_depth_vcf_index ' + 
                'outlier_filtered_pesr_vcf outlier_filtered_pesr_vcf_index ' + \
                'filtered_batch_samples_file'
 keep_08_outs = keep_08_outs.split()
+keep_10_outs = 'genotyped_depth_vcf genotyped_depth_vcf_index genotyped_pesr_vcf ' + \
+               'genotyped_pesr_vcf_index metrics_file_genotypebatch ' + \
+               'regeno_coverage_medians sr_background_fail sr_bothside_pass ' + \
+               'trained_PE_metrics trained_SR_metrics ' + \
+               'trained_genotype_depth_depth_sepcutoff ' + \
+               'trained_genotype_depth_pesr_sepcutoff ' + \
+               'trained_genotype_pesr_depth_sepcutoff ' + \
+               'trained_genotype_pesr_pesr_sepcutoff'
+keep_10_outs = keep_10_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
                     '05' : keep_05_outs,
@@ -69,7 +79,8 @@ keep_output_keys = {'03' : keep_03_outs,
                     '05C' : keep_05C_outs,
                     '06' : keep_06_outs,
                     '07' : keep_07_outs,
-                    '08' : keep_08_outs}
+                    '08' : keep_08_outs,
+                    '10' : keep_10_outs}
 
 
 def check_if_staged(bucket, bid, module_index):
