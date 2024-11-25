@@ -38,7 +38,9 @@ cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 
 # Override any GATK-SV WDLs with their corresponding custom G2C copies
-# This is rarely necessary but was deemed the easiest solution for handling edge cases
+# This is rarely necessary but was deemed the easiest solution for handling 
+# edge cases (like for 06) or situations where we intentionally deviated from
+# GATK-SV default procedures (like for outlier sample definition in 08)
 cp pancan_germline_wgs/wdl/gatk-sv/* $WRKDIR/wdl/gatk-sv/
 
 # Copy WDLs to AoU RW bucket

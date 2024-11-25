@@ -31,7 +31,8 @@ wdl_names = {'03' : 'TrainGCNV',
              '05B' : 'ExcludeClusteredOutliers',
              '05C' : 'ClusterBatch',
              '06' : 'GenerateBatchMetrics',
-             '07' : 'FilterBatchSites'}
+             '07' : 'FilterBatchSites',
+             '08' : 'FilterBatchSamples'}
 module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'
@@ -57,13 +58,18 @@ keep_07_outs = 'sites_filtered_melt_vcf sites_filtered_wham_vcf cutoffs ' + \
                'sites_filtered_sv_counts sites_filtered_manta_vcf ' + \
                'sites_filtered_depth_vcf scores'
 keep_07_outs = keep_07_outs.split()
+keep_08_outs = 'outlier_filtered_depth_vcf outlier_filtered_depth_vcf_index ' + \
+               'outlier_filtered_pesr_vcf outlier_filtered_pesr_vcf_index ' + \
+               'filtered_batch_samples_file'
+keep_08_outs = keep_08_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
                     '05' : keep_05_outs,
                     '05B' : keep_05B_outs,
                     '05C' : keep_05C_outs,
                     '06' : keep_06_outs,
-                    '07' : keep_07_outs}
+                    '07' : keep_07_outs,
+                    '08' : keep_08_outs}
 
 
 def check_if_staged(bucket, bid, module_index):

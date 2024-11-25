@@ -148,13 +148,6 @@ cat gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.*.outliers.samples.list \
 | sort -V | uniq \
 > gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list
 
-# Compress and archive outlier data for future reference
-tar -czvf gatksv_05B_outliers.tar.gz gatksv_05B_outliers
-gsutil -m cp \
-  gatksv_05B_outliers.tar.gz \
-  gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
-
 # Update sample metadata with 05B outlier failure labels
 code/scripts/append_qc_fail_metadata.R \
   --qc-tsv dfci-g2c.intake_qc.all.post_qc_batching.tsv.gz \
@@ -163,6 +156,14 @@ code/scripts/append_qc_fail_metadata.R \
   --fail-samples-list gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list \
   --outfile dfci-g2c.sample_meta.post_clusterbatch.tsv
 gzip -f dfci-g2c.sample_meta.post_clusterbatch.tsv
+
+# Compress and archive outlier data for future reference
+tar -czvf gatksv_05B_outliers.tar.gz gatksv_05B_outliers
+gsutil -m cp \
+  gatksv_05B_outliers.tar.gz \
+  gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list \
+  dfci-g2c.sample_meta.post_clusterbatch.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
 
 # Replot sample QC after excluding outliers above
 qcplotdir=dfci-g2c.phase1.clusterbatch_qc_pass.plots
@@ -257,13 +258,6 @@ cat gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.*.outliers.samples.list \
 | sort -V | uniq \
 > gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list
 
-# Compress and archive outlier data for future reference
-tar -czvf gatksv_08_outliers.tar.gz gatksv_08_outliers
-gsutil -m cp \
-  gatksv_08_outliers.tar.gz \
-  gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
-
 # Update sample metadata with 08 outlier failure labels
 code/scripts/append_qc_fail_metadata.R \
   --qc-tsv dfci-g2c.sample_meta.post_clusterbatch.tsv.gz \
@@ -274,6 +268,14 @@ code/scripts/append_qc_fail_metadata.R \
   --outfile dfci-g2c.sample_meta.post_filtersites.tsv
 gzip -f dfci-g2c.sample_meta.post_filtersites.tsv
 
+# Compress and archive outlier data for future reference
+tar -czvf gatksv_08_outliers.tar.gz gatksv_08_outliers
+gsutil -m cp \
+  gatksv_08_outliers.tar.gz \
+  gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list \
+  dfci-g2c.sample_meta.post_filtersites.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
+
 # Replot sample QC after excluding outliers above
 qcplotdir=dfci-g2c.phase1.filtersites_qc_pass.plots
 if [ ! -e $qcplotdir ]; then mkdir $qcplotdir; fi
@@ -281,6 +283,7 @@ code/scripts/plot_intake_qc.R \
   --qc-tsv dfci-g2c.sample_meta.post_filtersites.tsv.gz \
   --pass-column global_qc_pass \
   --pass-column batch_qc_pass \
+  --pass-column clusterbatch_qc_pass \
   --pass-column filtersites_qc_pass \
   --out-prefix $qcplotdir/dfci-g2c.phase1.filtersites_qc_pass
 tar -czvf dfci-g2c.phase1.filtersites_qc_pass.plots.tar.gz $qcplotdir

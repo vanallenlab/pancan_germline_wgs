@@ -1,3 +1,6 @@
+# Drop-in replacement for GATK-SV v1.0 module 06
+# Handles edge case observed for two batches in DFCI G2C
+
 version 1.0
 
 import "PETest.wdl" as pet

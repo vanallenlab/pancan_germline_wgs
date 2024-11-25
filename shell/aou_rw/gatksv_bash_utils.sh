@@ -75,6 +75,11 @@ check_batch_module() {
       gate=20
       max_resub=2
       ;;
+    08)
+      sub_name="08-FilterBatchSamples"
+      gate=1
+      max_resub=2
+      ;;
   esac
 
   # Process batch based on reported status
@@ -126,7 +131,7 @@ module_submission_routine_all_batches() {
     05|05C)
       outer_gate=30
       ;;
-    05B)
+    05B|08)
       outer_gate=10
       ;;
     07)
@@ -263,6 +268,9 @@ submit_batch_module() {
       ;;
     07)
       module_name="FilterBatchSites"
+      ;;
+    08)
+      module_name="FilterBatchSamples"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
@@ -505,6 +513,24 @@ EOF
 }
 EOF
       ;;
+
+
+    #############
+    # MODULE 08 #
+    #############
+    08)
+      wdl="code/wdl/gatk-sv/FilterBatchSamples.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.08-FilterBatchSamples.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "FilterBatchSamples.depth_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_depth_vcf ),
+    "FilterBatchSamples.manta_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_manta_vcf ),
+    "FilterBatchSamples.melt_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_melt_vcf ),
+    "FilterBatchSamples.wham_vcf": $( gsutil cat $prev_module_outputs_json | jq .sites_filtered_wham_vcf )
+}
+EOF
+      ;;
+
 
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
