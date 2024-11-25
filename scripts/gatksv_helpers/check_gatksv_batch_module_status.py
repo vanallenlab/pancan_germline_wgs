@@ -62,7 +62,8 @@ keep_output_keys = {'03' : keep_03_outs,
                     '05' : keep_05_outs,
                     '05B' : keep_05B_outs,
                     '05C' : keep_05C_outs,
-                    '06' : keep_06_outs}
+                    '06' : keep_06_outs,
+                    '07' : keep_07_outs}
 
 
 def check_if_staged(bucket, bid, module_index):

@@ -83,7 +83,7 @@ check_batch_module() {
               $tracker )
   if [ -z $status ]; then
     echo -e "Failed getting status of batch '$bid' for module '$module_idx'. Exiting."
-    return
+    return 1
   fi
   jid_list=~/cromshell/job_ids/$bid.$sub_name.job_ids.list
   if [ -e $jid_list ]; then
@@ -129,6 +129,8 @@ module_submission_routine_all_batches() {
     05B)
       outer_gate=10
       ;;
+    07)
+      outer_gate=20
   esac
 
   _count_remaining() {
@@ -211,6 +213,7 @@ submit_batch_module() {
   prev_module_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/$prev_idx/$BATCH/$BATCH.gatksv_module_$prev_idx.outputs.json
   if [ $( gsutil ls $prev_module_outputs_json | wc -l ) -lt 1 ]; then
     echo "Module $module_idx requires the outputs from module $prev_idx to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+    return 126
   fi
 
   # Some modules require multiple prior outputs; these extra outputs are checked here
@@ -220,6 +223,7 @@ submit_batch_module() {
       module_04_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/04/$BATCH/$BATCH.gatksv_module_04.outputs.json
       if [ $( gsutil ls $module_04_outputs_json | wc -l ) -lt 1 ]; then
         echo "Module $module_idx requires the outputs from module 04 to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+        return 126
       fi
       ;;
     07)
@@ -227,6 +231,7 @@ submit_batch_module() {
       module_05C_outputs_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/$BATCH/$BATCH.gatksv_module_05C.outputs.json
       if [ $( gsutil ls $module_05C_outputs_json | wc -l ) -lt 1 ]; then
         echo "Module $module_idx requires the outputs from module 05C to be staged, but staged outputs .json was not found for batch $BATCH. Exiting."
+        return 126
       fi
       ;;
   esac
@@ -261,7 +266,7 @@ submit_batch_module() {
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
-      return
+      return 2
       ;;
   esac
   sub_name="${module_idx}-$module_name"
@@ -503,7 +508,7 @@ EOF
 
     *)
       echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
-      return
+      return 2
       ;;
   
   esac

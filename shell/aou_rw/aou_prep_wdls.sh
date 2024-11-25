@@ -37,6 +37,10 @@ cp pancan_germline_wgs/wdl/*.wdl $WRKDIR/wdl/pancan_germline_wgs/
 cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 
+# Override any GATK-SV WDLs with their corresponding custom G2C copies
+# This is rarely necessary but was deemed the easiest solution for handling edge cases
+cp pancan_germline_wgs/wdl/gatk-sv/* $WRKDIR/wdl/gatk-sv/
+
 # Copy WDLs to AoU RW bucket
 # Note: must use AoU Google credentials
 export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45

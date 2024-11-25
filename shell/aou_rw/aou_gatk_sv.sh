@@ -197,3 +197,97 @@ module_submission_routine_all_batches 05C
 
 module_submission_routine_all_batches 06
 
+
+#########################
+# 07 | FilterBatchSites #
+#########################
+
+module_submission_routine_all_batches 07
+
+
+###########################
+# 08 | FilterBatchSamples #
+###########################
+
+# Note: similar to 05B above, this step uses custom outlier definitions
+# The below code needs to be run just once in a single workspace
+
+# This also requires all packages installed and outputs as for 05B above
+# If necessary, rerun the 05B library installation steps before proceeding
+
+# Collect SV count data for each sample per algorithm
+if ! [ -e data/gatksv_08_outliers ]; then
+  mkdir gatksv_08_outliers
+fi
+for alg in depth manta melt wham; do
+  gsutil -m cat \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/07/*/PlotSVCountsPerSample/CountSVsPerSamplePerType/**.$alg.with_evidence.svcounts.txt \
+  | sort -Vrk1,1 -k2,2V | uniq \
+  > gatksv_08_outliers/dfci-g2c.08_sv_counts.$alg.tsv
+done
+
+# Define outlier samples cohort-wide as Q3 + 6 IQR for all algorithms
+for alg in depth manta melt wham; do
+  case $alg in
+    "depth")
+      prefix="Depth"
+      ;;
+    "manta")
+      prefix="Manta"
+      ;;
+    "melt")
+      prefix="Melt"
+      ;;
+    "wham")
+      prefix="Wham"
+      ;;
+  esac
+  code/scripts/define_variant_count_outlier_samples.R \
+    --counts-tsv gatksv_08_outliers/dfci-g2c.08_sv_counts.$alg.tsv \
+    --sample-labels-tsv gatksv_05B_outliers/dfci-g2c.intake_pop_labels.aou_split.tsv \
+    --n-iqr 6 \
+    --no-lower-filter \
+    --plot \
+    --plot-title-prefix $prefix \
+    --out-prefix gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.$alg
+done
+
+# Merge outlier sample lists
+cat gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.*.outliers.samples.list \
+| sort -V | uniq \
+> gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list
+
+# Compress and archive outlier data for future reference
+tar -czvf gatksv_08_outliers.tar.gz gatksv_08_outliers
+gsutil -m cp \
+  gatksv_08_outliers.tar.gz \
+  gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
+
+# Update sample metadata with 08 outlier failure labels
+code/scripts/append_qc_fail_metadata.R \
+  --qc-tsv dfci-g2c.sample_meta.post_clusterbatch.tsv.gz \
+  --new-column-name filtersites_qc_pass \
+  --all-samples-list <( cat batch_info/sample_lists/* | fgrep -wvf \
+                        gatksv_05B_outliers/dfci-g2c.gatksv.05B_outliers.all_outlier_samples.list ) \
+  --fail-samples-list gatksv_08_outliers/dfci-g2c.gatksv.08_outliers.all_outlier_samples.list \
+  --outfile dfci-g2c.sample_meta.post_filtersites.tsv
+gzip -f dfci-g2c.sample_meta.post_filtersites.tsv
+
+# Replot sample QC after excluding outliers above
+qcplotdir=dfci-g2c.phase1.filtersites_qc_pass.plots
+if [ ! -e $qcplotdir ]; then mkdir $qcplotdir; fi
+code/scripts/plot_intake_qc.R \
+  --qc-tsv dfci-g2c.sample_meta.post_filtersites.tsv.gz \
+  --pass-column global_qc_pass \
+  --pass-column batch_qc_pass \
+  --pass-column filtersites_qc_pass \
+  --out-prefix $qcplotdir/dfci-g2c.phase1.filtersites_qc_pass
+tar -czvf dfci-g2c.phase1.filtersites_qc_pass.plots.tar.gz $qcplotdir
+gsutil -m cp \
+  dfci-g2c.phase1.filtersites_qc_pass.plots.tar.gz \
+  $MAIN_WORKSPACE_BUCKET/results/gatksv_qc/
+
+# Launch workflows to remove outlier samples from filtered VCFs for each batch
+module_submission_routine_all_batches 08
+
