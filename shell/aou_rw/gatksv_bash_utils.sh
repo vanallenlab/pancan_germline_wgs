@@ -68,7 +68,7 @@ check_batch_module() {
     06)
       sub_name="06-GenerateBatchMetrics"
       gate=30
-      max_resub=3
+      max_resub=5
       ;;
     07)
       sub_name="07-FilterBatchSites"

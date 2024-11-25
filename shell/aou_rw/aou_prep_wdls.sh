@@ -51,5 +51,5 @@ gsutil -m cp -r \
   $rw_bucket/code/
 
 # Clean up
-cd ~
+cd -
 rm -rf $WRKDIR
