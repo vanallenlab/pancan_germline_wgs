@@ -63,14 +63,13 @@ keep_08_outs = 'outlier_filtered_depth_vcf outlier_filtered_depth_vcf_index ' + 
                'outlier_filtered_pesr_vcf outlier_filtered_pesr_vcf_index ' + \
                'filtered_batch_samples_file'
 keep_08_outs = keep_08_outs.split()
-keep_10_outs = 'genotyped_depth_vcf genotyped_depth_vcf_index genotyped_pesr_vcf ' + \
-               'genotyped_pesr_vcf_index metrics_file_genotypebatch ' + \
-               'regeno_coverage_medians sr_background_fail sr_bothside_pass ' + \
-               'trained_PE_metrics trained_SR_metrics ' + \
-               'trained_genotype_depth_depth_sepcutoff ' + \
-               'trained_genotype_depth_pesr_sepcutoff ' + \
-               'trained_genotype_pesr_depth_sepcutoff ' + \
-               'trained_genotype_pesr_pesr_sepcutoff'
+keep_10_outs = 'trained_genotype_pesr_depth_sepcutoff sr_background_fail ' + \
+               'trained_SR_metrics genotyped_depth_vcf_index ' + \
+               'trained_genotype_depth_pesr_sepcutoff genotyped_pesr_vcf_index ' + \
+               'sr_bothside_pass genotyped_depth_vcf metrics_file_genotypebatch ' + \
+               'trained_genotype_depth_depth_sepcutoff genotyped_pesr_vcf ' + \
+               'regeno_coverage_medians trained_genotype_pesr_pesr_sepcutoff ' + \
+               'trained_PE_metrics'
 keep_10_outs = keep_10_outs.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,

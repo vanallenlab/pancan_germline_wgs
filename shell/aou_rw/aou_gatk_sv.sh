@@ -331,17 +331,25 @@ cromshell --no_turtle -t 120 -mc submit \
 | jq .id | tr -d '"' >> cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list
 
 # Monitor submission
-monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list )
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list )
 
 # Once complete, stage outputs
-# TODO: implement this
+cromshell -t 120 --no_turtle -mc list-outputs \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list ) \
+| awk '{ print $2 }' | gsutil -m cp -I \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/09/
 
 
 ######################
 # 10 | GenotypeBatch #
 ######################
 
+# Test batch:
+submit_batch_module g2c-bgw2i4m3 10
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/g2c-bgw2i4m3.10-GenotypeBatch.job_ids.list )
 
-
+module_submission_routine_all_batches 10
 
 

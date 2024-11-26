@@ -80,9 +80,9 @@ check_batch_module() {
       gate=1
       max_resub=2
       ;;
-    04)
+    10)
       sub_name="10-GenotypeBatch"
-      gate=45
+      gate=90
       max_resub=2
       ;;
   esac
@@ -141,6 +141,7 @@ module_submission_routine_all_batches() {
       ;;
     07)
       outer_gate=20
+      ;;
   esac
 
   _count_remaining() {
