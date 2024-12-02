@@ -24,7 +24,7 @@ task Extract_Coding_Regions {
     preemptible: 3
   }
   output {
-  	File germline_coding_list = "germline_coding.list"
+    File germline_coding_list = "germline_coding.list"
     File somatic_coding_list = "somatic_coding.list"
   }
 }
@@ -47,7 +47,7 @@ task Extract_Germline_Variants {
   echo "Checkpoint 1"
 
   # Split VEP annotations and filter for relevant information
-	bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
+  bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
   
   echo "Checkpoint 2"
   # Extract potential deleterious germline genes
@@ -108,7 +108,7 @@ task Extract_Germline_Variants {
     preemptible: 3
   }
   output{
-  	File out = "~{patient_id}.txt"
+    File out = "~{patient_id}.txt"
   }
 }
 
