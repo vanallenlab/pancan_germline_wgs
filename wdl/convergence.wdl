@@ -39,13 +39,17 @@ task Extract_Germline_Variants {
   }
   
   command <<<
+  set -eu -o pipefail
+
   # Extract variants present only in the germline data
   bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -o sample.vcf
   bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
+  echo "Checkpoint 1"
 
   # Split VEP annotations and filter for relevant information
 	bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
   
+  echo "Checkpoint 2"
   # Extract potential deleterious germline genes
   cut -f4 query.tsv | sort | uniq > potential_deleterious_germline_genes.list
   touch c1.list
@@ -74,7 +78,8 @@ task Extract_Germline_Variants {
 
   # Initialize an empty set for pathogenic genes
   pathogenic_gene_list = set()
-
+  print("Checkpoint 3")
+  
   # Loop through each row in the DataFrame
   for _, row in vep_df.iterrows():
       # If there is a P/LP variant, add the gene
@@ -93,8 +98,8 @@ task Extract_Germline_Variants {
       for gene in sorted(pathogenic_gene_list):  # Sorting is optional but improves readability
           file.write(f"{gene}\n")
 
-print(f"Pathogenic genes written to ~{patient_id}.txt")
-CODE
+  print(f"Pathogenic genes written to ~{patient_id}.txt")
+  CODE
 
   >>>
   
