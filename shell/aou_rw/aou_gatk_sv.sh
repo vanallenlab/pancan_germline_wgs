@@ -301,34 +301,8 @@ module_submission_routine_all_batches 08
 
 # Note: this module only needs to be run once in one workspace for the whole cohort
 
-# Refresh staging directory for this module
-if [ -e staging/09 ]; then rm -rf staging/09; fi; mkdir staging/09
-
-# Get GS URIs for all batch PESR and RD VCFs
-while read bid; do
-  mod08_output_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/08/$bid/$bid.gatksv_module_08.outputs.json
-  gsutil cat $mod08_output_json | jq .outlier_filtered_pesr_vcf | tr -d '"' >> staging/09/pesr_vcfs.list
-  gsutil cat $mod08_output_json | jq .outlier_filtered_depth_vcf | tr -d '"' >> staging/09/depth_vcfs.list
-done < batch_info/dfci-g2c.gatk-sv.batches.list
-
-# Prep input .json
-cat << EOF > cromshell/inputs/dfci-g2c.v1.09-MergeBatchSites.inputs.json
-{
-    "MergeBatchSites.cohort": "dfci-g2c.v1",
-    "MergeBatchSites.depth_vcfs": $( collapse_txt staging/09/depth_vcfs.list ),
-    "MergeBatchSites.pesr_vcfs": $( collapse_txt staging/09/pesr_vcfs.list ),
-    "MergeBatchSites.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
-    "MergeBatchSites.runtime_attr_merge_pesr" : { "disk_gb" : 25 }
-}
-EOF
-
-# Submit to Cromwell
-cromshell --no_turtle -t 120 -mc submit \
-  --options-json code/refs/json/aou.cromwell_options.default.json \
-  --dependencies-zip gatksv.dependencies.zip \
-  code/wdl/gatk-sv/MergeBatchSites.wdl \
-  cromshell/inputs/dfci-g2c.v1.09-MergeBatchSites.inputs.json \
-| jq .id | tr -d '"' >> cromshell/job_ids/dfci-g2c.v1.09-MergeBatchSites.job_ids.list
+# Submit workflow
+submit_cohort_module 09
 
 # Monitor submission
 monitor_workflow \
@@ -340,16 +314,56 @@ cromshell -t 120 --no_turtle -mc list-outputs \
 | awk '{ print $2 }' | gsutil -m cp -I \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/09/
 
+# Once staged, clean up outputs
+gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/MergeBatchSites/** >> uris_to_delete.list
+cleanup_garbage
+
 
 ######################
 # 10 | GenotypeBatch #
 ######################
 
-# Test batch:
-submit_batch_module g2c-bgw2i4m3 10
-monitor_workflow \
-  $( tail -n1 cromshell/job_ids/g2c-bgw2i4m3.10-GenotypeBatch.job_ids.list )
-
 module_submission_routine_all_batches 10
+
+
+#######################
+# 11 | RegenotypeCNVs #
+#######################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Submit workflow
+submit_cohort_module 11
+
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.11-RegenotypeCNVs.job_ids.list )
+
+# Once complete, stage outputs and cleanup garbage
+stage_cohort_module 11
+cromshell -t 120 --no_turtle -mc list-outputs \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.11-RegenotypeCNVs.job_ids.list ) \
+| awk '{ print $2 }' | gsutil -m cp -I \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/11/
+
+# Cleanup outputs
+gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/RegenotypeCNVs/** >> uris_to_delete.list
+cleanup_garbage
+
+
+#######################
+# 12 | CombineBatches #
+#######################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Submit workflow
+submit_cohort_module 12
+
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.12-CombineBatches.job_ids.list )
+
+
 
 

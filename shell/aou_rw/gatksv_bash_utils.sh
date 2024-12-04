@@ -38,6 +38,14 @@ check_batch_module() {
     --status-tsv "$tracker" \
     --update-status
 
+  # Check number of prior submissions (this can impact gate window)
+  jid_list=~/cromshell/job_ids/$bid.$sub_name.job_ids.list
+  if [ -e $jid_list ]; then
+    n_prev_subs=$( cat $jid_list | wc -l )
+  else
+    n_prev_subs=0
+  fi
+
   # Get module-specific parameters
   case $module_idx in
     03)
@@ -82,8 +90,12 @@ check_batch_module() {
       ;;
     10)
       sub_name="10-GenotypeBatch"
-      gate=90
-      max_resub=2
+      if [ $n_prev_subs -gt 0 ]; then
+        gate=5
+      else
+        gate=60
+      fi
+      max_resub=3
       ;;
   esac
 
@@ -94,12 +106,6 @@ check_batch_module() {
   if [ -z $status ]; then
     echo -e "Failed getting status of batch '$bid' for module '$module_idx'. Exiting."
     return 1
-  fi
-  jid_list=~/cromshell/job_ids/$bid.$sub_name.job_ids.list
-  if [ -e $jid_list ]; then
-    n_prev_subs=$( cat $jid_list | wc -l )
-  else
-    n_prev_subs=0
   fi
   case "$status" in
     not_started|failed|doomed|aborted)
@@ -299,7 +305,7 @@ submit_batch_module() {
       module_name="GenotypeBatch"
       ;;
     *)
-      echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
+      echo "Module number $module_idx not recognized by submit_batch_module. Exiting."
       return 2
       ;;
   esac
@@ -316,7 +322,6 @@ submit_batch_module() {
   # Set workflow-specific parameters
   json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.$sub_name.inputs.template.json
   case $module_idx in
-
 
     #############
     # MODULE 03 #
@@ -339,7 +344,6 @@ submit_batch_module() {
 }
 EOF
       ;;
-
 
     #############
     # MODULE 04 #
@@ -452,7 +456,6 @@ EOF
 EOF
       ;;
 
-
     #############
     # MODULE 05 #
     #############
@@ -468,7 +471,6 @@ EOF
 }
 EOF
       ;;
-
 
     ##############
     # MODULE 05B #
@@ -486,7 +488,6 @@ EOF
 EOF
       ;;
 
-
     ##############
     # MODULE 05C #
     ##############
@@ -503,7 +504,6 @@ EOF
 }
 EOF
       ;;
-
 
     #############
     # MODULE 06 #
@@ -526,7 +526,6 @@ EOF
 EOF
       ;;
 
-
     #############
     # MODULE 07 #
     #############
@@ -545,7 +544,6 @@ EOF
 EOF
       ;;
 
-
     #############
     # MODULE 08 #
     #############
@@ -561,7 +559,6 @@ EOF
 }
 EOF
       ;;
-
 
     #############
     # MODULE 10 #
@@ -582,9 +579,8 @@ EOF
 EOF
       ;;
 
-
     *)
-      echo "Module number $module_idx not recognized by submit_gatsv_module. Exiting."
+      echo "Module number $module_idx not recognized by submit_batch_module. Exiting."
       return 2
       ;;
   
@@ -598,12 +594,189 @@ EOF
     -u $sub_dir/$BATCH.$sub_name.updates.json \
     -o cromshell/inputs/$BATCH.$sub_name.inputs.json
 
-  # Submit job and add job ID to list of jobs for this sample
+  # Submit job and add job ID to list of jobs for this batch
   cmd="cromshell --no_turtle -t 120 -mc submit"
   cmd="$cmd --options-json code/refs/json/aou.cromwell_options.default.json"
   cmd="$cmd --dependencies-zip gatksv.dependencies.zip"
   cmd="$cmd $wdl cromshell/inputs/$BATCH.$sub_name.inputs.json"
   eval $cmd | jq .id | tr -d '"' \
   >> cromshell/job_ids/$BATCH.$sub_name.job_ids.list
+}
+
+
+# Submit a single GATK-SV module for the entire cohort
+submit_cohort_module() {
+   # Check inputs
+  if [ $# -ne 1 ]; then
+    echo "Must specify [09,11-16] as first two positional arguments"
+    return
+  else
+    export module_idx=$1
+  fi
+
+  # Set constants
+  batches_list="batch_info/dfci-g2c.gatk-sv.batches.list"
+
+  # Make batch staging directory, if necessary
+  if ! [ -e ~/staging ]; then mkdir ~/staging; fi
+  case $module_idx in
+    09)
+      module_name="MergeBatchSites"
+      ;;
+    11)
+      module_name="RegenotypeCNVs"
+      ;;
+    12)
+      module_name="CombineBatches"
+      ;;
+    *)
+      echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
+      return 2
+      ;;
+  esac
+  sub_name="${module_idx}-$module_name"
+  sub_dir="~/staging/$sub_name"
+  if [ -e $sub_dir ]; then rm -rf $sub_dir; fi
+  mkdir "$sub_dir"
+
+  # Set workflow-specific parameters
+  staging_prefix=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs
+  case $module_idx in
+
+    #############
+    # MODULE 09 #
+    #############
+    09)
+      wdl="code/wdl/gatk-sv/MergeBatchSites.wdl"
+
+      # Get URIs per batch
+      while read bid; do
+        mod08_output_json=$staging_prefix/08/$bid/$bid.gatksv_module_08.outputs.json
+        gsutil cat $mod08_output_json | jq .outlier_filtered_depth_vcf \
+        | tr -d '"' >> $sub_dir/depth_vcfs.list
+        gsutil cat $mod08_output_json | jq .outlier_filtered_pesr_vcf \
+        | tr -d '"' >> $sub_dir/pesr_vcfs.list
+      done < $batches_list
+
+      # Prep input .json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+{
+    "MergeBatchSites.cohort": "dfci-g2c.v1",
+    "MergeBatchSites.depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
+    "MergeBatchSites.pesr_vcfs": $( collapse_txt $sub_dir/pesr_vcfs.list ),
+    "MergeBatchSites.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
+    "MergeBatchSites.runtime_attr_merge_pesr" : { "disk_gb" : 25 }
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 11 #
+    #############
+    11)
+      wdl="code/wdl/gatk-sv/RegenotypeCNVs.wdl"
+
+      # Collect batch-specific URIs and other info
+      while read bid; do
+        
+        mod04_output_json=$staging_prefix/04/$bid/$bid.gatksv_module_04.outputs.json
+        gsutil cat $mod04_output_json | jq .merged_bincov | tr -d '"' \
+        >> $sub_dir/bincovs.list
+        gsutil cat $mod04_output_json | jq .merged_bincov_index | tr -d '"' \
+        >> $sub_dir/bincov_idxs.list
+        gsutil cat $mod04_output_json | jq .median_cov | tr -d '"' \
+        >> $sub_dir/cov_medians.list
+
+        mod08_output_json=$staging_prefix/08/$bid/$bid.gatksv_module_08.outputs.json
+        gsutil cat $mod08_output_json | jq .outlier_filtered_depth_vcf \
+        | tr -d '"' >> $sub_dir/depth_vcfs.list
+        
+        mod10_output_json=$staging_prefix/10/$bid/$bid.gatksv_module_10.outputs.json
+        gsutil cat $mod10_output_json | jq .genotyped_depth_vcf | tr -d '"' \
+        >> $sub_dir/depth_gt_vcfs.list
+        gsutil cat $mod10_output_json | jq .trained_genotype_depth_depth_sepcutoff \
+        | tr -d '"' >> $sub_dir/depth_cutoffs.list
+        gsutil cat $mod10_output_json | jq .regeno_coverage_medians | tr -d '"' \
+        >> $sub_dir/regeno_medians.list
+      done < $batches_list
+
+      # Prep input .json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+{
+    "RegenotypeCNVs.RD_depth_sepcutoffs": $( collapse_txt $sub_dir/depth_cutoffs.list ),
+    "RegenotypeCNVs.batch_depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
+    "RegenotypeCNVs.batches": $( collapse_txt $batches_list ),
+    "RegenotypeCNVs.cohort": "dfci-g2c.v1",
+    "RegenotypeCNVs.cohort_depth_vcf": "$staging_prefix/09/dfci-g2c.v1.all_batches.depth.vcf.gz",
+    "RegenotypeCNVs.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "RegenotypeCNVs.coveragefile_idxs": $( collapse_txt $sub_dir/bincov_idxs.list ),
+    "RegenotypeCNVs.coveragefiles": $( collapse_txt $sub_dir/bincovs.list ),
+    "RegenotypeCNVs.depth_vcfs": $( collapse_txt $sub_dir/depth_gt_vcfs.list ),
+    "RegenotypeCNVs.medianfiles": $( collapse_txt $sub_dir/cov_medians.list ),
+    "RegenotypeCNVs.n_RdTest_bins": 100000,
+    "RegenotypeCNVs.n_per_split": 5000,
+    "RegenotypeCNVs.regeno_coverage_medians": $( collapse_txt $sub_dir/regeno_medians.list ),
+    "RegenotypeCNVs.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "RegenotypeCNVs.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 12 #
+    #############
+    12)
+      wdl="code/wdl/gatk-sv/CombineBatches.wdl"
+
+      # Get URIs per batch
+      while read bid; do                
+        mod10_output_json=$staging_prefix/10/$bid/$bid.gatksv_module_10.outputs.json
+        gsutil cat $mod10_output_json | jq .genotyped_pesr_vcf | tr -d '"' \
+        >> $sub_dir/pesr_vcfs.list
+        gsutil cat $mod10_output_json | jq .sr_background_fail | tr -d '"' \
+        >> $sub_dir/sr_bg_fails.list
+        gsutil cat $mod10_output_json | jq .sr_bothside_pass | tr -d '"' \
+        >> $sub_dir/bothsides_pass.list
+
+        gsutil ls "$staging_prefix/11/$bid.depth.regeno_final.vcf.gz" \
+        >> $sub_dir/depth_vcfs.list
+      done < $batches_list
+
+      # Prep input .json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+{
+    "CombineBatches.batches": $( collapse_txt $batches_list ),
+    "CombineBatches.cohort_name": "dfci-g2c.v1",
+    "CombineBatches.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+    "CombineBatches.depth_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
+    "CombineBatches.depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
+    "CombineBatches.empty_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
+    "CombineBatches.min_sr_background_fail_batches": 0.5,
+    "CombineBatches.pe_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+    "CombineBatches.pesr_vcfs": $( collapse_txt $sub_dir/pesr_vcfs.list ),
+    "CombineBatches.raw_sr_background_fail_files": $( collapse_txt $sub_dir/sr_bg_fails.list ),
+    "CombineBatches.raw_sr_bothside_pass_files": $( collapse_txt $sub_dir/bothsides_pass.list ),
+    "CombineBatches.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "CombineBatches.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
+    "CombineBatches.use_hail": true,
+    "CombineBatches.gcs_project": "$GPROJECT"
+}
+EOF
+      ;;
+
+    *)
+      echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
+      return 2
+      ;;
+  
+  esac
+
+  # Submit job and add job ID to list of jobs for this module
+  cmd="cromshell --no_turtle -t 120 -mc submit"
+  cmd="$cmd --options-json code/refs/json/aou.cromwell_options.default.json"
+  cmd="$cmd --dependencies-zip gatksv.dependencies.zip"
+  cmd="$cmd $wdl cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json"
+  eval $cmd | jq .id | tr -d '"' \
+  >> cromshell/job_ids/dfci-g2c.v1.$sub_name.job_ids.list
 }
 
