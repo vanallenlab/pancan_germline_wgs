@@ -9,7 +9,7 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install python packages dependencies
 RUN apt-get update && \
-    apt-get install -y python3-pip \
+    apt-get install -y python3-pip && \
     apt-get clean
 
 # Install Python packages using pip
