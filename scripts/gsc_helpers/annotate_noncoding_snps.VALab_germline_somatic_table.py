@@ -38,6 +38,32 @@ with open("VALab_germline_somatic.tsv", "r") as input_file:
                 for chrom_pos, risk_allele in chrom_pos_risk_alleles:
                     output.append(f"{cancer_type}\t{chrom_pos}-{risk_allele}\t{germline_gene}\tnoncoding\t{somatic_gene}\tnoncoding\t{criteria}")
 
+# Read VALab_germline_somatic.tsv, filter rows
+with open("VALab_germline_somatic.tsv", "r") as input_file:
+    # Skip header
+    next(input_file)
+    for line in input_file:
+        parts = line.strip().split("\t")
+        if len(parts) >= 6 and parts[2] == "coding" and parts[4] == "coding":
+            cancer_type, germline_gene, _, somatic_gene, _, criteria = parts
+            if germline_gene in gene_map:
+                chrom_pos_risk_alleles = gene_map[germline_gene]
+                for chrom_pos, risk_allele in chrom_pos_risk_alleles:
+                    output.append(f"{cancer_type}\t{chrom_pos}-{risk_allele}\t{germline_gene}\tcoding\t{somatic_gene}\tcoding\t{criteria}")
+
+# Read VALab_germline_somatic.tsv, filter rows
+with open("VALab_germline_somatic.tsv", "r") as input_file:
+    # Skip header
+    next(input_file)
+    for line in input_file:
+        parts = line.strip().split("\t")
+        if len(parts) >= 6 and parts[2] == "coding" and parts[4] == "noncoding":
+            cancer_type, germline_gene, _, somatic_gene, _, criteria = parts
+            if germline_gene in gene_map:
+                chrom_pos_risk_alleles = gene_map[germline_gene]
+                for chrom_pos, risk_allele in chrom_pos_risk_alleles:
+                    output.append(f"{cancer_type}\t{chrom_pos}-{risk_allele}\t{germline_gene}\tcoding\t{somatic_gene}\tnoncoding\t{criteria}")
+
 # Write output to a new file
 with open("VALab_germline_somatic.noncoding.tsv", "w") as output_file:
     output_file.write("cancer\tchr:pos-risk_allele\tgermline_gene\tgermline_context\tsomatic_gene\tsomatic_context\tcriteria\n")
