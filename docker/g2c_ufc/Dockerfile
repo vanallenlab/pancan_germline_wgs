@@ -7,7 +7,6 @@
 FROM ubuntu:latest
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
-
 # Install python packages dependencies
 RUN apt-get update && \
     apt-get install -y python3-numpy python3-pandas \
@@ -17,7 +16,7 @@ RUN apt-get update && \
 # Set up a virtual environment in /opt/myenv
 RUN python3 -m venv /opt/myenv
 
-# Install qqman inside the virtual environment
+# Install qqman and all its dependencies inside the virtual environment
 RUN /opt/myenv/bin/pip install qqman
 
 # Set environment variables so the virtual environment is used by default
