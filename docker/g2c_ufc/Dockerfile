@@ -18,7 +18,7 @@ RUN apt-get update && \
 COPY *.py /opt/
 
 # Install qqman via pip
-RUN pip3 install qqman
+RUN python3 -m pip3 install qqman
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
