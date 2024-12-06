@@ -9,18 +9,20 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install python packages dependencies
 RUN apt-get update && \
-    apt-get install -y python3-numpy python3-pandas \
-                       python3-scipy python3-seaborn python3-pip python3-venv && \
+    apt-get install -y python3-pip \
     apt-get clean
 
+# Install Python packages using pip
+RUN python3 -m pip install numpy pandas qqman
+
 # Set up a virtual environment in /opt/myenv
-RUN python3 -m venv /opt/myenv
+#RUN python3 -m venv /opt/myenv
 
 # Install qqman and all its dependencies inside the virtual environment
-RUN /opt/myenv/bin/pip install qqman
+#RUN /opt/myenv/bin/pip install qqman
 
 # Set environment variables so the virtual environment is used by default
-ENV PATH="/opt/myenv/bin:$PATH"
+#ENV PATH="/opt/myenv/bin:$PATH"
 
 # Copy your utility script to the image
 COPY *.py /opt/
