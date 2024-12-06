@@ -346,7 +346,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
 | awk '{ print $2 }' | gsutil -m cp -I \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/11/
 
-# Cleanup outputs
+# Once staged, clean up outputs
 gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/RegenotypeCNVs/** >> uris_to_delete.list
 cleanup_garbage
 
@@ -363,6 +363,16 @@ submit_cohort_module 12
 # Monitor submission
 monitor_workflow \
   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.12-CombineBatches.job_ids.list )
+
+# # Once complete, stage outputs
+# cromshell -t 120 --no_turtle -mc list-outputs \
+#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.12-CombineBatches.job_ids.list ) \
+# | awk '{ print $2 }' | gsutil -m cp -I \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/12/
+
+# # Once staged, clean up outputs
+# gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/CombineBatches/** >> uris_to_delete.list
+# cleanup_garbage
 
 
 

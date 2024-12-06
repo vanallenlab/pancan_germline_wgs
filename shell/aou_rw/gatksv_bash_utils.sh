@@ -635,9 +635,9 @@ submit_cohort_module() {
       ;;
   esac
   sub_name="${module_idx}-$module_name"
-  sub_dir="~/staging/$sub_name"
+  sub_dir=~/staging/$sub_name
   if [ -e $sub_dir ]; then rm -rf $sub_dir; fi
-  mkdir "$sub_dir"
+  mkdir $sub_dir
 
   # Set workflow-specific parameters
   staging_prefix=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs
@@ -758,8 +758,8 @@ EOF
     "CombineBatches.raw_sr_bothside_pass_files": $( collapse_txt $sub_dir/bothsides_pass.list ),
     "CombineBatches.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "CombineBatches.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
-    "CombineBatches.use_hail": true,
-    "CombineBatches.gcs_project": "$GPROJECT"
+    "CombineBatches.use_hail": false,
+    "CombineBatches.runtime_override_svtk_vcf_cluster" : {"mem_gb": 15, "cpu_cores": 4}
 }
 EOF
       ;;
