@@ -14,11 +14,17 @@ RUN apt-get update && \
                        python3-scipy python3-seaborn python3-pip python3-venv && \
     apt-get clean
 
+# Set up a virtual environment in /opt/myenv
+RUN python3 -m venv /opt/myenv
+
+# Install qqman inside the virtual environment
+RUN /opt/myenv/bin/pip install qqman
+
+# Set environment variables so the virtual environment is used by default
+ENV PATH="/opt/myenv/bin:$PATH"
+
 # Copy your utility script to the image
 COPY *.py /opt/
-
-# Install qqman via pip
-#RUN python3 -m pip install qqman
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
