@@ -157,24 +157,6 @@ def relocate_outputs(workflow_id, staging_bucket, bid, module_index,
     remove(json_fout)
 
 
-def collect_trash(workflow_ids, bucket, wdl_name, dumpster_path):
-    """
-    Add all execution files associated with execution of workflow_ids to the list
-    of files to be deleted (the "dumpster")
-    """
-
-    # Write gsutil-compliant search strings for identifying files to delete
-    ex_fmt = '{}/cromwell/execution/{}/{}/**'
-    ex_uris = [ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
-    out_fmt = '{}/cromwell/outputs/{}/{}/**'
-    out_uris = [out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
-    all_uris = ex_uris + out_uris
-
-    # Find list of all files present in execution or output buckets
-    # and mark those files for deletion by writing their URIs to the dumpster
-    g2cpy.collect_gcp_garbage(all_uris, dumpster_path)
-
-
 def main():
     """
     Main block
@@ -229,7 +211,7 @@ def main():
     if module_name is None:
         module_name = '-'.join([args.module_index, wdl_name])
 
-    # If --status-tsv is provided, read last known sample status and use that 
+    # If --status-tsv is provided, read last known batch status and use that 
     # information to  speed up the downstream checks
     if args.status_tsv is not None:
         status_tsv = pd.read_csv(args.status_tsv, sep='\t', header=None, dtype=str, 
@@ -245,7 +227,7 @@ def main():
     # gsutil/cromshell queries
     while True:
 
-        # First, check if sample output has been already staged
+        # First, check if batch output has been already staged
         # If so, nothing more needs to be done
         if status == 'staged':
             break
@@ -253,8 +235,8 @@ def main():
             status = 'staged'
             break
 
-        # Second, check if sample has any previous workflow submissions
-        # If not, sample has not yet been started and can be reported as such
+        # Second, check if batch has any previous workflow submissions
+        # If not, batch has not yet been started and can be reported as such
         workflow_ids_fmt = '{}/cromshell/job_ids/{}.{}.job_ids.list'
         workflow_ids_path = workflow_ids_fmt.format(args.base_directory, bid, 
                                                     module_name)
@@ -263,7 +245,7 @@ def main():
             status = 'not_started'
             break
 
-        # If sample isn't either unstarted or fully staged, proceed with working 
+        # If batch isn't either unstarted or fully staged, proceed with working 
         # through the possible intermediate states
 
         # Read ordered list of workflow IDs
@@ -284,7 +266,7 @@ def main():
         if status == 'succeeded':
             relocate_outputs(wid, staging_bucket, bid, args.module_index)
             status = 'staged'
-            collect_trash(wids, bucket, wdl_name, args.dumpster)
+            g2cpy.collect_workflow_trash(wids, bucket, wdl_name, args.dumpster)
 
         # Exit loop after processing most recent workflow ID
         break

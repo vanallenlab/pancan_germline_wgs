@@ -743,11 +743,11 @@ EOF
       done < $batches_list
 
       # Prep input .json
-      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
 {
     "CombineBatches.batches": $( collapse_txt $batches_list ),
     "CombineBatches.cohort_name": "dfci-g2c.v1",
-    "CombineBatches.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+    "CombineBatches.contig_list": "gs://dfci-g2c-refs/contig_fais/$CONTIG.fai",
     "CombineBatches.depth_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
     "CombineBatches.depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
     "CombineBatches.empty_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
@@ -772,11 +772,25 @@ EOF
   esac
 
   # Submit job and add job ID to list of jobs for this module
-  cmd="cromshell --no_turtle -t 120 -mc submit"
-  cmd="$cmd --options-json code/refs/json/aou.cromwell_options.default.json"
-  cmd="$cmd --dependencies-zip gatksv.dependencies.zip"
-  cmd="$cmd $wdl cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json"
-  eval $cmd | jq .id | tr -d '"' \
-  >> cromshell/job_ids/dfci-g2c.v1.$sub_name.job_ids.list
+  case $module_idx in
+    # Submission for module 12 is handled differently due to it being contig-sharded
+    12)
+      code/scripts/manage_chromshards.py \
+        --wdl $wdl \
+        --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
+        --staging-bucket $staging_prefix/$module_idx \
+        --name $sub_name \
+        --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv
+      ;;
+
+    *)
+      cmd="cromshell --no_turtle -t 120 -mc submit"
+      cmd="$cmd --options-json code/refs/json/aou.cromwell_options.default.json"
+      cmd="$cmd --dependencies-zip gatksv.dependencies.zip"
+      cmd="$cmd $wdl cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json"
+      eval $cmd | jq .id | tr -d '"' \
+      >> cromshell/job_ids/dfci-g2c.v1.$sub_name.job_ids.list
+      ;;
+  esac
 }
 

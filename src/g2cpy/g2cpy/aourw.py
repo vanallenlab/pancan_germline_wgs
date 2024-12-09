@@ -76,6 +76,24 @@ def collect_gcp_garbage(uris, dumpster_path='uris_to_delete.list'):
                 fout.write(uri + '\n')
 
 
+def collect_workflow_trash(workflow_ids, bucket, wdl_name, dumpster_path):
+    """
+    Add all execution files associated with execution of workflow_ids to the list
+    of files to be deleted (the "dumpster")
+    """
+
+    # Write gsutil-compliant search strings for identifying files to delete
+    ex_fmt = '{}/cromwell/execution/{}/{}/**'
+    ex_uris = [ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    out_fmt = '{}/cromwell/outputs/{}/{}/**'
+    out_uris = [out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    all_uris = ex_uris + out_uris
+
+    # Find list of all files present in execution or output buckets
+    # and mark those files for deletion by writing their URIs to the dumpster
+    collect_gcp_garbage(all_uris, dumpster_path)
+
+
 def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
     """
     Moves or copies a GCP object from a source URI to a destination URI
