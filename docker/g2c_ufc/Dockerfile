@@ -6,12 +6,10 @@
 FROM ubuntu:latest
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
-# Install Python 3.9 and pip
+# Install python packages dependencies
 RUN apt-get update && \
-    apt-get install -y software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get install -y python3 python3-pip python3-distutils && \
+    apt-get install -y python3-numpy python3-pandas \
+                       python3-scipy python3-seaborn python3-qqman && \
     apt-get clean
 
 # Install Python packages using pip
