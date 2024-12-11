@@ -79,7 +79,7 @@ def report_status(all_status, title=None):
         print(title)
     for status, contigs in sorted(status_groups.items(), 
                                   key=lambda x: len(x[1]), reverse=True):
-        print('  [{:,}] {}: {}'.format(len(contigs), status, 
+        print('  - {:,} {}: {}'.format(len(contigs), status, 
                                        ', '.join(g2cpy.chromsort(list(contigs)))))
     print('')
 
@@ -211,7 +211,7 @@ def main():
     parser.add_argument('-m', '--max-resubmissions', type=int, default=3, 
                         help='Maximum number of resubmissions to attempt for ' +
                         'any one contig')
-    parser.add_argument('-g', '--gate', type=float, default=30, help='Number of ' +
+    parser.add_argument('-g', '--gate', type=float, default=20, help='Number of ' +
                         'minutes to wait between monitor cycles')
     parser.add_argument('--workflow-id-log-prefix', help='Optional prefix for ' +
                         'logger files for submitted workflow IDs')
@@ -356,7 +356,7 @@ def main():
 
             # Submit new workflow if not already running or staged
             if status not in 'staged submitted running'.split():
-                if n_prior_subs + 1 < args.max_resubmissions:
+                if n_prior_subs < args.max_resubmissions:
                     status = submit_workflow(contig, args.wdl, args.input_json_template, 
                                              input_json, prev_wids, args.quiet)
                 else:

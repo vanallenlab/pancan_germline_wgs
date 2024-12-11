@@ -759,6 +759,7 @@ EOF
     "CombineBatches.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "CombineBatches.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
     "CombineBatches.use_hail": false,
+    "CombineBatches.runtime_override_sort_merged_vcf_cluster": {"disk_gb" : 50},
     "CombineBatches.runtime_override_svtk_vcf_cluster" : {"mem_gb": 15, "cpu_cores": 4}
 }
 EOF

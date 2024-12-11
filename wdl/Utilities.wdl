@@ -9,49 +9,46 @@
 version 1.0
 
 
-task ShardVcf {
+task ConcatTextFiles {
   input {
-    File vcf
-    File vcf_idx
-    Int records_per_shard
-    String bcftools_docker
+    Array[File] shards
+    String concat_command = "cat"
+    String? sort_command
+    String? compression_command
+    Boolean input_has_header = false
+    String output_filename
+
+    String docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded"
-  Int disk_gb = ceil(3 * size(vcf, "GB"))
+  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
+  String sort = if defined(sort_command) then " | " + sort_command else ""
+  String compress = if defined(compression_command) then " | " + compression_command else ""
+  String posthoc_cmds = sort + " | cat header.txt - " + compress
 
   command <<<
     set -eu -o pipefail
 
-    # Make an empty shard in case the input VCF is totally empty
-    bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
+    if [ "~{input_has_header}" == "true" ]; then
+      ~{concat_command} ~{shards[0]} \
+      | head -n1 > header.txt || true
+    else
+      touch header.txt
+    fi
 
-    bcftools +scatter \
-      -O z3 -o . -p "~{out_prefix}". \
-      -n ~{records_per_shard} \
-      ~{vcf}
-
-    # Print all VCFs to stdout for logging purposes
-    find ./ -name "*.vcf.gz"
-
-    # Index all shards
-    find ./ -name "~{out_prefix}.*.vcf.gz" \
-    | xargs -I {} tabix -p vcf -f {}
+    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename}
   >>>
 
   output {
-    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
-    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
+    File merged_file = "~{output_filename}"
   }
 
   runtime {
-    cpu: 2
-    memory: "3.75 GiB"
-    disks: "local-disk " + disk_gb + 20 + " HDD"
-    bootDiskSizeGb: 10
-    docker: bcftools_docker
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    maxRetries: 1
   }
 }
 
@@ -98,6 +95,39 @@ task ConcatVcfs {
     memory: mem_gb + " GB"
     cpu: cpu_cores
     disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 3
+  }
+}
+
+
+task CountRecordsInVcf {
+  input {
+    File vcf
+    File? vcf_idx
+    String bcftools_docker
+  }
+
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    if [ ~{defined(vcf_idx)} == "false" ]; then
+      tabix -p vcf -f ~{vcf}
+    fi
+
+    bcftools query -f '%CHROM\n' ~{vcf} | wc -l > record_count.txt
+  >>>
+
+  output {
+    Int n_records = read_int("record_count.txt")
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
   }
 }
@@ -169,6 +199,40 @@ task GetContigsFromVcfHeader {
 }
 
 
+task GetSamplesFromVcfHeader {
+  input {
+    File vcf
+    File? vcf_idx
+    String bcftools_docker
+  }
+
+  String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    if [ ~{defined(vcf_idx)} == "false" ]; then
+      tabix -p vcf -f ~{vcf}
+    fi
+
+    bcftools query -l ~{vcf} > ~{out_filename}
+  >>>
+
+  output {
+    String sample_list = out_filename
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 task IndexVcf {
   input {
     File vcf
@@ -197,45 +261,48 @@ task IndexVcf {
 }
 
 
-task ConcatTextFiles {
+task ShardVcf {
   input {
-    Array[File] shards
-    String concat_command = "cat"
-    String? sort_command
-    String? compression_command
-    Boolean input_has_header = false
-    String output_filename
-
-    String docker
+    File vcf
+    File vcf_idx
+    Int records_per_shard
+    String bcftools_docker
   }
 
-  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
-  String sort = if defined(sort_command) then " | " + sort_command else ""
-  String compress = if defined(compression_command) then " | " + compression_command else ""
-  String posthoc_cmds = sort + " | cat header.txt - " + compress
+  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded"
+  Int disk_gb = ceil(3 * size(vcf, "GB"))
 
   command <<<
     set -eu -o pipefail
 
-    if [ "~{input_has_header}" == "true" ]; then
-      ~{concat_command} ~{shards[0]} \
-      | head -n1 > header.txt || true
-    else
-      touch header.txt
-    fi
+    # Make an empty shard in case the input VCF is totally empty
+    bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
 
-    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename}
+    bcftools +scatter \
+      -O z3 -o . -p "~{out_prefix}". \
+      -n ~{records_per_shard} \
+      ~{vcf}
+
+    # Print all VCFs to stdout for logging purposes
+    find ./ -name "*.vcf.gz"
+
+    # Index all shards
+    find ./ -name "~{out_prefix}.*.vcf.gz" \
+    | xargs -I {} tabix -p vcf -f {}
   >>>
 
   output {
-    File merged_file = "~{output_filename}"
+    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
+    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
   }
 
   runtime {
-    docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + disk_gb + 20 + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
     preemptible: 3
+    maxRetries: 1
   }
 }
