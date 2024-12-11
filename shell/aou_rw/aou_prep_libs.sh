@@ -20,6 +20,10 @@ cd $WRKDIR
 export g2c_branch=gatksv
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
+# Clone RLCtools repo & checkout branch of interest
+export rlctools_branch=main
+git clone git@github.com:RCollins13/RLCtools.git --branch=$rlctools_branch
+
 # Clone GATK-SV repo & checkout release tag of interest
 export gatksv_tag=v1.0
 git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
@@ -29,15 +33,18 @@ for dir in src bin; do
   if [ -e $dir ]; then rm -rf $dir; fi
   mkdir $dir
 done
-cp -r gatk-sv/src/svtk $WRKDIR/src/
+cp -r \
+  pancan_germline_wgs/src/g2cpy \
+  pancan_germline_wgs/src/G2C_*.tar.gz \
+  RLCtools/RLCtools_*.tar.gz \
+  gatk-sv/src/svtk \
+  $WRKDIR/src/
 
 # Copy code to AoU RW bucket
 # Note: must use AoU Google credentials
 export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 # gcloud auth login
-gsutil -m cp -r \
-  src/svtk \
-  $rw_bucket/code/src/
+gsutil -m cp -r src $rw_bucket/code/
 gsutil -m cp \
   pancan_germline_wgs/shell/aou_rw/general_bash_utils.sh \
   pancan_germline_wgs/shell/aou_rw/aou_bash_utils.sh \

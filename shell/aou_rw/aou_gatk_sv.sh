@@ -364,3 +364,6 @@ cleanup_garbage
 
 submit_cohort_module 12
 
+# Once all 24 contigs are complete, we need to concatenate a few of 
+# the flat text outputs across all contigs
+# TODO: implement this

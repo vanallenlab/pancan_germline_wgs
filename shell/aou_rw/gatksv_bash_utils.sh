@@ -747,7 +747,7 @@ EOF
 {
     "CombineBatches.batches": $( collapse_txt $batches_list ),
     "CombineBatches.cohort_name": "dfci-g2c.v1",
-    "CombineBatches.contig_list": "gs://dfci-g2c-refs/contig_fais/$CONTIG.fai",
+    "CombineBatches.contig_list": "gs://dfci-g2c-refs/hg38/contig_fais/\$CONTIG.fai",
     "CombineBatches.depth_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
     "CombineBatches.depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
     "CombineBatches.empty_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
@@ -780,7 +780,9 @@ EOF
         --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
         --staging-bucket $staging_prefix/$module_idx \
         --name $sub_name \
-        --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv
+        --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
+        --workflow-id-log-prefix "dfci-g2c.v1" \
+        --gate 60
       ;;
 
     *)

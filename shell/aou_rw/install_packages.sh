@@ -14,9 +14,19 @@
 if [ $# -eq 0 ]; then
   echo -e "Error: at least one positional argument must be supplied to install_packages.sh"
   echo -e "Current options include: R, python"
+  echo -e "Exiting"
   exit 1
 fi
 
+# Check to ensure this is executed from the correct directory
+for dir in code code/src; do
+  if ! [ -e $dir ]; then
+    echo -e "Error: could not locate $dir directory."
+    echo -e "Are you sure you are calling this script from the same directory where G2C code has been staged?"
+    echo -e "Exiting"
+    exit 1
+  fi
+done
 
 # Install all packages as optioned
 for lang in "$@"; do
@@ -33,11 +43,11 @@ for lang in "$@"; do
 
       # Install RLCtools
       export RLCtools_version=0.1
-      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('~/code/src/RLCtools_$RLCtools_version.tar.gz', repos=NULL, type='source')"
+      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('code/src/RLCtools_$RLCtools_version.tar.gz', repos=NULL, type='source')"
 
       # Install G2C companion library
       export G2CR_version=0.2.0
-      Rscript -e "if(require('G2CR') == TRUE){remove.packages('G2CR')}; install.packages('~/code/src/G2CR_$G2CR_version.tar.gz', repos=NULL, type='source')"
+      Rscript -e "if(require('G2CR') == TRUE){remove.packages('G2CR')}; install.packages('code/src/G2CR_$G2CR_version.tar.gz', repos=NULL, type='source')"
       ;;
 
     # Install python packages
@@ -51,15 +61,9 @@ for lang in "$@"; do
         pip install $pkg
       done
 
-      # Install G2C companion package from source
-      cd ~/code/src/g2cpy && \
-      pip install --config-settings editable_mode=compat -e . && \
-      cd -
-
-      # Install svtk from source
-      cd ~/code/src/svtk && \
-      pip install --config-settings editable_mode=compat -e . && \
-      cd -
+      # Install svtk & G2C companion package from source
+      pip install code/src/g2cpy
+      pip install code/src/svtk
 
   esac
 done
