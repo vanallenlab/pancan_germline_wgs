@@ -1,7 +1,7 @@
 # The Germline Somatic Convergence (G2C)
 # Contact: Noah Fields <Noah_Fields@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
-
+# Germline_Somatic Docker
 # Use an Ubuntu base image
 FROM ubuntu:latest
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"

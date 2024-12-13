@@ -39,16 +39,18 @@ task Extract_Germline_Variants {
   }
   
   command <<<
-  set -eu -o pipefail
+  set -eux -o pipefail
 
   # Extract variants present only in the germline data
-  bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -o sample.vcf
-  bcftools view -i 'AC>0 & GT="alt"' sample.vcf -o germline_only.vcf
+  bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -Oz -o sample.vcf.gz
+  bcftools view -i 'AC>0 & GT="alt"' sample.vcf -Oz -o germline_only.vcf.gz
+  rm sample.vcf.gz
   echo "Checkpoint 1"
 
   # Split VEP annotations and filter for relevant information
-  bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
-  
+  bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf.gz | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
+  rm germline_only.vcf.gz
+
   echo "Checkpoint 2"
   # Extract potential deleterious germline genes
   cut -f4 query.tsv | sort | uniq > potential_deleterious_germline_genes.list
@@ -60,6 +62,8 @@ task Extract_Germline_Variants {
   python3 <<CODE
   import pandas as pd
 
+  print("Checkpoint 2.5")
+  
   # Load data
   vep_df = pd.read_csv("query.tsv", sep='|', names=["CHROM", "POS", "Gene", "IMPACT", "gnomad_AF_nfe", "gnomad_AF_popmax", "gnomAD_controls_AF_popmax", "ClinVar_CLNSIG", "Consequence"])
   convergence_table = pd.read_csv("~{germline_somatic_table}", sep='\t')
