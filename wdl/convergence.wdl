@@ -43,7 +43,7 @@ task Extract_Germline_Variants {
 
   # Extract variants present only in the germline data
   bcftools view -s ~{patient_id} ~{germline_merged_vep_vcf} -Oz -o sample.vcf.gz
-  bcftools view -i 'AC>0 & GT="alt"' sample.vcf -Oz -o germline_only.vcf.gz
+  bcftools view -i 'AC>0 & GT="alt"' sample.vcf.gz -Oz -o germline_only.vcf.gz
   rm sample.vcf.gz
   echo "Checkpoint 1"
 
