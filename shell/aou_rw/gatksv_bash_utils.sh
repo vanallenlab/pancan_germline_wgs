@@ -629,6 +629,9 @@ submit_cohort_module() {
     12)
       module_name="CombineBatches"
       ;;
+    13)
+      module_name="ResolveComplexVariants"
+      ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
       return 2
@@ -751,6 +754,7 @@ EOF
     "CombineBatches.depth_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
     "CombineBatches.depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
     "CombineBatches.empty_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
+    "CombineBatches.localize_shard_size": 20000,
     "CombineBatches.min_sr_background_fail_batches": 0.5,
     "CombineBatches.pe_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
     "CombineBatches.pesr_vcfs": $( collapse_txt $sub_dir/pesr_vcfs.list ),
@@ -760,7 +764,58 @@ EOF
     "CombineBatches.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0",
     "CombineBatches.use_hail": false,
     "CombineBatches.runtime_override_sort_merged_vcf_cluster": {"disk_gb" : 50},
-    "CombineBatches.runtime_override_svtk_vcf_cluster" : {"mem_gb": 15, "cpu_cores": 4}
+    "CombineBatches.runtime_override_svtk_vcf_cluster" : {"mem_gb": 15, "cpu_cores": 4, "boot_disk_gb": 15, "disk_gb": 20}
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 13 #
+    #############
+    13)
+      wdl="code/wdl/gatk-sv/ResolveComplexVariants.wdl"
+
+      # Collect batch-specific URIs and other info
+      while read bid; do
+        
+        mod04_output_json=$staging_prefix/04/$bid/$bid.gatksv_module_04.outputs.json
+        gsutil cat $mod04_output_json | jq .merged_PE | tr -d '"' \
+        >> $sub_dir/pe_files.list
+
+        mod07_output_json=$staging_prefix/07/$bid/$bid.gatksv_module_07.outputs.json
+        gsutil cat $mod07_output_json | jq .cutoffs | tr -d '"' \
+        >> $sub_dir/cutoffs.list
+
+      done < $batches_list
+
+      # Collect per-chromosome outputs from module 11
+      for contig in $( seq 1 22 ) X Y; do
+        mod11_output_json=$staging_prefix/12/chr$contig/12-CombineBatches.chr$contig.outputs.json
+        gsutil cat $mod11_output_json | jq .combined_vcfs | tr -d '"' >> $sub_dir/combined_vcfs.list
+        gsutil cat $mod11_output_json | jq .cluster_bothside_pass_lists \
+        | tr -d '"' >> $sub_dir/bothsides_pass.list
+        gsutil cat $mod11_output_json | jq .cluster_background_fail_lists \
+        | tr -d '"' >> $sub_dir/background_fail.list
+      done
+
+      # Prep input .json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+{
+    "ResolveComplexVariants.cluster_background_fail_lists": $( collapse_txt $sub_dir/background_fail.list ),
+    "ResolveComplexVariants.cluster_bothside_pass_lists": $( collapse_txt $sub_dir/bothsides_pass.list ),
+    "ResolveComplexVariants.cluster_vcfs": $( collapse_txt $sub_dir/combined_vcfs.list ),
+    "ResolveComplexVariants.cohort_name": "dfci-g2c.v1",
+    "ResolveComplexVariants.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "ResolveComplexVariants.cytobands": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
+    "ResolveComplexVariants.disc_files": $( collapse_txt $sub_dir/pe_files.list ),
+    "ResolveComplexVariants.max_shard_size": 500,
+    "ResolveComplexVariants.mei_bed": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
+    "ResolveComplexVariants.pe_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+    "ResolveComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+    "ResolveComplexVariants.rf_cutoff_files": $( collapse_txt $sub_dir/cutoffs.list ),
+    "ResolveComplexVariants.runtime_override_integrate_resolved_vcfs": { "boot_disk_gb" : 20, "disk_gb" : 100 },
+    "ResolveComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "ResolveComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0"
 }
 EOF
       ;;
@@ -783,7 +838,8 @@ EOF
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
         --workflow-id-log-prefix "dfci-g2c.v1" \
-        --gate 60
+        --gate 60 \
+        --max-resubmissions 5
       ;;
 
     *)

@@ -364,6 +364,27 @@ cleanup_garbage
 
 submit_cohort_module 12
 
-# Once all 24 contigs are complete, we need to concatenate a few of 
-# the flat text outputs across all contigs
-# TODO: implement this
+
+###############################
+# 13 | ResolveComplexVariants #
+###############################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Submit workflow
+submit_cohort_module 13
+
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.13-ResolveComplexVariants.job_ids.list )
+
+# # Once complete, stage outputs and cleanup garbage
+# stage_cohort_module 11
+# cromshell -t 120 --no_turtle -mc list-outputs \
+#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.11-RegenotypeCNVs.job_ids.list ) \
+# | awk '{ print $2 }' | gsutil -m cp -I \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/11/
+
+# # Once staged, clean up outputs
+# gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/RegenotypeCNVs/** >> uris_to_delete.list
+# cleanup_garbage

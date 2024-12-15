@@ -286,7 +286,7 @@ def main():
     while True:
         if not args.quiet:
             msg = '[{}] Not all contigs yet staged. Entering another cycle of ' + \
-                  'submission management routine.\n'
+                  'submission management routine.'
             print(msg.format(clean_date()))
 
         # Loop over all chromosomes
@@ -370,7 +370,7 @@ def main():
             # Update & report status
             all_status[contig] = status
             if not args.quiet:
-                msg = '[{}] Status of contig {}: {}\n'
+                msg = '[{}] Status of contig {}: {}'
                 print(msg.format(clean_date(), contig, status))
             if args.status_tsv is not None:
                 with open(args.status_tsv, 'w') as fout:
@@ -378,7 +378,7 @@ def main():
                         fout.write('\t'.join([k, v]) + '\n')
 
         # Check at end of loop if all contigs are staged
-        if len(set(all_status.keys()).difference({'staged'})) == 0:
+        if len(set(all_status.values()).difference({'staged'})) == 0:
             break
 
         # Wait before checking again
