@@ -628,9 +628,14 @@ submit_cohort_module() {
       ;;
     12)
       module_name="CombineBatches"
+      max_attempts=5
       ;;
     13)
       module_name="ResolveComplexVariants"
+      ;;
+    14)
+      module_name="GenotypeComplexVariants"
+      max_attempts=1
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
@@ -745,7 +750,7 @@ EOF
         >> $sub_dir/depth_vcfs.list
       done < $batches_list
 
-      # Prep input .json
+      # Prep input .json template
       cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
 {
     "CombineBatches.batches": $( collapse_txt $batches_list ),
@@ -813,9 +818,55 @@ EOF
     "ResolveComplexVariants.pe_exclude_list": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
     "ResolveComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
     "ResolveComplexVariants.rf_cutoff_files": $( collapse_txt $sub_dir/cutoffs.list ),
-    "ResolveComplexVariants.runtime_override_integrate_resolved_vcfs": { "boot_disk_gb" : 20, "disk_gb" : 100 },
+    "ResolveComplexVariants.runtime_override_breakpoint_overlap_filter": { "boot_disk_gb" : 20, "disk_gb" : 1000, "mem_gb" : 31.5, "preemptible_tries" : 1 },
+    "ResolveComplexVariants.runtime_override_concat_resolved_per_shard": { "boot_disk_gb" : 20, "disk_gb" : 150, "mem_gb" : 15.5, "preemptible_tries" : 1, "cpu_cores" : 4 },
+    "ResolveComplexVariants.runtime_override_integrate_resolved_vcfs": { "boot_disk_gb" : 20, "disk_gb" : 500 },
     "ResolveComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "ResolveComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 14 #
+    #############
+    14)
+      wdl="code/wdl/gatk-sv/GenotypeComplexVariants.wdl"
+
+      # Get URIs per batch
+      while read bid; do                
+        mod04_output_json=$staging_prefix/04/$bid/$bid.gatksv_module_04.outputs.json
+        gsutil cat $mod04_output_json | jq .merged_bincov | tr -d '"' \
+        >> $sub_dir/bincovs.list
+        gsutil cat $mod04_output_json | jq .median_cov | tr -d '"' \
+        >> $sub_dir/median_covs.list
+
+        mod10_output_json=$staging_prefix/10/$bid/$bid.gatksv_module_10.outputs.json
+        gsutil cat $mod10_output_json | jq .trained_genotype_depth_depth_sepcutoff \
+        | tr -d '"' >> $sub_dir/depth_cutoffs.list
+
+        echo "$staging_prefix/11/$bid.depth.regeno_final.vcf.gz" \
+        >> $sub_dir/depth_regeno_vcfs.list
+      done < $batches_list
+
+      # Prep input .json template
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+{
+    "GenotypeComplexVariants.batches": $( collapse_txt $batches_list ),
+    "GenotypeComplexVariants.bin_exclude": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz",
+    "GenotypeComplexVariants.bincov_files": $( collapse_txt $sub_dir/bincovs.list ),
+    "GenotypeComplexVariants.cohort_name": "dfci-g2c.v1",
+    "GenotypeComplexVariants.complex_resolve_vcf_indexes": ["$staging_prefix/13/dfci-g2c.v1.reshard_vcf.\$CONTIG.resharded.vcf.gz.tbi"],
+    "GenotypeComplexVariants.complex_resolve_vcfs": ["$staging_prefix/13/dfci-g2c.v1.reshard_vcf.\$CONTIG.resharded.vcf.gz"],
+    "GenotypeComplexVariants.contig_list": "gs://dfci-g2c-refs/hg38/contig_fais/\$CONTIG.fai",
+    "GenotypeComplexVariants.depth_gt_rd_sep_files": $( collapse_txt $sub_dir/depth_cutoffs.list ),
+    "GenotypeComplexVariants.depth_vcfs": $( collapse_txt $sub_dir/depth_regeno_vcfs.list ),
+    "GenotypeComplexVariants.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+    "GenotypeComplexVariants.median_coverage_files": $( collapse_txt $sub_dir/median_covs.list ),
+    "GenotypeComplexVariants.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
+    "GenotypeComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+    "GenotypeComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "GenotypeComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0"
 }
 EOF
       ;;
@@ -829,8 +880,8 @@ EOF
 
   # Submit job and add job ID to list of jobs for this module
   case $module_idx in
-    # Submission for module 12 is handled differently due to it being contig-sharded
-    12)
+    # Submission for modules 12, 14, and 15 are handled differently due to them being contig-sharded
+    12|14)
       code/scripts/manage_chromshards.py \
         --wdl $wdl \
         --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
@@ -839,7 +890,7 @@ EOF
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
         --workflow-id-log-prefix "dfci-g2c.v1" \
         --gate 60 \
-        --max-resubmissions 5
+        --max-attempts $max_attempts
       ;;
 
     *)

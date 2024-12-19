@@ -3,7 +3,7 @@
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Quality control of a joint-genotyped VCF
+# Quality control of a joint-genotyped VCF (GATK-HC, GATK-SV, or combined)
 
 
 version 1.0
@@ -59,7 +59,7 @@ workflow VcfQc {
     Array[File] sharded_vcf_idx = select_first([ShardVcf.vcf_shard_idxs, [vcf_idx]])
   }
 
-  # Flatted all VCF shards into a single array for parallelization
+  # Flatten all VCF shards into a single array for parallelization
   Array[File] vcf_shards = flatten(sharded_vcf)
   Array[File] vcf_shard_idxs = flatten(sharded_vcf_idx)
 

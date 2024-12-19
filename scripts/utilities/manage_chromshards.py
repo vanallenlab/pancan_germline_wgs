@@ -166,7 +166,7 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids, quiet=Fa
             fout.write(new_wid + '\n')
         status = 'submitted'
         if not quiet:
-            msg = '[{}] Submitted {} for contig {} (workflow ID: {})\n'
+            msg = '[{}] Submitted {} for contig {} (workflow ID: {})'
             print(msg.format(clean_date(), path.basename(wdl), contig, new_wid))
     except:
         status = 'submission_error'
@@ -208,9 +208,8 @@ def main():
                         help='Path to file collecting all GCP URIs to be deleted. ' +
                         'Note that this script will only ever append to this file, ' +
                         'not overwrite it.')
-    parser.add_argument('-m', '--max-resubmissions', type=int, default=3, 
-                        help='Maximum number of resubmissions to attempt for ' +
-                        'any one contig')
+    parser.add_argument('-m', '--max-attempts', type=int, default=3, 
+                        help='Maximum number of submission attempts for any one contig')
     parser.add_argument('-g', '--gate', type=float, default=20, help='Number of ' +
                         'minutes to wait between monitor cycles')
     parser.add_argument('--workflow-id-log-prefix', help='Optional prefix for ' +
@@ -325,9 +324,13 @@ def main():
                 # through the possible intermediate states
 
                 # Read ordered list of workflow IDs
-                with open(prev_wids) as fin:
-                    wids = [line.rstrip() for line in fin.readlines()]
-                    n_prior_subs = len(wids)
+                if path.exists(prev_wids):
+                    with open(prev_wids) as fin:
+                        wids = [line.rstrip() for line in fin.readlines()]
+                        n_prior_subs = len(wids)
+                else:
+                    wids = []
+                    n_prior_subs = 0
 
                 # Check to make sure at least one workflow ID is reported
                 if n_prior_subs == 0:
@@ -356,15 +359,15 @@ def main():
 
             # Submit new workflow if not already running or staged
             if status not in 'staged submitted running'.split():
-                if n_prior_subs < args.max_resubmissions:
+                if n_prior_subs < args.max_attempts:
                     status = submit_workflow(contig, args.wdl, args.input_json_template, 
                                              input_json, prev_wids, args.quiet)
                 else:
                     if not args.quiet:
                         msg = '[{}] Contig {} has reached the maximum number of ' + \
-                              'resubmissions ({:,}) for {}; skipping.\n'
+                              'attempts ({:,}) for {}; skipping.\n'
                         print(msg.format(clean_date(), contig, 
-                                         args.max_resubmissions, method_name))
+                                         args.max_attempts, method_name))
                     status = 'exhausted'
 
             # Update & report status
