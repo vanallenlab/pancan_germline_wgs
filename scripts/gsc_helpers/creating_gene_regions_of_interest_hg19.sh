@@ -5,9 +5,10 @@
 
 # Download MANE GTF:
 wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_45/GRCh37_mapping/gencode.v45lift37.annotation.gtf.gz
-gsc_table="/Users/noah/Desktop/DFCI_Data/gsi/data/VALab_germline_somatic.flipped.tsv"
-#cut -f2,3 "$gsc_table" | grep -v 'noncoding' | cut -f1 | sort | uniq > coding_genes.list
-cut -f2 "$gsc_table" | sort | uniq > coding_genes.list
+gsc_table="/Users/noah/Desktop/gsc_table.step4.tsv"
+cut -f2,3 "$gsc_table" | tail -n +2 | grep -v 'noncoding' | cut -f1 | sort | uniq > coding_genes.list
+head coding_genes.list
+#cut -f2 "$gsc_table" | sort | uniq > coding_genes.list
 
 # Subset MANE to genes of interest
 zcat gencode.v45lift37.annotation.gtf.gz \
@@ -21,7 +22,8 @@ zcat gencode.v45lift37.annotation.subsetted.gtf.gz \
 | sort -Vk1,1 -k2,2n -k3,3n \
 | bedtools merge -i - \
 | bgzip -c \
-> coding_genes.flipped.coordinates.bed.gz
+> coding_genes.hg19.coordinates.bed.gz
 
-rm coding_genes.list
+gsutil -m cp coding_genes.hg19.coordinates.bed.gz gs://fc-9cb68074-23c1-4bb3-9ef2-7363efd1fb40/annotate_gsc_table/inputs/
+#rm coding_genes.list gencode.v45lift37.annotation.subsetted.gtf.gz coding_genes.hg19.coordinates.bed.gz
 

@@ -48,7 +48,8 @@ task Extract_Germline_Variants {
   echo "Checkpoint 1"
 
   # Split VEP annotations and filter for relevant information
-  bcftools +split-vep -f '%CHROM|%POS|%CSQ/SYMBOL|%CSQ/IMPACT|%CSQ/gnomAD_AF_nfe|%CSQ/gnomAD_AF_popmax|%CSQ/gnomAD_controls_AF_popmax|%CSQ/ClinVar_external_CLNSIG|%CSQ/Consequence' germline_only.vcf.gz | cut -d'|' -f1,2,5,6,39-44 | awk '{gsub(/\|/, "\t");print}' | cut -d',' -f1 | awk -F'\t' '($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $9 < 0.02 || $9 == "." || $9 == "") &&($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $7 < 0.02 || $7 == "." || $7 == "") && ($5 == "Pathogenic" || $5 == "Likely_pathogenic" || $8 < 0.02 || $8 == "." || $8 == "")' | grep -Ev 'Benign|Likely_benign|LOW' | grep -Fwf ~{germline_genes} > query.tsv
+  bcftools +split-vep -f '%CHROM\t%POS\t%SYMBOL\t%IMPACT\t%gnomAD_AF_nfe\t%gnomAD_AF_popmax\t%gnomAD_controls_AF_popmax\t%ClinVar_external_CLNSIG\t%Consequence' germline_only.vcf.gz -d | sort -u > query.tsv
+
   rm germline_only.vcf.gz
 
   echo "Checkpoint 2"
@@ -66,6 +67,39 @@ task Extract_Germline_Variants {
   
   # Load data
   vep_df = pd.read_csv("query.tsv", sep='|', names=["CHROM", "POS", "Gene", "IMPACT", "gnomad_AF_nfe", "gnomad_AF_popmax", "gnomAD_controls_AF_popmax", "ClinVar_CLNSIG", "Consequence"])
+
+  # 1. Add 'is_Pathogenic' column
+  vep_df['is_Pathogenic'] = vep_df['ClinVar_CLNSIG'].str.contains(
+      'Pathogenic|Likely_pathogenic|risk_factor', case=False, na=False
+  ).astype(int)
+
+  # 2. Add 'is_Rare' column
+  vep_df['is_Rare'] = (
+      (vep_df['gnomad_AF_nfe'] < 0.02) &
+      (vep_df['gnomad_AF_popmax'] < 0.02) &
+      (vep_df['gnomAD_controls_AF_popmax'] < 0.02)
+  ).astype(int)
+
+  # 3. Add 'is_Benign' column
+  vep_df['is_Benign'] = vep_df['ClinVar_CLNSIG'].str.contains(
+      'Benign|Likely_benign|protective', case=False, na=False
+  ).astype(int)
+
+  # 4. Add 'is_Low_Impact' column
+  vep_df['is_Low_Impact'] = vep_df['IMPACT'].str.contains(
+      'LOW|MODIFIER', case=True, na=False
+  ).astype(int)
+
+  # Filter based on the given conditions
+  vep_df = vep_df[
+      (vep_df['is_Pathogenic'] == 1) |  # Keep rows where is_Pathogenic is 1
+      (
+          (vep_df['is_Benign'] == 0) &  # Remove rows where is_Benign is 1
+          (vep_df['is_Rare'] == 1) &    # Keep rows where is_Rare is true
+          (vep_df['is_Low_Impact'] == 0)  # Remove rows where is_Low_Impact is true
+      )
+  ]
+
   convergence_table = pd.read_csv("~{germline_somatic_table}", sep='\t')
 
   # Create arrays for gene categories
