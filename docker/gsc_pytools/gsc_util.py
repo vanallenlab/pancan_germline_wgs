@@ -277,14 +277,14 @@ def find_germline_event_frequency(df, cancer_type, germline_event, germline_cont
         df = df[df['cancer_type'] == cancer_type]
 
     # Verify that we have the data we want
-    if event not in df.columns:       
-        print(f"Combination {event} not found in DataFrame")
+    if germline_event not in df.columns:       
+        print(f"Combination {germline_event} not found in DataFrame")
         return
 
-    df= df.dropna(subset=[event])
+    df= df.dropna(subset=[germline_event])
     
     # Get the column values, excluding NaNs
-    column_values = df[event].dropna()
+    column_values = df[germline_event].dropna()
     
     # Calculate the allele frequency
     frequency = None
