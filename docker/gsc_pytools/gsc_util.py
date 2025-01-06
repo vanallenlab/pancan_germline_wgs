@@ -271,7 +271,7 @@ def find_mutation_frequency(df, cancer_type, somatic_gene):
     return mutation_frequency,column_values.sum(),len(column_values)
 
 # Get a allele frequency for the cancer_type at large
-def find_germline_event_frequency(df, cancer_type, event, germline_context):
+def find_germline_event_frequency(df, cancer_type, germline_event, germline_context):
     # Filter to Cancer Type of Interest
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
