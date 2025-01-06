@@ -287,8 +287,8 @@ def find_germline_event_frequency(df, cancer_type, event, germline_context):
     column_values = df[event].dropna()
     
     # Calculate the allele frequency
-   frequency = None
-   total = None
+    frequency = None
+    total = None
 
     if germline_event == "coding":
         total = len(column_values)
