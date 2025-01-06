@@ -291,17 +291,20 @@ def find_germline_event_frequency(df, cancer_type, germline_event, germline_cont
         df = df[df['cancer_type'] == cancer_type]
 
     if df.empty:
-        raise ValueError(f"No data available for cancer_type: {cancer_type}")
+        print("Error: find_germline_event_frequency - 0")
+        return
 
     # Verify germline_event exists in the DataFrame
-    if germline_event not in df.columns:       
-        raise ValueError(f"Germline event '{germline_event}' not found in DataFrame")
+    if germline_event not in df.columns:
+        print("Error: find_germline_event_frequency - 1")
+        return
 
     # Remove rows with NaN in the germline_event column
     column_values = df[germline_event].dropna()
 
     if column_values.empty:
-        raise ValueError(f"No valid values for germline_event: {germline_event}")
+        print("Error: find_germline_event_frequency - 2")
+        return
 
     # Calculate the allele frequency
     if germline_context == "coding":
@@ -309,10 +312,12 @@ def find_germline_event_frequency(df, cancer_type, germline_event, germline_cont
     elif germline_context == "noncoding":
         total = len(column_values) * 2
     else:
-        raise ValueError("Invalid germline_context. Choose 'coding' or 'noncoding'.")
+        print("Error: find_germline_event_frequency - 3")
+        return
 
     if total == 0:
-        raise ValueError(f"Total alleles calculated as zero for context: {germline_context}")
+        print("Error: find_germline_event_frequency - 4")
+        return
 
     frequency = column_values.sum() / total
 
