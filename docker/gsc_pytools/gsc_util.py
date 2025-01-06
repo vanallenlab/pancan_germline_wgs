@@ -24,17 +24,16 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     if cancer_type == "Pancancer":
         columns_to_check = ['Breast_Diagnosis', 'Colorectal_Diagnosis', 'Kidney_Diagnosis', 'Lung_Diagnosis', 'Prostate_Diagnosis']
         
-        # Identify columns to keep (those with sum != 0)
-        valid_columns = [col for col in columns_to_check if df[col].sum() != 0]
+        # Identify invalid columns to drop (those with sum == 0)
+        invalid_columns = [col for col in columns_to_check if df[col].sum() == 0]
         
-        # Check if at least 3 of the 5 columns remain
-        if len(valid_columns) < 3:
-            # Drop all specified columns if fewer than 3 are valid
-            df = df.drop(columns=columns_to_check)
+        # Check if at least 3 of the 5 columns remain valid
+        if len(invalid_columns) >= 3:
+            # Remove all columns in `columns_to_check` from covariates
+            covariates = list(set(covariates) - set(columns_to_check))
         else:
-            # Keep only the valid columns
-            df = df[valid_columns + [col for col in df.columns if col not in columns_to_check]]
-
+            # Remove only the invalid columns from covariates
+            covariates = list(set(covariates) - set(invalid_columns))
 
     # Check if the germline_event and somatic_gene are in the dataframe columns
     if germline_event not in df.columns or somatic_gene not in df.columns:
