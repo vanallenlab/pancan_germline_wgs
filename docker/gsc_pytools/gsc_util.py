@@ -270,34 +270,51 @@ def find_mutation_frequency(df, cancer_type, somatic_gene):
     
     return mutation_frequency,column_values.sum(),len(column_values)
 
-# Get a allele frequency for the cancer_type at large
 def find_germline_event_frequency(df, cancer_type, germline_event, germline_context):
+    """
+    Calculate allele frequency for a germline event in a specific cancer type and context.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame with cancer data.
+        cancer_type (str): Cancer type of interest ('Pancancer' for all cancer types).
+        germline_event (str): Germline event column to analyze.
+        germline_context (str): Context of interest ('coding' or 'noncoding').
+
+    Returns:
+        tuple: (frequency, total germline events, total alleles considered)
+    """
     # Filter to Cancer Type of Interest
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
 
-    # Verify that we have the data we want
+    if df.empty:
+        raise ValueError(f"No data available for cancer_type: {cancer_type}")
+
+    # Verify germline_event exists in the DataFrame
     if germline_event not in df.columns:       
-        print(f"Combination {germline_event} not found in DataFrame")
-        return
+        raise ValueError(f"Germline event '{germline_event}' not found in DataFrame")
 
-    df= df.dropna(subset=[germline_event])
-    
-    # Get the column values, excluding NaNs
+    # Remove rows with NaN in the germline_event column
     column_values = df[germline_event].dropna()
-    
-    # Calculate the allele frequency
-    frequency = None
-    total = None
 
-    if germline_event == "coding":
+    if column_values.empty:
+        raise ValueError(f"No valid values for germline_event: {germline_event}")
+
+    # Calculate the allele frequency
+    if germline_context == "coding":
         total = len(column_values)
-    elif germline_event == "noncoding":
-        total = (len(column_values) * 2)
+    elif germline_context == "noncoding":
+        total = len(column_values) * 2
+    else:
+        raise ValueError("Invalid germline_context. Choose 'coding' or 'noncoding'.")
+
+    if total == 0:
+        raise ValueError(f"Total alleles calculated as zero for context: {germline_context}")
 
     frequency = column_values.sum() / total
-    
-    return frequency,column_values.sum(),total
+
+    return frequency, column_values.sum(), total
+
 
 def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged_with_combined_OR_and_p_values.tsv'):
     """
