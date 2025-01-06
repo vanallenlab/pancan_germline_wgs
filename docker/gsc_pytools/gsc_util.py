@@ -16,6 +16,23 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     if cancer_type != "Pancancer":
         df = df[df['cancer_type'] == cancer_type]
 
+    """
+    This next chunk of code is to prevent convergence failure in pancancer, when the germline event
+    is not present in a cancer type. This throws off the covariates for pancancer appraoch.
+    We need to keep at least 3 cancer types otherwise we throw them all out for convergence purposes.
+    """
+    if cancer_type == "Pancancer":
+        columns_to_check = ['Breast_Diagnosis', 'Colorectal_Diagnosis', 'Kidney_Diagnosis', 'Lung_Diagnosis', 'Prostate_Diagnosis']
+        # Remove columns where the sum equals 0
+        df = df.loc[:, df[columns_to_check].sum() != 0]
+
+        # Check if at least 3 of the 5 columns are still present
+        remaining_columns = [col for col in columns_to_check if col in df.columns]
+
+        if len(remaining_columns) < 3:
+            # Drop all columns if fewer than 3 are present
+            df = df.drop(columns=remaining_columns)
+
     # Check if the germline_event and somatic_gene are in the dataframe columns
     if germline_event not in df.columns or somatic_gene not in df.columns:
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
@@ -150,7 +167,7 @@ def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,cova
         print(f"Error processing combination {germline_event} - {somatic_gene}: {e}")
 
 
-def find_filtered_allele_frequency(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
+def find_filtered_germline_event_frequency(df, cancer_type, germline_event, somatic_gene,germline_context,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     """
     Calculate the allele frequency for a specified column in a DataFrame.
     
@@ -174,9 +191,15 @@ def find_filtered_allele_frequency(df, cancer_type, germline_event, somatic_gene
     column_values = df[germline_event].dropna()
     
     # Calculate the allele frequency
-    allele_frequency = column_values.sum() / (len(column_values) * 2)
+    total = None
+    if germline_context == "coding":
+        total = len(column_values)
+    elif germline_context == "noncoding":
+        total = (len(column_values) * 2)
+
+    allele_frequency = column_values.sum() / total
     
-    return allele_frequency,column_values.sum(),(len(column_values) * 2)
+    return allele_frequency, column_values.sum(), total
 
 # Get a allele frequency for the cancer_type at large
 def find_allele_frequency(df, cancer_type, germline_event):
@@ -246,6 +269,35 @@ def find_mutation_frequency(df, cancer_type, somatic_gene):
     mutation_frequency = column_values.sum() / len(column_values)
     
     return mutation_frequency,column_values.sum(),len(column_values)
+
+# Get a allele frequency for the cancer_type at large
+def find_germline_event_frequency(df, cancer_type, event, germline_context):
+    # Filter to Cancer Type of Interest
+    if cancer_type != "Pancancer":
+        df = df[df['cancer_type'] == cancer_type]
+
+    # Verify that we have the data we want
+    if event not in df.columns:       
+        print(f"Combination {event} not found in DataFrame")
+        return
+
+    df= df.dropna(subset=[event])
+    
+    # Get the column values, excluding NaNs
+    column_values = df[event].dropna()
+    
+    # Calculate the allele frequency
+   frequency = None
+   total = None
+
+    if germline_event == "coding":
+        total = len(column_values)
+    elif germline_event == "noncoding":
+        total = (len(column_values) * 2)
+
+    frequency = column_values.sum() / total
+    
+    return frequency,column_values.sum(),total
 
 def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged_with_combined_OR_and_p_values.tsv'):
     """
@@ -401,18 +453,18 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
       # Apply the functions to get metrics
       if cancer_type == "Breast" or cancer_type == "Prostate":
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_hsc)
-        filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_hsc)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,germline_context, covariates=covariates_hsc)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_hsc)
       elif cancer_type == "Pancancer":
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_pancancer)
-        filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_pancancer)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, germline_context, covariates=covariates_pancancer)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_pancancer)       
       else:
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates)
-        filtered_germline_output = find_filtered_allele_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, germline_context, covariates=covariates)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
               
-      germline_output = find_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix)
+      germline_output = find_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix,germline_context)
       somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_gene + somatic_suffix)
           
       # Assign values using ternary operators for cleaner code
