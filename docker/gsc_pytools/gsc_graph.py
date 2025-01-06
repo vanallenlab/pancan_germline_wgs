@@ -133,9 +133,23 @@ def plot_volcano(df,
     df['log2_OR'] = np.log2(df[or_col])
     
     # Define shapes and colors
-    shapes = {'known_ppi': 'o', 'same_gene': 's', 'protein_complex': 'h', 
-              'ligand_receptor': '^', 'known_ppi;ligand_receptor': '*', 
-              'known_ppi;protein_complex': 'd'}
+    shapes = {'direct_ppi_known_function': 'o',
+             'direct_ppi_known_function;direct_ppi_unspecified_function':'o',
+             'direct_ppi_known_function;nonspecific_ppi':'o',
+             'direct_ppi_known_function;nonspecific_ppi;protein_complex':'o',
+             'direct_ppi_unspecified_function':'h',
+             'direct_ppi_unspecified_function;nonspecific_ppi':'h',
+             'direct_ppi_unspecified_function;ligand_receptor':'^',
+             'direct_ppi_unspecified_function;ligand_receptor;nonspecific_ppi':'^',
+             'direct_ppi_unspecified_function;ligand_receptor;nonspecific_ppi;protein_complex':'^',
+             'ligand_receptor':'^',
+             'ligand_receptor;nonspecific_ppi':"^",
+             'protein_complex':'h',
+             'nonspecific_ppi;protein_complex':'h',
+             'direct_ppi_unspecified_function;protein_complex':'h',
+             'direct_ppi_unspecified_function;nonspecific_ppi;protein_complex':'h',
+             'same_gene': 's',
+             'nonspecific_ppi':'*'}
     colors = {'Breast': 'red', 'Prostate': 'blue', 'Colorectal': 'green', 
               'Lung': 'purple', 'Kidney': 'orange', 'Pancancer': 'black'}
     
