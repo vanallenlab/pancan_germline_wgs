@@ -15,7 +15,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python packages using pip
-RUN python3.9 -m pip install numpy pandas scipy seaborn statsmodels scikit-learn firthlogist
+RUN python3.9 -m pip install numpy pandas scipy seaborn statsmodels scikit-learn==1.5 firthlogist
 
 # Copy your utility script to the image
 COPY gsc_util.py /opt/
