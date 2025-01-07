@@ -238,10 +238,13 @@ def plot_volcano(df,
     # Adjust layout to give room for the legend
     plt.subplots_adjust(right=0.75)
     
+    # Resize figure for better layout
+    fig.set_size_inches(12, 8)  # Wider figure for better spacing
+
     # Labels, title, and save
-    ax.set_xlabel('log2(OR)')
-    ax.set_ylabel('-log10(p)')
-    ax.set_title(figure_title)
+    ax.set_xlabel('log2(OR)',fontsize=14)
+    ax.set_ylabel('-log10(p)',fontsize=14)
+    ax.set_title(figure_title,fontsize=16)
     plt.tight_layout()
     fig.savefig(save_path)
     plt.close(fig)
