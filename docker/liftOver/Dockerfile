@@ -7,11 +7,11 @@
 #FROM ubuntu:22.04
 #FROM ubuntu:focal-20220531
 FROM continuumio/miniconda3
-MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
+LABEL org.opencontainers.image.authors="Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
 
-#COPY liftOver /opt/
+COPY liftOver /opt/
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
