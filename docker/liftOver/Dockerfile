@@ -2,11 +2,11 @@
 # Contact: Noah Fields <Noah_Fields@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Simple Dockerfile for vanallenlab/bcftools
+# Simple Dockerfile for vanallenlab/liftover
 
-#FROM ubuntu:22.04
+FROM ubuntu:22.04
 #FROM ubuntu:focal-20220531
-FROM continuumio/miniconda3
+#FROM continuumio/miniconda3
 LABEL org.opencontainers.image.authors="Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install bcftools dependencies
