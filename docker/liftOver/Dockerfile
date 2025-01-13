@@ -17,6 +17,7 @@ RUN apt-get update && \
     apt-get clean
 
 RUN wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/liftOver -O /usr/local/bin/liftOver
+RUN wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
 
 # Make liftOver executable
 RUN chmod +x /usr/local/bin/liftOver
