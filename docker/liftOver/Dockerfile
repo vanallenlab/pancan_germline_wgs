@@ -9,9 +9,14 @@
 FROM continuumio/miniconda3
 LABEL org.opencontainers.image.authors="Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
+# Install bcftools dependencies
+RUN apt-get update && \
+    apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
+                       libcurl4-openssl-dev libssl-dev libncurses5-dev && \
+    apt-get clean
 
-
-COPY liftOver /opt/
+# Copy the liftOver binary to a directory in the PATH
+COPY liftOver /usr/local/bin/liftOver
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
