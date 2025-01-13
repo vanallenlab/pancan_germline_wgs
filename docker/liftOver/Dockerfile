@@ -10,12 +10,14 @@ FROM continuumio/miniconda3
 MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
-# Install bcftools dependencies
+# Install liftover dependencies
 RUN apt-get update && \
     apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
                        libcurl4-openssl-dev libssl-dev libncurses5-dev && \
     apt-get clean
 
+#Copy Liftover in
+COPY liftOver /usr/local/bin/
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
