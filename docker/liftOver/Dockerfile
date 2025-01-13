@@ -11,7 +11,7 @@ MAINTAINER "Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 
 
-COPY liftOver /opt/
+#COPY liftOver /opt/
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
