@@ -21,19 +21,19 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     is not present in a cancer type. This throws off the covariates for pancancer appraoch.
     We need to keep at least 3 cancer types otherwise we throw them all out for convergence purposes.
     """
-    # if cancer_type == "Pancancer":
-    #     columns_to_check = ['Breast_Diagnosis', 'Colorectal_Diagnosis', 'Kidney_Diagnosis', 'Lung_Diagnosis', 'Prostate_Diagnosis']
+    if cancer_type == "Pancancer":
+        columns_to_check = ['Breast_Diagnosis', 'Colorectal_Diagnosis', 'Kidney_Diagnosis', 'Lung_Diagnosis', 'Prostate_Diagnosis']
         
-    #     # Identify invalid columns to drop (those with sum == 0)
-    #     invalid_columns = [col for col in columns_to_check if df[col].sum() == 0]
+        # Identify invalid columns to drop (those with sum == 0)
+        invalid_columns = [col for col in columns_to_check if df[col].sum() == 0]
         
-    #     # Check if at least 3 of the 5 columns remain valid
-    #     if len(invalid_columns) >= 3:
-    #         # Remove all columns in `columns_to_check` from covariates
-    #         covariates = list(set(covariates) - set(columns_to_check))
-    #     else:
-    #         # Remove only the invalid columns from covariates
-    #         covariates = list(set(covariates) - set(invalid_columns))
+        # Check if at least 3 of the 5 columns remain valid
+        if len(invalid_columns) >= 3:
+            # Remove all columns in `columns_to_check` from covariates
+            covariates = list(set(covariates) - set(columns_to_check))
+        else:
+            # Remove only the invalid columns from covariates
+            covariates = list(set(covariates) - set(invalid_columns))
 
     # Check if the germline_event and somatic_gene are in the dataframe columns
     if germline_event not in df.columns or somatic_gene not in df.columns:
