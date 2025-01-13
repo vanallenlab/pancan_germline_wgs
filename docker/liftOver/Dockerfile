@@ -16,7 +16,7 @@ RUN apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
 RUN apt-get clean
 
 # Copy the liftOver binary to a directory in the PATH
-COPY liftOver /usr/local/bin/liftOver
+#COPY liftOver /usr/local/bin/liftOver
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
