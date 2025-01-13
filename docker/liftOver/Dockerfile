@@ -16,8 +16,13 @@ RUN apt-get update && \
                        libcurl4-openssl-dev libssl-dev libncurses5-dev && \
     apt-get clean
 
-#Copy Liftover in
-COPY liftOver /usr/local/bin/
+RUN wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/liftOver -O /usr/local/bin/liftOver
+
+# Make liftOver executable
+RUN chmod +x /usr/local/bin/liftOver
+
+# Clean up
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
