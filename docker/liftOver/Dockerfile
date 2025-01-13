@@ -18,17 +18,7 @@ RUN apt-get update && \
                        libcurl4-openssl-dev libssl-dev libncurses5-dev && \
     apt-get clean
 
-# Install bcftools
-#ARG BCFTOOLS_VERISON=1.19
-RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2 && \
-    tar -xvf bcftools-1.19.tar.bz2 && \
-    cd bcftools-1.19 && \
-    ./configure --prefix=/ && \
-    make && \
-    make install
-
-RUN rm -r bcftools-1.19
-RUN rm bcftools-1.19.tar.bz2
+COPY liftOver /opt/
 
 # Launch bash at runtime
 CMD ["/bin/bash"]
