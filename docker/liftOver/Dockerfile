@@ -4,13 +4,13 @@
 
 # Simple Dockerfile for vanallenlab/liftover
 
-FROM ubuntu:24.04
+#FROM ubuntu:24.04
 #FROM ubuntu:focal-20220531
-#FROM continuumio/miniconda3
+FROM continuumio/miniconda3
 LABEL org.opencontainers.image.authors="Noah Fields <Noah_Fields@dfci.harvard.edu>"
 
 # Install bcftools dependencies
-RUN apt-get update 
+RUN apt-get update -y
 RUN apt-get install -y gcc make zlib1g-dev libbz2-dev liblzma-dev \
                        libcurl4-openssl-dev libssl-dev libncurses5-dev
 RUN apt-get clean
