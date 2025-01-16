@@ -555,7 +555,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
 
     # Ensure all strings in relevant_cancer_types are lowercase
     relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
-
+    cancer_types = ["Breast", "Colorectal", "Prostate", "Lung", "Kidney", "Pancancer"]
     for cancer_type in cancer_types:
       relevant_cancer = 0
       if gwas_cancer_type.lower() in relevant_cancer_types_lower:
