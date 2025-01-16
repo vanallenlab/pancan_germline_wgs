@@ -5,16 +5,35 @@ import numpy as np
 from firthlogist import FirthLogisticRegression
 import scipy.stats as stats
 
-
-# Assuming FirthLogisticRegression is already imported or defined elsewhere
-# You may need to implement this if it's not available.
+def filter_by_cancer_type(cancer_type, df):
+    """
+    Filters a DataFrame based on the cancer_type string.
+        
+    Parameters:
+    - cancer_type (str): The type of cancer to filter by. Can be 'Pancancer', 
+                             a single cancer type, or a hyphen-separated string of cancer types.
+    - df (pd.DataFrame): The DataFrame to filter, containing a 'cancer_type' column.
+        
+    Returns:
+    - pd.DataFrame: The filtered DataFrame.
+    """
+    if cancer_type == 'Pancancer':
+        # No filtering for Pancancer
+        return df
+    elif '-' in cancer_type:
+        # Split the string by hyphen and filter for multiple cancer types
+        cancer_types = cancer_type.split('-')
+        filtered_df = df[df['cancer_type'].isin(cancer_types)]
+    else:
+        # Filter for a single cancer type
+        filtered_df = df[df['cancer_type'] == cancer_type]
+        
+    return filtered_df
 
 def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_gene, covariates=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
     
-    # Filter based on cancer_type if it's not Pancancer
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     """
     This next chunk of code is to prevent convergence failure in pancancer, when the germline event
@@ -126,8 +145,8 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
 
 def firth_logistic_regression(df, cancer_type, germline_event, somatic_gene,covariates=['male','pca_1','pca_2','pca_3','pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+
+    df = filter_by_cancer_type(cancer_type, df)
 
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
@@ -181,8 +200,7 @@ def find_filtered_germline_event_frequency(df, cancer_type, germline_event, soma
     Returns:
     float: The calculated allele frequency.
     """
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     if germline_event not in df.columns or somatic_gene not in df.columns:       
         print(f"Combination {germline_event} - {somatic_gene} not found in DataFrame")
@@ -206,9 +224,9 @@ def find_filtered_germline_event_frequency(df, cancer_type, germline_event, soma
 
 # Get a allele frequency for the cancer_type at large
 def find_allele_frequency(df, cancer_type, germline_event):
+
     # Filter to Cancer type of interest
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     # Make sure the snp is present in the df
     if germline_event not in df.columns:       
@@ -227,9 +245,9 @@ def find_allele_frequency(df, cancer_type, germline_event):
 
 # Get a mutation frequency for specific logistic regression (verify that all variables are there first)
 def find_filtered_mutation_frequency(df, cancer_type, germline_event, somatic_gene, covariates=['male','pca_1','pca_2','pca_3','pca_4']):
+    
     # Filter to Cancer Type of Interest
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     # Verify that we have the data we want
     if germline_event not in df.columns or somatic_gene not in df.columns:       
@@ -251,9 +269,9 @@ def find_filtered_mutation_frequency(df, cancer_type, germline_event, somatic_ge
 
 # Get a allele frequency for the cancer_type at large
 def find_mutation_frequency(df, cancer_type, somatic_gene):
+    
     # Filter to Cancer Type of Interest
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     # Verify that we have the data we want
     if somatic_gene not in df.columns:       
@@ -287,8 +305,7 @@ def find_germline_event_frequency(df, cancer_type, germline_event, germline_cont
         tuple: (frequency, total germline events, total alleles considered)
     """
     # Filter to Cancer Type of Interest
-    if cancer_type != "Pancancer":
-        df = df[df['cancer_type'] == cancer_type]
+    df = filter_by_cancer_type(cancer_type, df)
 
     if df.empty:
         print("Error: find_germline_event_frequency - 0")
@@ -456,6 +473,8 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   for index, row in convergences_df.iterrows():
     germline_event = None
     somatic_event = None
+    germline_column_of_interest = None
+    somatic_column_of_interest = None
 
     gwas_cancer_type = row['cancer']
     germline_context = row['germline_context']
@@ -468,15 +487,96 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     # Extract necessary columns
     if germline_context == "coding":
       germline_event = row['germline_gene']
+      germline_column_of_interest = 'germline_gene'
     elif germline_context == "noncoding":
       germline_event = row['gwas_risk_snp']
+      germline_column_of_interest = 'gwas_risk_snp'
 
     if somatic_context == "coding":
-        somatic_event = row['somatic_gene']
+      somatic_event = row['somatic_gene']
+      somatic_column_of_interest = 'somatic_gene'
     elif somatic_context == "noncoding":
-        somatic_event = row['somatic_noncoding_hotspot_region']
+      somatic_event = row['somatic_noncoding_hotspot_region']
+      somatic_column_of_interest = 'somatic_noncoding_hotspot_region'
     
-    for cancer_type in ["Breast","Colorectal","Prostate","Lung","Kidney","Pancancer"]:
+    # ###### Collect all Cancer Types that are involved in a speciifc pair
+    # # Filter the DataFrame for the specific somatic_event and germline_event
+    # filtered_convergences_df = convergences_df[(convergences_df[somatic_column_of_interest] == somatic_event) & (convergences_df[germline_column_of_interest] == germline_event)]
+
+    # # Extract the unique values from the 'cancer_type' column
+    # unique_cancer_types_list = filtered_convergences_df['cancer_type'].unique()
+
+    # # Handle the conditions
+    # if len(unique_cancer_types_list) == 1:
+    #     unique_cancer_types = ""  # Make the string empty if only one unique value
+    # elif len(unique_cancer_types_list) > 1:
+    #     # Check for duplicates in the filtered DataFrame
+    #     if len(filtered_convergences_df['cancer_type']) != len(set(filtered_convergences_df['cancer_type'])):
+    #         print("Error: Duplicate values found in cancer_type!")
+    #         print(filtered_convergences_df)
+    #     raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
+    #     else:
+    #         unique_cancer_types = '-'.join(sorted(unique_cancer_types_list))  # Keep as is if all values are unique
+    # else:
+    #     unique_cancer_types = ""
+
+    # ######
+    # cancer_types = ["Breast","Colorectal","Prostate","Lung","Kidney","Pancancer"]
+
+    # # Add unique_cancer_types to the list if it's not empty
+    # if unique_cancer_types:
+    #     cancer_types.append(unique_cancer_types)
+
+
+    def collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column, germline_column):
+        """
+        Collect unique cancer types associated with a specific pair of somatic and germline events.
+
+        Parameters:
+        - convergences_df (pd.DataFrame): The DataFrame containing the data.
+        - somatic_event (str): The specific somatic event to filter on.
+        - germline_event (str): The specific germline event to filter on.
+        - somatic_column (str): The column name representing somatic events.
+        - germline_column (str): The column name representing germline events.
+
+        Returns:
+        - list: A list of cancer types, including the unique ones derived from the filtering.
+        """
+        # Filter the DataFrame for the specific somatic_event and germline_event
+        filtered_df = convergences_df[
+            (convergences_df[somatic_column] == somatic_event) &
+            (convergences_df[germline_column] == germline_event)
+        ]
+
+        # Extract unique cancer types
+        unique_cancer_types_list = filtered_df['cancer_type'].unique()
+
+        # Determine the unique cancer types string based on conditions
+        if len(unique_cancer_types_list) == 1:
+            unique_cancer_types = ""  # Make the string empty if only one unique value
+        elif len(unique_cancer_types_list) > 1:
+            # Check for duplicates in the 'cancer_type' column
+            if len(filtered_df['cancer_type']) != len(set(filtered_df['cancer_type'])):
+                print("Error: Duplicate values found in cancer_type!")
+                print(filtered_df)
+                raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
+            else:
+                unique_cancer_types = '-'.join(sorted(unique_cancer_types_list))
+        else:
+            unique_cancer_types = ""
+
+        # Base cancer types
+        cancer_types = ["Breast", "Colorectal", "Prostate", "Lung", "Kidney", "Pancancer"]
+
+        # Append unique cancer types if not empty
+        if unique_cancer_types:
+            cancer_types.append(unique_cancer_types)
+
+        return cancer_types
+
+    cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
+
+    for cancer_type in cancer_types:
       relevant_cancer = 0
       if gwas_cancer_type.lower() == cancer_type.lower():
         relevant_cancer = 1
