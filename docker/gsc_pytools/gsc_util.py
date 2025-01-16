@@ -521,7 +521,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         ]
 
         # Extract unique cancer types
-        unique_cancer_types_list = list(filtered_df['cancer_type'].unique())
+        unique_cancer_types_list = list(filtered_df['cancer'].unique())
 
         # Determine the unique cancer types string based on conditions
         if len(unique_cancer_types_list) == 1:
