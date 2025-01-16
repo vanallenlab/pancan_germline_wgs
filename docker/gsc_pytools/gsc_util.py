@@ -498,34 +498,6 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     elif somatic_context == "noncoding":
       somatic_event = row['somatic_noncoding_hotspot_region']
       somatic_column_of_interest = 'somatic_noncoding_hotspot_region'
-    
-    # ###### Collect all Cancer Types that are involved in a speciifc pair
-    # # Filter the DataFrame for the specific somatic_event and germline_event
-    # filtered_convergences_df = convergences_df[(convergences_df[somatic_column_of_interest] == somatic_event) & (convergences_df[germline_column_of_interest] == germline_event)]
-
-    # # Extract the unique values from the 'cancer_type' column
-    # unique_cancer_types_list = filtered_convergences_df['cancer_type'].unique()
-
-    # # Handle the conditions
-    # if len(unique_cancer_types_list) == 1:
-    #     unique_cancer_types = ""  # Make the string empty if only one unique value
-    # elif len(unique_cancer_types_list) > 1:
-    #     # Check for duplicates in the filtered DataFrame
-    #     if len(filtered_convergences_df['cancer_type']) != len(set(filtered_convergences_df['cancer_type'])):
-    #         print("Error: Duplicate values found in cancer_type!")
-    #         print(filtered_convergences_df)
-    #     raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
-    #     else:
-    #         unique_cancer_types = '-'.join(sorted(unique_cancer_types_list))  # Keep as is if all values are unique
-    # else:
-    #     unique_cancer_types = ""
-
-    # ######
-    # cancer_types = ["Breast","Colorectal","Prostate","Lung","Kidney","Pancancer"]
-
-    # # Add unique_cancer_types to the list if it's not empty
-    # if unique_cancer_types:
-    #     cancer_types.append(unique_cancer_types)
 
 
     def collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column, germline_column):
@@ -549,7 +521,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         ]
 
         # Extract unique cancer types
-        unique_cancer_types_list = filtered_df['cancer_type'].unique()
+        unique_cancer_types_list = list(filtered_df['cancer_type'].unique())
 
         # Determine the unique cancer types string based on conditions
         if len(unique_cancer_types_list) == 1:
@@ -572,13 +544,22 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         if unique_cancer_types:
             cancer_types.append(unique_cancer_types)
 
-        return cancer_types
+        return cancer_types, unique_cancer_types_list
 
-    cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
+    """
+    # This line gives us 
+    # 1) The cancer types we're interested in analyzing (Main 5 plus combos if relevant), 
+    # 2) Bare minimum relevant cancer types (no Pancancer stuff)
+    """
+    cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, 
+        somatic_column_of_interest, germline_column_of_interest)
+
+    # Ensure all strings in relevant_cancer_types are lowercase
+    relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
 
     for cancer_type in cancer_types:
       relevant_cancer = 0
-      if gwas_cancer_type.lower() == cancer_type.lower():
+      if gwas_cancer_type.lower() in relevant_cancer_types_lower:
         relevant_cancer = 1
       elif '-' in cancer_type:
         relevant_cancer = 2
