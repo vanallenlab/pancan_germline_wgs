@@ -528,7 +528,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
             unique_cancer_types = ""  # Make the string empty if only one unique value
         elif len(unique_cancer_types_list) > 1:
             # Check for duplicates in the 'cancer_type' column
-            if len(filtered_df['cancer_type']) != len(set(filtered_df['cancer_type'])):
+            if len(filtered_df['cancer']) != len(set(filtered_df['cancer'])):
                 print("Error: Duplicate values found in cancer_type!")
                 print(filtered_df)
                 raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
