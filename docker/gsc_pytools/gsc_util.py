@@ -469,7 +469,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     if germline_context == "coding":
       germline_event = row['germline_gene']
     elif germline_context == "noncoding":
-      germline_event = row['germline_risk_snp']
+      germline_event = row['gwas_risk_snp']
 
     if somatic_context == "coding":
         somatic_event = row['somatic_gene']
