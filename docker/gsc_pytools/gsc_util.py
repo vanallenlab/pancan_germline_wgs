@@ -580,8 +580,10 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
       relevant_cancer = 0
       if gwas_cancer_type.lower() == cancer_type.lower():
         relevant_cancer = 1
-      elif cancer_type == "Pancancer":
+      elif '-' in cancer_type:
         relevant_cancer = 2
+      elif cancer_type == "Pancancer":
+        relevant_cancer = 3
 
       # Apply the functions to get metrics
       if cancer_type == "Breast" or cancer_type == "Prostate":
