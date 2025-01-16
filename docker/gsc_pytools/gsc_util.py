@@ -450,30 +450,31 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   if somatic_context == "coding":
     somatic_suffix = "-s"
   else:
-    somatic_suffix = "-ncs"
+    somatic_suffix = ""
 
   # Step 4: Loop through each row of the DataFrame and apply logistic regression with firth fallback
   for index, row in convergences_df.iterrows():
     germline_event = None
+    somatic_event = None
+
+    gwas_cancer_type = row['cancer']
+    germline_context = row['germline_context']
+    somatic_context = row['somatic_context']
+    germline_gene = row['germline_gene']
+    somatic_gene = row['somatic_gene']
+    criteria = row['criteria']
+    tier = row['tier']
 
     # Extract necessary columns
     if germline_context == "coding":
-      gwas_cancer_type = row[0]
-      germline_gene = row[1]
-      germline_context = row[2]
-      somatic_gene = row[3]
-      somatic_context = row[4]
-      criteria = row[5]
-      germline_event = germline_gene
-    else:
-      gwas_cancer_type = row[0]
-      germline_snp = row[1]
-      germline_gene = row[2]
-      germline_context = row[3]
-      somatic_gene = row[4]
-      somatic_context = row[5]
-      criteria = row[6]
-      germline_event = germline_snp
+      germline_event = row['germline_gene']
+    elif germline_context == "noncoding":
+      germline_event = row['germline_risk_snp']
+
+    if somatic_context == "coding":
+        somatic_event = row['somatic_gene']
+    elif somatic_context == "noncoding":
+        somatic_event = row['somatic_noncoding_hotspot_region']
     
     for cancer_type in ["Breast","Colorectal","Prostate","Lung","Kidney","Pancancer"]:
       relevant_cancer = 0
@@ -484,20 +485,20 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
 
       # Apply the functions to get metrics
       if cancer_type == "Breast" or cancer_type == "Prostate":
-        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_hsc)
-        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,germline_context, covariates=covariates_hsc)
-        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_hsc)
+        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,covariates=covariates_hsc)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,germline_context, covariates=covariates_hsc)
+        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, covariates=covariates_hsc)
       elif cancer_type == "Pancancer":
-        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates_pancancer)
-        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, germline_context, covariates=covariates_pancancer)
-        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates_pancancer)       
+        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,covariates=covariates_pancancer)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, germline_context, covariates=covariates_pancancer)
+        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, covariates=covariates_pancancer)       
       else:
-        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix,covariates=covariates)
-        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, germline_context, covariates=covariates)
-        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_gene + somatic_suffix, covariates=covariates)
+        regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,covariates=covariates)
+        filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, germline_context, covariates=covariates)
+        filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, covariates=covariates)
               
       germline_output = find_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix,germline_context)
-      somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_gene + somatic_suffix)
+      somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_event + somatic_suffix)
           
       # Assign values using ternary operators for cleaner code
       OR, p_val, ci_OR_low, ci_OR_high = regression_output if regression_output else (pd.NA, pd.NA, pd.NA, pd.NA)
@@ -518,50 +519,95 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         filtered_somatic_output if filtered_somatic_output else (pd.NA, pd.NA, pd.NA)
       )
 
-      if germline_context == "coding":
+      if germline_context == "coding" and somatic_context == "coding":
         # Append the results to the list
         results.append([
             cancer_type, germline_gene, germline_context, 
-            somatic_gene, somatic_context, criteria,
+            somatic_gene, somatic_context, criteria, tier,
             germline_plp_frequency, germline_plp_count, germline_sample_size,
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
             OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
         ])
-      else:
+      elif germline_context == "noncoding" and somatic_context == "coding":
         # Append the results to the list
         results.append([
-            cancer_type, germline_snp, germline_gene, germline_context, 
-            somatic_gene, somatic_context, criteria,
+            cancer_type, germline_event, germline_gene, germline_context, 
+            somatic_gene, somatic_context, criteria, tier,
             germline_plp_frequency, germline_plp_count, germline_sample_size,
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
             OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
-        ])          
-  
-  if germline_context == "noncoding" and somatic_context == "coding":
+        ])
+      elif germline_context == "coding" and somatic_context == "noncoding":
+        # Append the results to the list
+        results.append([
+            cancer_type, germline_gene, germline_context, 
+            somatic_gene, somatic_context, somatic_event, criteria, tier,
+            germline_plp_frequency, germline_plp_count, germline_sample_size,
+            filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
+            somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
+            filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+        ])           
+      elif germline_context == "noncoding" and somatic_context == "noncoding":
+        # Append the results to the list
+        results.append([
+            cancer_type, germline_event, germline_gene, germline_context, 
+            somatic_gene, somatic_context, somatic_event, criteria, tier,
+            germline_plp_frequency, germline_plp_count, germline_sample_size,
+            filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
+            somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
+            filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+        ])
+  if somatic_context == "coding":
     cohort_suffix = cohort
   else:
     cohort_suffix = "final"
 
-  if germline_context == "coding":
+  if germline_context == "coding" and somatic_context == "coding":
     # Convert the results to a DataFrame
     output_df = pd.DataFrame(results, columns=[
         'cancer_type', 'germline_gene', 'germline_context', 
-        'somatic_gene', 'somatic_context', 'criteria',
+        'somatic_gene', 'somatic_context', 'criteria', 'tier',
         f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
         f'OR_{cohort_suffix}', f'p_val_{cohort_suffix}', f'ci_OR_low_{cohort_suffix}', f'ci_OR_high_{cohort_suffix}', 'relevant_cancer'
     ])
-  else:
+  elif germline_context == "noncoding" and somatic_context == "coding":
     # Convert the results to a DataFrame
     output_df = pd.DataFrame(results, columns=[
         'cancer_type', 'germline_risk_allele','germline_gene', 'germline_context', 
-        'somatic_gene', 'somatic_context', 'criteria',
+        'somatic_gene', 'somatic_context', 'criteria', 'tier',
+        f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
+        f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
+        f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
+        f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
+        f'OR_{cohort_suffix}', f'p_val_{cohort_suffix}', f'ci_OR_low_{cohort_suffix}', f'ci_OR_high_{cohort_suffix}', 'relevant_cancer'
+    ])
+
+  elif germline_context == "coding" and somatic_context == "noncoding":
+    # Convert the results to a DataFrame
+    output_df = pd.DataFrame(results, columns=[
+        'cancer_type','germline_gene', 'germline_context', 
+        'somatic_gene', 'somatic_context', 'somatic_noncoding_hotspot_region', 'criteria', 'tier',
+        f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
+        f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
+        f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
+        f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
+        f'OR_{cohort_suffix}', f'p_val_{cohort_suffix}', f'ci_OR_low_{cohort_suffix}', f'ci_OR_high_{cohort_suffix}', 'relevant_cancer'
+    ])
+
+  elif germline_context == "noncoding" and somatic_context == "noncoding":
+    # Convert the results to a DataFrame
+    output_df = pd.DataFrame(results, columns=[
+        'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 
+        'somatic_gene', 'somatic_context', 'somatic_noncoding_hotspot_region', 'criteria', 'tier',
         f'germline_plp_frequency_{cohort}', f'germline_plp_count_{cohort}', f'germline_sample_size_{cohort}',
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
