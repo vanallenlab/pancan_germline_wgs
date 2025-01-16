@@ -551,8 +551,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     # 1) The cancer types we're interested in analyzing (Main 5 plus combos if relevant), 
     # 2) Bare minimum relevant cancer types (no Pancancer stuff)
     """
-    cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, 
-        somatic_column_of_interest, germline_column_of_interest)
+    cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
 
     # Ensure all strings in relevant_cancer_types are lowercase
     relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
