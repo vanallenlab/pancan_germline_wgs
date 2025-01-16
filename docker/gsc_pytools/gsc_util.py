@@ -324,7 +324,7 @@ def find_germline_event_frequency(df, cancer_type, germline_event, germline_cont
     return frequency, column_values.sum(), total
 
 
-def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged_with_combined_OR_and_p_values.tsv'):
+def merge_and_analyze(tsv1_path, tsv2_path, germline_context, somatic_context, output_path='merged_with_combined_OR_and_p_values.tsv'):
     """
     This function merges two TSV files, performs inverse variance analysis on odds ratios (ORs),
     and combines p-values using Stouffer's Z-score method.
@@ -347,9 +347,15 @@ def merge_and_analyze_noncoding_coding(tsv1_path, tsv2_path, output_path='merged
     df2['cancer_type'] = df2['cancer_type'].replace('Renal', 'Kidney')
 
     # Step 2: Merge the DataFrames on the relevant columns, including 'criteria'
-    merged_df = pd.merge(df1, df2, how='outer', 
+    merged_df = None
+    if germline_context == "noncoding" and somatic_context == "coding":
+        merged_df = pd.merge(df1, df2, how='outer', 
                          on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer'],
                          suffixes=('_HMF', '_PROFILE'))
+    if germline_context == "coding" and somatic_context == "coding":
+        merged_df = pd.merge(df1, df2, how='outer', 
+                             on=['criteria', 'cancer_type', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer'],
+                             suffixes=('_HMF', '_PROFILE'))
 
     # Step 3: Calculate variance for ORs based on confidence intervals (CI)
     merged_df['variance_HMF'] = ((np.log(merged_df['ci_OR_high_HMF']) - np.log(merged_df['ci_OR_low_HMF'])) / (2 * 1.96)) ** 2
@@ -417,6 +423,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   convergences_df = convergences_df[(convergences_df['germline_context'] == germline_context) & 
                                   (convergences_df['somatic_context'] == somatic_context)]
   patient_df = pd.read_csv(genotype_table_path, sep='\t')
+  patient_df['cancer_type'] = patient_df['cancer_type'].replace('Renal', 'Kidney')
   
   # Initialize an empty list to store results
   results = []
