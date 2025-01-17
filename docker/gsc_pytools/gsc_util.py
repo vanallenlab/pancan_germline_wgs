@@ -527,9 +527,9 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         if len(unique_cancer_types_list) == 1:
             unique_cancer_types = ""  # Make the string empty if only one unique value
         elif len(unique_cancer_types_list) > 1:
-            # Check for duplicates in the 'cancer_type' column
+            # Check for duplicates in the 'cancer' column
             if len(filtered_df['cancer']) != len(set(filtered_df['cancer'])):
-                print("Error: Duplicate values found in cancer_type!")
+                print("Error: Duplicate values found in cancer!")
                 print(filtered_df)
                 raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
             else:
@@ -551,14 +551,14 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     # 1) The cancer types we're interested in analyzing (Main 5 plus combos if relevant), 
     # 2) Bare minimum relevant cancer types (no Pancancer stuff)
     """
-    cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
+    #cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
 
     # Ensure all strings in relevant_cancer_types are lowercase
-    relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
+    #relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
     cancer_types = ["Breast", "Colorectal", "Prostate", "Lung", "Kidney", "Pancancer"]
     for cancer_type in cancer_types:
       relevant_cancer = 0
-      if gwas_cancer_type.lower() in relevant_cancer_types_lower:
+      if gwas_cancer_type.lower() == cancer_type.lower():
         relevant_cancer = 1
       elif '-' in cancer_type:
         relevant_cancer = 2
