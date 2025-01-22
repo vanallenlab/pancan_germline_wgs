@@ -484,6 +484,9 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     criteria = row['criteria']
     tier = row['tier']
 
+    if gwas_cancer_type.lower() == "renal":
+        gwas_cancer_type = "Kidney"
+
     # Extract necessary columns
     if germline_context == "coding":
       germline_event = row['germline_gene']
