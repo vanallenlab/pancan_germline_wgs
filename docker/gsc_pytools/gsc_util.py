@@ -17,7 +17,13 @@ def filter_by_cancer_type(cancer_type, df):
     Returns:
     - pd.DataFrame: The filtered DataFrame.
     """
-    if cancer_type == 'Pancancer':
+    # Convert the input cancer_type to lowercase
+    cancer_type = cancer_type.lower()
+
+    # Ensure the 'cancer_type' column in the DataFrame is also in lowercase for comparison
+    df['cancer_type'] = df['cancer_type'].str.lower()
+
+    if cancer_type == 'pancancer':
         # No filtering for Pancancer
         return df
     elif '-' in cancer_type:
@@ -27,8 +33,9 @@ def filter_by_cancer_type(cancer_type, df):
     else:
         # Filter for a single cancer type
         filtered_df = df[df['cancer_type'] == cancer_type]
-        
+    
     return filtered_df
+
 
 def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_gene, covariates=['male', 'pca_1', 'pca_2', 'pca_3', 'pca_4']):
     print(f"Cancer Type: {cancer_type}\n Germline Event: {germline_event} \n Somatic Gene: {somatic_gene}")
@@ -40,8 +47,8 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     is not present in a cancer type. This throws off the covariates for pancancer appraoch.
     We need to keep at least 3 cancer types otherwise we throw them all out for convergence purposes.
     """
-    if cancer_type == "Pancancer":
-        columns_to_check = ['Breast_Diagnosis', 'Colorectal_Diagnosis', 'Kidney_Diagnosis', 'Lung_Diagnosis', 'Prostate_Diagnosis']
+    if cancer_type == "pancancer":
+        columns_to_check = ['breast_diagnosis', 'colorectal_diagnosis', 'kidney_diagnosis', 'lung_diagnosis', 'prostate_diagnosis']
         
         # Identify invalid columns to drop (those with sum == 0)
         invalid_columns = [col for col in columns_to_check if df[col].sum() == 0]
@@ -440,7 +447,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   convergences_df = convergences_df[(convergences_df['germline_context'] == germline_context) & 
                                   (convergences_df['somatic_context'] == somatic_context)]
   patient_df = pd.read_csv(genotype_table_path, sep='\t')
-  patient_df['cancer_type'] = patient_df['cancer_type'].replace('Renal', 'Kidney')
+  patient_df['cancer_type'] = patient_df['cancer_type'].replace('renal', 'kidney')
   
   # Initialize an empty list to store results
   results = []
@@ -454,7 +461,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
 
   # Alternate slate of covariates for hormone sensitive cancers and pancancer
   covariates_hsc = [cov for cov in covariates if cov != 'male'] 
-  covariates_pancancer = covariates + ['Breast_Diagnosis','Colorectal_Diagnosis','Kidney_Diagnosis','Lung_Diagnosis','Prostate_Diagnosis']
+  covariates_pancancer = covariates + ['breast_diagnosis','colorectal_diagnosis','kidney_diagnosis','lung_diagnosis','prostate_diagnosis']
   
   # Step 3: Prepare Suffixes
   germline_suffix = None
@@ -485,7 +492,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     tier = row['tier']
 
     if gwas_cancer_type.lower() == "renal":
-        gwas_cancer_type = "Kidney"
+        gwas_cancer_type = "kidney"
 
     # Extract necessary columns
     if germline_context == "coding":
@@ -522,58 +529,41 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
             (convergences_df[somatic_column] == somatic_event) &
             (convergences_df[germline_column] == germline_event)
         ]
+        print(filtered_df.head())
 
         # Extract unique cancer types
         unique_cancer_types_list = list(filtered_df['cancer'].unique())
 
         # Determine the unique cancer types string based on conditions
         if len(unique_cancer_types_list) == 1:
-            unique_cancer_types = ""  # Make the string empty if only one unique value
+            return []
         elif len(unique_cancer_types_list) > 1:
-            # Check for duplicates in the 'cancer' column
-            if len(filtered_df['cancer']) != len(set(filtered_df['cancer'])):
-                print("Error: Duplicate values found in cancer!")
-                print(filtered_df)
-                raise ValueError("Filtered DataFrame has duplicate values in cancer_type.")
-            else:
-                unique_cancer_types = '-'.join(sorted(unique_cancer_types_list))
-        else:
-            unique_cancer_types = ""
-
-        # Base cancer types
-        cancer_types = ["Breast", "Colorectal", "Prostate", "Lung", "Kidney", "Pancancer"]
-
-        # Append unique cancer types if not empty
-        if unique_cancer_types:
-            cancer_types.append(unique_cancer_types)
-
-        return cancer_types, unique_cancer_types_list
+            return unique_cancer_types = ['-'.join(sorted(unique_cancer_types_list))]
 
     """
     # This line gives us 
     # 1) The cancer types we're interested in analyzing (Main 5 plus combos if relevant), 
     # 2) Bare minimum relevant cancer types (no Pancancer stuff)
     """
-    #cancer_types, relevant_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
+    combo_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
 
     # Ensure all strings in relevant_cancer_types are lowercase
-    #relevant_cancer_types_lower = [ctype.lower() for ctype in relevant_cancer_types]
-    cancer_types = ["Breast", "Colorectal", "Prostate", "Lung", "Kidney", "Pancancer"]
+    cancer_types = ["breast", "colorectal", "prostate", "lung", "kidney", "pancancer"].extend(combo_cancer_types)
     for cancer_type in cancer_types:
       relevant_cancer = 0
       if gwas_cancer_type.lower() == cancer_type.lower():
         relevant_cancer = 1
       elif '-' in cancer_type:
         relevant_cancer = 2
-      elif cancer_type == "Pancancer":
+      elif cancer_type == "pancancer":
         relevant_cancer = 3
 
       # Apply the functions to get metrics
-      if cancer_type == "Breast" or cancer_type == "Prostate":
+      if cancer_type == "breast" or cancer_type == "prostate":
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,covariates=covariates_hsc)
         filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,germline_context, covariates=covariates_hsc)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, covariates=covariates_hsc)
-      elif cancer_type == "Pancancer":
+      elif cancer_type == "pancancer":
         regression_output = logistic_regression_with_fallback(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix,covariates=covariates_pancancer)
         filtered_germline_output = find_filtered_germline_event_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, germline_context, covariates=covariates_pancancer)
         filtered_somatic_output = find_filtered_mutation_frequency(patient_df, cancer_type, germline_event + germline_suffix, somatic_event + somatic_suffix, covariates=covariates_pancancer)       
