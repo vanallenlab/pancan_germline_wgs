@@ -548,7 +548,10 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     combo_cancer_types = collect_cancer_types(convergences_df, somatic_event, germline_event, somatic_column_of_interest, germline_column_of_interest)
 
     # Ensure all strings in relevant_cancer_types are lowercase
-    cancer_types = ["breast", "colorectal", "prostate", "lung", "kidney", "pancancer"].extend(combo_cancer_types)
+    cancer_types = ["breast", "colorectal", "prostate", "lung", "kidney", "pancancer"]
+    if combo_cancer_types:
+      cancer_types.extend(combo_cancer_types)
+      
     for cancer_type in cancer_types:
       relevant_cancer = 0
       if gwas_cancer_type.lower() == cancer_type.lower():
