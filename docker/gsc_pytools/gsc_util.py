@@ -367,8 +367,8 @@ def merge_and_analyze(tsv1_path, tsv2_path, germline_context, somatic_context, o
     df2 = pd.read_csv(tsv2_path, sep='\t')
 
     # Step 1: Replace 'Renal' with 'Kidney' in the 'cancer_type' column in both DataFrames
-    df1['cancer_type'] = df1['cancer_type'].replace('Renal', 'Kidney')
-    df2['cancer_type'] = df2['cancer_type'].replace('Renal', 'Kidney')
+    df1['cancer_type'] = df1['cancer_type'].replace('renal', 'kidney')
+    df2['cancer_type'] = df2['cancer_type'].replace('renal', 'kidney')
 
     # Step 2: Merge the DataFrames on the relevant columns, including 'criteria'
     merged_df = None
@@ -538,7 +538,7 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
         if len(unique_cancer_types_list) == 1:
             return []
         elif len(unique_cancer_types_list) > 1:
-            return unique_cancer_types = ['-'.join(sorted(unique_cancer_types_list))]
+            return ['-'.join(sorted(unique_cancer_types_list))]
 
     """
     # This line gives us 
