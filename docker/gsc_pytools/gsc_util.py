@@ -696,8 +696,26 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
   # Eliminate duplicate rows based on all columns
   output_df = output_df.drop_duplicates()
 
+  # Step 1: Separate the DataFrame into two DataFrames based on 'relevant_cancer'
+  df_cancer_0 = output_df[output_df['relevant_cancer'] == 0]
+  df_cancer_1 = output_df[output_df['relevant_cancer'] == 1]
+  df_cancer = output_df[output_df['relevant_cancer'] >= 2]
+
+  # Step 2: Find the rows in df_cancer_0 that have an identical counterpart in df_cancer_1
+  # Drop 'relevant_cancer' column to compare all columns except 'relevant_cancer'
+  df_cancer_0_cleaned = df_cancer_0.merge(df_cancer_1.drop(columns=['relevant_cancer']), 
+                                        how='left', 
+                                        on=df_cancer_0.columns.difference(['relevant_cancer']).tolist(),
+                                        indicator=True)
+
+  # Step 3: Remove rows in df_cancer_0 that have a match in df_cancer_1
+  df_cancer_0_cleaned = df_cancer_0_cleaned[df_cancer_0_cleaned['_merge'] == 'left_only']
+
+  # Step 4: Concatenate the cleaned df_cancer_0 with df_cancer_1
+  final_df = pd.concat([df_cancer_0_cleaned.drop(columns=['_merge']), df_cancer_1, df_cancer], ignore_index=True)
+
   # Write the DataFrame to a TSV file
-  output_df.to_csv(output_file, sep='\t', index=False)
+  final_df.to_csv(output_file, sep='\t', index=False)
 
 def process_and_merge_profile_tables(variant_table_pathway, gene_table_pathway):
     """
