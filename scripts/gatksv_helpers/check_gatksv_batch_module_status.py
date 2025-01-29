@@ -33,7 +33,8 @@ wdl_names = {'03' : 'TrainGCNV',
              '06' : 'GenerateBatchMetrics',
              '07' : 'FilterBatchSites',
              '08' : 'FilterBatchSamples',
-             '10' : 'GenotypeBatch'}
+             '10' : 'GenotypeBatch',
+             '14A' : 'FilterCoverageSamples'}
 module_alt_name = {'05C' : '05C-ReclusterBatch'}
 output_bucket_fmt = '{0}/dfci-g2c-callsets/gatk-sv/module-outputs/{1}/{2}'
 output_json_fname_fmt = '{2}.gatksv_module_{1}.outputs.json'

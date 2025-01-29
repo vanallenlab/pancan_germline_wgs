@@ -19,7 +19,7 @@
 check_batch_module() {
    # Check inputs
   if [ $# -ne 2 ]; then
-    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
+    echo "Must specify batch ID and [03-08,10,14A] as first two positional arguments"
     return
   else
     export bid=$1
@@ -96,6 +96,11 @@ check_batch_module() {
         gate=60
       fi
       max_resub=3
+      ;;
+    14)
+      sub_name="14A-FilterCoverageSamples"
+      gate=1
+      max_resub=2
       ;;
   esac
 
@@ -201,7 +206,7 @@ report_gatksv_status() {
 submit_batch_module() {
    # Check inputs
   if [ $# -ne 2 ]; then
-    echo "Must specify batch ID and [03-08,10] as first two positional arguments"
+    echo "Must specify batch ID and [03-08,10,14A] as first two positional arguments"
     return
   else
     export BATCH=$1
@@ -225,6 +230,9 @@ submit_batch_module() {
       ;;
     10)
       prev_idx="08"
+      ;;
+    14A)
+      prev_idx="04"
       ;;
     *)
       prev_idx="0$(( 10#$module_idx - 1 ))"    
@@ -303,6 +311,9 @@ submit_batch_module() {
       ;;
     10)
       module_name="GenotypeBatch"
+      ;;
+    14A)
+      module_name="FilterCoverageSamples"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_batch_module. Exiting."
@@ -575,6 +586,20 @@ EOF
     "GenotypeBatch.medianfile": $( gsutil cat $module_04_outputs_json | jq .median_cov ),
     "GenotypeBatch.rf_cutoffs": $( gsutil cat $module_07_outputs_json | jq .cutoffs ),
     "GenotypeBatch.splitfile": $( gsutil cat $module_04_outputs_json | jq .merged_SR )
+}
+EOF
+      ;;
+
+    ##############
+    # MODULE 14A #
+    ##############
+    14A)
+      wdl="code/wdl/gatk-sv/FilterCoverageSamples.wdl"
+      json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.14A-FilterCoverageSamples.inputs.template.json
+      cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
+{
+    "FilterCoverageSamples.bincov" : $( gsutil cat $module_04_outputs_json | jq .merged_bincov ),
+    "FilterCoverageSamples.median_cov" : $( gsutil cat $module_04_outputs_json | jq .median_cov )
 }
 EOF
       ;;

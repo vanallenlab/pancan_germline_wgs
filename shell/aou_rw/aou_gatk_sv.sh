@@ -388,11 +388,24 @@ gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/ResolveComplexVariants/** >> uris_to_d
 cleanup_garbage
 
 
-####################################
-# 14A | RemoveOutliersFromCoverage #
-####################################
+###############################
+# 14A | FilterCoverageSamples #
+###############################
 
 # Note: this is not a canonical GATK-SV module and was instituted specifically for G2C
+
+# Get list of samples present in VCF at this stage
+if [ ! -e staging/14A-FilterCoverageSamples ]; then
+  mkdir staging/14A-FilterCoverageSamples
+fi
+gsutil cat \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/13/dfci-g2c.v1.reshard_vcf.chrY.resharded.vcf.gz \
+| gunzip -c | head -n300 | fgrep -v "##" | fgrep "#" | cut -f10- \
+| sed 's/\t/\n/g' | sort -V | uniq \
+> staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list
+gsutil -m cp \
+  staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
 
 module_submission_routine_all_batches 14A
 
@@ -408,6 +421,9 @@ module_submission_routine_all_batches 14A
 # # parallelized by chromosome with 24 independent submissions
 
 # # All cleanup and tracking is handled by a helper routine within submit_cohort_module
+
+# Subset .ped file to those present in VCF
+# TODO: implement this
 
 submit_cohort_module 14
 
