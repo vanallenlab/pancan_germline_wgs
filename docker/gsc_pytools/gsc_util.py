@@ -382,32 +382,32 @@ def merge_and_analyze(tsv1_path, tsv2_path, germline_context, somatic_context, o
                              suffixes=('_HMF', '_PROFILE'))
 
     # Step 3: Calculate variance for ORs based on confidence intervals (CI)
-    merged_df['variance_HMF'] = ((np.log(merged_df['ci_OR_high_HMF']) - np.log(merged_df['ci_OR_low_HMF'])) / (2 * 1.96)) ** 2
-    merged_df['variance_PROFILE'] = ((np.log(merged_df['ci_OR_high_PROFILE']) - np.log(merged_df['ci_OR_low_PROFILE'])) / (2 * 1.96)) ** 2
+    merged_df['variance_OR_HMF'] = ((np.log(merged_df['ci_OR_high_HMF']) - np.log(merged_df['ci_OR_low_HMF'])) / (2 * 1.96)) ** 2
+    merged_df['variance_OR_PROFILE'] = ((np.log(merged_df['ci_OR_high_PROFILE']) - np.log(merged_df['ci_OR_low_PROFILE'])) / (2 * 1.96)) ** 2
 
     # Step 4: Perform inverse variance weighting for OR
     merged_df['log_OR_HMF'] = np.log(merged_df['OR_HMF'])
     merged_df['log_OR_PROFILE'] = np.log(merged_df['OR_PROFILE'])
 
     # Calculate combined log OR using inverse variance weighting
-    merged_df['log_OR_combined'] = (
-        (merged_df['log_OR_HMF'] / merged_df['variance_HMF'] + merged_df['log_OR_PROFILE'] / merged_df['variance_PROFILE']) /
-        (1 / merged_df['variance_HMF'] + 1 / merged_df['variance_PROFILE'])
+    merged_df['log_OR_final'] = (
+        (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] + merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE']) /
+        (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'])
     )
 
     # Convert combined log OR back to OR
-    merged_df['OR_final'] = np.exp(merged_df['log_OR_combined'])
+    merged_df['OR_final'] = np.exp(merged_df['log_OR_final'])
 
     # Step 5: Calculate the variance of the combined OR using inverse variance
-    merged_df['variance_OR_combined'] = 1 / (1 / merged_df['variance_HMF'] + 1 / merged_df['variance_PROFILE'])
+    merged_df['variance_OR_final'] = 1 / (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'])
 
-    # Step 6: Calculate Z-scores as OR_combined / variance_OR_combined
-    merged_df['z_combined'] = np.log(merged_df['OR_final']) / np.sqrt(merged_df['variance_OR_combined'])
+    # Step 6: Calculate Z-scores as OR_final / variance_OR_final
+    merged_df['z_final'] = np.log(merged_df['OR_final']) / np.sqrt(merged_df['variance_OR_final'])
 
     # Step 7: Calculate p-value from Z-score
-    merged_df['p_val_final'] = 2 * stats.norm.sf(np.abs(merged_df['z_combined']))
+    merged_df['p_val_final'] = 2 * stats.norm.sf(np.abs(merged_df['z_final']))
 
-    # Step 8: Save the merged DataFrame with combined OR and p-values
+    # Step 8: Save the merged DataFrame with final OR and p-values
     merged_df.to_csv(output_path, sep='\t', index=False)
 
     # Return the merged DataFrame
@@ -432,7 +432,7 @@ def filter_by_pvalues(input_tsv, output_tsv = "filtered.tsv"):
     # Filter based on the conditions
     filtered_df = df[
         ((df['p_val_HMF'] < 0.05) | (df['p_val_PROFILE'] < 0.05)) & 
-        (df['p_val_combined'] < 0.05)
+        (df['p_val_final'] < 0.05)
     ]
 
     # Save the filtered DataFrame to a new TSV file
@@ -441,7 +441,7 @@ def filter_by_pvalues(input_tsv, output_tsv = "filtered.tsv"):
     # Return the filtered DataFrame
     return filtered_df
 
-def analyze_data(convergence_table_path,genotype_table_path,germline_context,somatic_context,cohort,output_file):
+def analyze_data(convergence_table_path, genotype_table_path, germline_context, somatic_context, cohort, output_file, analyze_all_cancers = True):
   # Step 1: Read in Dataframe containing convergences and Dataframe containing patient level data  
   convergences_df = pd.read_csv(convergence_table_path,sep='\t')
   convergences_df = convergences_df[(convergences_df['germline_context'] == germline_context) & 
@@ -551,7 +551,12 @@ def analyze_data(convergence_table_path,genotype_table_path,germline_context,som
     cancer_types = ["breast", "colorectal", "prostate", "lung", "kidney", "pancancer"]
     if combo_cancer_types:
       cancer_types.extend(combo_cancer_types)
-      
+    
+    # We can set this parameter to True to analyze all cancer types, or False to just do the 1 relevant cancer.
+    # For the miniGWAS, we should set this to False, because we are narrowing the scope of the analyze.
+    if analyze_all_cancers == False:
+        cancer_types = [gwas_cancer_type]
+
     for cancer_type in cancer_types:
       relevant_cancer = 0
       if gwas_cancer_type.lower() == cancer_type.lower():
@@ -788,3 +793,47 @@ def process_and_merge_profile_tables(variant_table_pathway, gene_table_pathway):
     merged_table.to_csv("profile_table.tsv",sep='\t',index=False)
     return
 
+def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_noncoding_table):
+    df_c_c = pd.read_csv(coding_coding_table,sep='\t')
+    df_nc_c = pd.read_csv(gwas_coding_table,sep='\t')
+    df_nc_nc = pd.read_csv(gwas_noncoding_table,sep='\t')
+    df_c_nc = pd.read_csv(coding_noncoding_table,sep='\t')
+
+    # Concatenate all DataFrames into one
+    concatenated_df = pd.concat([df_c_c, df_nc_c, df_nc_nc, df_c_nc], ignore_index=True)
+    concatenated_df = concatenated_df.drop_duplicates()
+    concatenated_df['present_in_HMF'] = ~concatenated_df['p_val_HMF'].isna()
+    concatenated_df['present_in_PROFILE'] = ~concatenated_df['p_val_PROFILE'].isna()
+
+    def fill_in_metadata(df,hmf_col, profile_col, meta_col):
+        # Fill p_val_final with values from p_val_HMF or p_val_PROFILE
+        df[meta_col] = df[meta_col].combine_first(df[hmf_col].combine_first(df[profile_col]))
+        return df
+
+    df = fill_in_metadata(concatenated_df,"p_val_HMF","p_val_PROFILE","p_val_final")
+    df = fill_in_metadata(df,"OR_HMF","OR_PROFILE","OR_final")
+    df = fill_in_metadata(df,"log_OR_HMF","log_OR_PROFILE","log_OR_final")
+    df = fill_in_metadata(df,"variance_OR_HMF","variance_OR_PROFILE","variance_OR_final")
+
+    # Step 1: Filter germline_context = "noncoding"
+    subset = df[df['germline_context'] == 'noncoding']
+
+    # Step 2: Group by cancer_type, germline_gene, somatic_gene
+    grouped = subset.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
+
+    # Step 3: Find the row with the smallest p_val_final
+    def assign_sentinal_snp(group):
+        if group['p_val_final'].notna().any():
+            min_idx = group['p_val_final'].idxmin()
+            group['sentinal_snp'] = 0
+            group.loc[min_idx, 'sentinal_snp'] = 1
+        else:
+            group['sentinal_snp'] = -1
+        return group
+
+    subset = grouped.apply(assign_sentinal_snp)
+
+    # Step 4: Add this back to the original df, replacing the old subset
+    df = df.drop(columns=['sentinal_snp'], errors='ignore')  # Drop existing column to avoid conflicts
+    df = pd.concat([df[df['germline_context'] != 'noncoding'], subset], ignore_index=True)
+    return
