@@ -21,7 +21,7 @@ export g2c_branch=gatksv
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
-export gatksv_tag=v1.0
+export gatksv_tag=v1.0.1
 git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
 
 # Clone GATK-HC workflows repo & checkout release tag of interest

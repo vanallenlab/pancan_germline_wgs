@@ -388,15 +388,37 @@ gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/ResolveComplexVariants/** >> uris_to_d
 cleanup_garbage
 
 
+####################################
+# 14A | RemoveOutliersFromCoverage #
+####################################
+
+# Note: this is not a canonical GATK-SV module and was instituted specifically for G2C
+
+module_submission_routine_all_batches 14A
+
+
 ################################
 # 14 | GenotypeComplexVariants #
 ################################
 
 # Note: this module only needs to be run once in one workspace for the whole cohort
 
-# Note 2: this module is handled differently by submit_cohort_module since it's
-# parallelized by chromosome with 24 independent submissions
+# AS OF DEC 20: attempting to debug with single submission for whole cohort
+# # Note 2: this module is handled differently by submit_cohort_module since it's
+# # parallelized by chromosome with 24 independent submissions
 
-# All cleanup and tracking is handled by a helper routine within submit_cohort_module
+# # All cleanup and tracking is handled by a helper routine within submit_cohort_module
 
 submit_cohort_module 14
+
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.14-GenotypeComplexVariants.job_ids.list )
+
+
+
+
+#################
+# 15 | CleanVcf #
+#################
+

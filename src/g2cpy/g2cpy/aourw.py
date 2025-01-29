@@ -27,12 +27,15 @@ def check_workflow_status(workflow_id, max_retries=20, timeout=30):
         crom_query = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc status ' + workflow_id
         crom_query_res = subprocess.run(crom_query, capture_output=True, 
                                         shell=True, check=False, text=True).stdout
-        res_splits = [sub('[,"]', '', s.split('":"')[1]) 
-                      for s in crom_query_res.split('\n') 
-                      if 'status' in s]
-        if len(res_splits) > 0:
-            return res_splits[0].lower()
-        else:
+        try:
+            res_splits = [sub('[,"]', '', s.split('":"')[1]) 
+                          for s in crom_query_res.split('\n') 
+                          if 'status' in s]
+            if len(res_splits) > 0:
+                return res_splits[0].lower()
+            else:
+                attempts += 1
+        except:
             attempts += 1
     
     if attempts == max_retries:

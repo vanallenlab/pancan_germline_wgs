@@ -261,11 +261,13 @@ def main():
         startup_report({'Method name' : method_name,
                         'WDL' : args.wdl,
                         'Input .json template' : args.input_json_template,
+                        'Status tracker .tsv' : args.status_tsv,
                         'Workspace bucket' : bucket,
                         'Staging bucket' : args.staging_bucket,
                         'Local root' : args.base_directory,
                         'Dumpster' : args.dumpster,
                         'Contigs' : ', '.join(contigs),
+                        'Max attempts' : args.max_attempts,
                         'Quiet' : args.quiet})
 
     # If --status-tsv is provided and exists, load this file as a dict
@@ -285,7 +287,7 @@ def main():
     while True:
         if not args.quiet:
             msg = '[{}] Not all contigs yet staged. Entering another cycle of ' + \
-                  'submission management routine.'
+                  'submission management routine.\n'
             print(msg.format(clean_date()))
 
         # Loop over all chromosomes
@@ -365,7 +367,7 @@ def main():
                 else:
                     if not args.quiet:
                         msg = '[{}] Contig {} has reached the maximum number of ' + \
-                              'attempts ({:,}) for {}; skipping.\n'
+                              'attempts ({:,}) for {}; skipping.'
                         print(msg.format(clean_date(), contig, 
                                          args.max_attempts, method_name))
                     status = 'exhausted'
@@ -383,6 +385,13 @@ def main():
         # Check at end of loop if all contigs are staged
         if len(set(all_status.values()).difference({'staged'})) == 0:
             break
+
+        # Check if all contigs are exhausted; if so, no progress will be made
+        if len(set(all_status.values()).difference({'staged', 'exhausted'})) == 0:
+            msg = '[{}] All contigs are staged or exhausted. No more progress ' + \
+                  'is possible with current settings. Exiting management routine.'
+            print(msg.format(clean_date()))
+            exit()
 
         # Wait before checking again
         else:
