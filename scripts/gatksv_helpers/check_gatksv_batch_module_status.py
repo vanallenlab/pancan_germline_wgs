@@ -72,6 +72,7 @@ keep_10_outs = 'trained_genotype_pesr_depth_sepcutoff sr_background_fail ' + \
                'regeno_coverage_medians trained_genotype_pesr_pesr_sepcutoff ' + \
                'trained_PE_metrics'
 keep_10_outs = keep_10_outs.split()
+keep_14A_outs = 'filtered_bincov filtered_bincov_idx filtered_median_cov'.split()
 keep_output_keys = {'03' : keep_03_outs,
                     '04' : keep_04_outs,
                     '05' : keep_05_outs,
@@ -80,7 +81,8 @@ keep_output_keys = {'03' : keep_03_outs,
                     '06' : keep_06_outs,
                     '07' : keep_07_outs,
                     '08' : keep_08_outs,
-                    '10' : keep_10_outs}
+                    '10' : keep_10_outs,
+                    '14A' : keep_14A_outs}
 
 
 def check_if_staged(bucket, bid, module_index):

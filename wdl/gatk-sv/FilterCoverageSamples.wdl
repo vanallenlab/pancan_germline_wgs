@@ -46,8 +46,6 @@ task FilterCovFiles {
   Int disk_gb = ceil(3 * size(select_all([bincov, median_cov]), "GB")) + 20
 
   command <<<
-    set -eu -o pipefail
-
     # Filter bincov, if provided
     if [ ~{defined(bincov)} == "true" ]; then
       zcat ~{bincov} | head -n1 | sed 's/\t/\n/g' > bincov.header || true

@@ -97,7 +97,7 @@ check_batch_module() {
       fi
       max_resub=3
       ;;
-    14)
+    14A)
       sub_name="14A-FilterCoverageSamples"
       gate=1
       max_resub=2
@@ -598,8 +598,8 @@ EOF
       json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.14A-FilterCoverageSamples.inputs.template.json
       cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
 {
-    "FilterCoverageSamples.bincov" : $( gsutil cat $module_04_outputs_json | jq .merged_bincov ),
-    "FilterCoverageSamples.median_cov" : $( gsutil cat $module_04_outputs_json | jq .median_cov )
+    "FilterCoverageSamples.bincov" : $( gsutil cat $prev_module_outputs_json | jq .merged_bincov ),
+    "FilterCoverageSamples.median_cov" : $( gsutil cat $prev_module_outputs_json | jq .median_cov )
 }
 EOF
       ;;
