@@ -100,7 +100,7 @@ check_batch_module() {
     14A)
       sub_name="14A-FilterCoverageSamples"
       gate=1
-      max_resub=2
+      max_resub=3
       ;;
   esac
 
@@ -138,7 +138,6 @@ module_submission_routine_all_batches() {
   fi
 
   WN=$( get_workspace_number )
-  batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
   tracker=cromshell/progress/gatksv.batch_modules.progress.tsv
 
   # Customize gate duration for certain short-running workflows
@@ -154,6 +153,13 @@ module_submission_routine_all_batches() {
       outer_gate=20
       ;;
   esac
+
+  # Batches will always be parallelized by workspace except for 14A
+  if [ $module_idx == "14A" ]; then
+    batches_list="batch_info/dfci-g2c.gatk-sv.batches.list"
+  else
+    batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
+  fi
 
   _count_remaining() {
     if [ -e $tracker ]; then
@@ -173,7 +179,7 @@ module_submission_routine_all_batches() {
       echo -e "Checking status of $bid for GATK-SV module $module_idx"
       check_batch_module $bid $module_idx
       cleanup_garbage
-    done < batch_info/dfci-g2c.gatk-sv.batches.w$WN.list
+    done < $batches_list
     echo -e "Finished checking status of all batches for GATK-SV module $module_idx"
     echo -e "Status of all batches for all GATK-SV modules:"
     report_gatksv_status $module_idx
@@ -598,7 +604,6 @@ EOF
       json_input_template=code/refs/json/gatk-sv/dfci-g2c.gatk-sv.14A-FilterCoverageSamples.inputs.template.json
       cat << EOF > $sub_dir/$BATCH.$sub_name.updates.json
 {
-    "FilterCoverageSamples.bincov" : $( gsutil cat $prev_module_outputs_json | jq .merged_bincov ),
     "FilterCoverageSamples.median_cov" : $( gsutil cat $prev_module_outputs_json | jq .median_cov )
 }
 EOF
@@ -859,16 +864,18 @@ EOF
       wdl="code/wdl/gatk-sv/GenotypeComplexVariants.wdl"
 
       # Get URIs per batch
-      while read bid; do                
+      while read bid; do
         mod04_output_json=$staging_prefix/04/$bid/$bid.gatksv_module_04.outputs.json
         gsutil cat $mod04_output_json | jq .merged_bincov | tr -d '"' \
         >> $sub_dir/bincovs.list
-        gsutil cat $mod04_output_json | jq .median_cov | tr -d '"' \
-        >> $sub_dir/median_covs.list
 
         mod10_output_json=$staging_prefix/10/$bid/$bid.gatksv_module_10.outputs.json
         gsutil cat $mod10_output_json | jq .trained_genotype_depth_depth_sepcutoff \
         | tr -d '"' >> $sub_dir/depth_cutoffs.list
+
+        mod14A_output_json=$staging_prefix/14A/$bid/$bid.gatksv_module_14A.outputs.json
+        gsutil cat $mod14A_output_json | jq .filtered_median_cov | tr -d '"' \
+        >> $sub_dir/median_covs.list
 
         echo "$staging_prefix/11/$bid.depth.regeno_final.vcf.gz" \
         >> $sub_dir/depth_regeno_vcfs.list
@@ -881,30 +888,6 @@ EOF
         echo -e "$staging_prefix/13/dfci-g2c.v1.reshard_vcf.chr$k.resharded.vcf.gz" \
         >> $sub_dir/cpx_vcfs.list
       done
-
-# NOTE: previous implementation for chromosome-sharded workflow
-# As of Dec 20, attempting single submission for whole cohort
-#       # Prep input .json template
-#       cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
-# {
-#     "GenotypeComplexVariants.batches": $( collapse_txt $batches_list ),
-#     "GenotypeComplexVariants.bin_exclude": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz",
-#     "GenotypeComplexVariants.bincov_files": $( collapse_txt $sub_dir/bincovs.list ),
-#     "GenotypeComplexVariants.cohort_name": "dfci-g2c.v1",
-#     "GenotypeComplexVariants.complex_resolve_vcf_indexes": ["$staging_prefix/13/dfci-g2c.v1.reshard_vcf.\$CONTIG.resharded.vcf.gz.tbi"],
-#     "GenotypeComplexVariants.complex_resolve_vcfs": ["$staging_prefix/13/dfci-g2c.v1.reshard_vcf.\$CONTIG.resharded.vcf.gz"],
-#     "GenotypeComplexVariants.contig_list": "gs://dfci-g2c-refs/hg38/contig_fais/\$CONTIG.fai",
-#     "GenotypeComplexVariants.depth_gt_rd_sep_files": $( collapse_txt $sub_dir/depth_cutoffs.list ),
-#     "GenotypeComplexVariants.depth_vcfs": $( collapse_txt $sub_dir/depth_regeno_vcfs.list ),
-#     "GenotypeComplexVariants.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-#     "GenotypeComplexVariants.median_coverage_files": $( collapse_txt $sub_dir/median_covs.list ),
-#     "GenotypeComplexVariants.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
-#     "GenotypeComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-#     "GenotypeComplexVariants.runtime_override_rd_genotype": {"disk_gb" : 20, "mem_gb" : 15.5, "n_cpu" : 4, "preemptible_tries" : 1},
-#     "GenotypeComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-#     "GenotypeComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2024-11-15-v1.0-488d7cb0"
-# }
-# EOF
 
       # Prep input .json
       cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
@@ -920,8 +903,9 @@ EOF
     "GenotypeComplexVariants.depth_vcfs": $( collapse_txt $sub_dir/depth_regeno_vcfs.list ),
     "GenotypeComplexVariants.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
     "GenotypeComplexVariants.median_coverage_files": $( collapse_txt $sub_dir/median_covs.list ),
-    "GenotypeComplexVariants.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
+    "GenotypeComplexVariants.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.gatksv_module14.ped",
     "GenotypeComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+    "GenotypeComplexVariants.runtime_override_parse_genotypes": {"disk_gb" : 75, "boot_disk_gb" : 20},
     "GenotypeComplexVariants.runtime_override_rd_genotype": {"disk_gb" : 20, "mem_gb" : 15.5, "n_cpu" : 4, "preemptible_tries" : 1},
     "GenotypeComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "GenotypeComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"

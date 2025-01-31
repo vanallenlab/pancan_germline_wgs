@@ -393,6 +393,8 @@ cleanup_garbage
 ###############################
 
 # Note: this is not a canonical GATK-SV module and was instituted specifically for G2C
+# All this does is remove outliers from the median coverage file to avoid 
+# RDtest normalization errors in module 14
 
 # Get list of samples present in VCF at this stage
 if [ ! -e staging/14A-FilterCoverageSamples ]; then
@@ -423,8 +425,18 @@ module_submission_routine_all_batches 14A
 # # All cleanup and tracking is handled by a helper routine within submit_cohort_module
 
 # Subset .ped file to those present in VCF
-# TODO: implement this
+if [ ! -e staging/14-GenotypeComplexVariants ]; then
+  mkdir staging/14-GenotypeComplexVariants
+fi
+gsutil -m cat \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped \
+| fgrep -wf staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list \
+> staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped
+gsutil cp \
+  staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/
 
+# Submit workflow
 submit_cohort_module 14
 
 # Monitor submission
