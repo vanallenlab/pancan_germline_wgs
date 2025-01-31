@@ -665,7 +665,9 @@ submit_cohort_module() {
       ;;
     14)
       module_name="GenotypeComplexVariants"
-      max_attempts=3
+      ;;
+    14)
+      module_name="CleanVcf"
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
@@ -905,10 +907,53 @@ EOF
     "GenotypeComplexVariants.median_coverage_files": $( collapse_txt $sub_dir/median_covs.list ),
     "GenotypeComplexVariants.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.gatksv_module14.ped",
     "GenotypeComplexVariants.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-    "GenotypeComplexVariants.runtime_override_parse_genotypes": {"disk_gb" : 75, "boot_disk_gb" : 20},
+    "GenotypeComplexVariants.runtime_override_parse_genotypes": {"disk_gb" : 275, "boot_disk_gb" : 30, "mem_gb" : 7.5, "cpu_cores" : 2},
     "GenotypeComplexVariants.runtime_override_rd_genotype": {"disk_gb" : 20, "mem_gb" : 15.5, "n_cpu" : 4, "preemptible_tries" : 1},
     "GenotypeComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "GenotypeComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 15 #
+    #############
+    15)
+      wdl="code/wdl/gatk-sv/CleanVcf.wdl"
+
+      # TODO: finish gathering inputs
+
+      # # Get arrays of inputs per chromosome
+      # for k in $( seq 1 22 ) X Y; do
+      #   echo -e "$staging_prefix/13/dfci-g2c.v1.reshard_vcf.chr$k.resharded.vcf.gz.tbi" \
+      #   >> $sub_dir/cpx_vcf_idxs.list
+      #   echo -e "$staging_prefix/13/dfci-g2c.v1.reshard_vcf.chr$k.resharded.vcf.gz" \
+      #   >> $sub_dir/cpx_vcfs.list
+      # done
+
+      # Prep input .json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
+{
+    "CleanVcf.HERVK_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HERVK.sorted.bed.gz",
+    "CleanVcf.LINE1_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/LINE1.sorted.bed.gz",
+    "CleanVcf.allosome_fai": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
+    "CleanVcf.chr_x": "chrX",
+    "CleanVcf.chr_y": "chrY",
+    "CleanVcf.clean_vcf1b_records_per_shard": 10000,
+    "CleanVcf.clean_vcf5_records_per_shard": 5000,
+    "CleanVcf.cohort_name": "dfci-g2c.v1",
+    "CleanVcf.complex_genotype_vcfs": "TBD",
+    "CleanVcf.complex_resolve_background_fail_list": "TBD",
+    "CleanVcf.complex_resolve_bothside_pass_list": "TBD",
+    "CleanVcf.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+    "CleanVcf.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+    "CleanVcf.max_shards_per_chrom_step1": 200,
+    "CleanVcf.min_records_per_shard_step1": 5000,
+    "CleanVcf.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.gatksv_module14.ped",
+    "CleanVcf.primary_contigs_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "CleanVcf.samples_per_step2_shard": 100,
+    "CleanVcf.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "CleanVcf.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
 }
 EOF
       ;;
@@ -922,7 +967,7 @@ EOF
 
   # Submit job and add job ID to list of jobs for this module
   case $module_idx in
-    # Submission for modules 12, [14?], and 15 are handled differently due to them being contig-sharded
+    # Submission for module 12 is handled differently due to it being contig-sharded
     12)
       code/scripts/manage_chromshards.py \
         --wdl $wdl \
