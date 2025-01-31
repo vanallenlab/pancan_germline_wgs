@@ -793,7 +793,7 @@ def process_and_merge_profile_tables(variant_table_pathway, gene_table_pathway):
     merged_table.to_csv("profile_table.tsv",sep='\t',index=False)
     return
 
-def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_noncoding_table):
+def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_noncoding_table,output_path):
     df_c_c = pd.read_csv(coding_coding_table,sep='\t')
     df_nc_c = pd.read_csv(gwas_coding_table,sep='\t')
     df_nc_nc = pd.read_csv(gwas_noncoding_table,sep='\t')
@@ -836,4 +836,6 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     # Step 4: Add this back to the original df, replacing the old subset
     df = df.drop(columns=['sentinal_snp'], errors='ignore')  # Drop existing column to avoid conflicts
     df = pd.concat([df[df['germline_context'] != 'noncoding'], subset], ignore_index=True)
+
+    df.to_csv(output_path,sep='\t',index=False)
     return
