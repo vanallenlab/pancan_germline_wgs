@@ -827,11 +827,11 @@ EOF
 
       # Collect per-chromosome outputs from module 11
       for contig in $( seq 1 22 ) X Y; do
-        mod11_output_json=$staging_prefix/12/chr$contig/12-CombineBatches.chr$contig.outputs.json
-        gsutil cat $mod11_output_json | jq .combined_vcfs | tr -d '"' >> $sub_dir/combined_vcfs.list
-        gsutil cat $mod11_output_json | jq .cluster_bothside_pass_lists \
+        mod12_output_json=$staging_prefix/12/chr$contig/12-CombineBatches.chr$contig.outputs.json
+        gsutil cat $mod12_output_json | jq .combined_vcfs | tr -d '"' >> $sub_dir/combined_vcfs.list
+        gsutil cat $mod12_output_json | jq .cluster_bothside_pass_lists \
         | tr -d '"' >> $sub_dir/bothsides_pass.list
-        gsutil cat $mod11_output_json | jq .cluster_background_fail_lists \
+        gsutil cat $mod12_output_json | jq .cluster_background_fail_lists \
         | tr -d '"' >> $sub_dir/background_fail.list
       done
 
@@ -921,15 +921,11 @@ EOF
     15)
       wdl="code/wdl/gatk-sv/CleanVcf.wdl"
 
-      # TODO: finish gathering inputs
-
-      # # Get arrays of inputs per chromosome
-      # for k in $( seq 1 22 ) X Y; do
-      #   echo -e "$staging_prefix/13/dfci-g2c.v1.reshard_vcf.chr$k.resharded.vcf.gz.tbi" \
-      #   >> $sub_dir/cpx_vcf_idxs.list
-      #   echo -e "$staging_prefix/13/dfci-g2c.v1.reshard_vcf.chr$k.resharded.vcf.gz" \
-      #   >> $sub_dir/cpx_vcfs.list
-      # done
+      # Get arrays of inputs per chromosome
+      for k in $( seq 1 22 ) X Y; do
+        echo -e "$staging_prefix/14/dfci-g2c.v1.chr$k.regenotyped.vcf.gz" \
+        >> $sub_dir/vcfs.list
+      done
 
       # Prep input .json
       cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
@@ -942,9 +938,9 @@ EOF
     "CleanVcf.clean_vcf1b_records_per_shard": 10000,
     "CleanVcf.clean_vcf5_records_per_shard": 5000,
     "CleanVcf.cohort_name": "dfci-g2c.v1",
-    "CleanVcf.complex_genotype_vcfs": "TBD",
-    "CleanVcf.complex_resolve_background_fail_list": "TBD",
-    "CleanVcf.complex_resolve_bothside_pass_list": "TBD",
+    "CleanVcf.complex_genotype_vcfs": $( collapse_txt $sub_dir/vcfs.list ),
+    "CleanVcf.complex_resolve_background_fail_list": "$staging_prefix/13/dfci-g2c.v1.all.sr_background_fail.updated3.txt",
+    "CleanVcf.complex_resolve_bothside_pass_list": "$staging_prefix/13/dfci-g2c.v1.all.sr_bothside_pass.updated3.txt",
     "CleanVcf.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
     "CleanVcf.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
     "CleanVcf.max_shards_per_chrom_step1": 200,

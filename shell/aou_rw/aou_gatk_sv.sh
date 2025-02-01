@@ -443,7 +443,7 @@ monitor_workflow \
 cromshell -t 120 --no_turtle -mc list-outputs \
   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.14-GenotypeComplexVariants.job_ids.list ) \
 | awk '{ print $2 }' | gsutil -m cp -I \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/13/
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/14/
 
 # Once staged, clean up outputs
 gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/GenotypeComplexVariants/** >> uris_to_delete.list
