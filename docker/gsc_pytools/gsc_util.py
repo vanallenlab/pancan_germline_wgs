@@ -91,8 +91,11 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
         model = sm.Logit(y, X)
         result = model.fit(disp=False)
         
+        if abs(result.params[germline_event]) > 10:
+            raise ValueError("Regular Logistic Converged, but model exploded. Trying Firth logistic regression.")
+            
         # If the model converged, extract p-value, odds ratio, and confidence intervals
-        if result.mle_retvals['converged']:
+        elif result.mle_retvals['converged']:
             print("Regular logistic regression converged successfully!")
             
             # Extract p-value and odds ratio for the germline_gene predictor
