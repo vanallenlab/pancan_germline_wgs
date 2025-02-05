@@ -13,6 +13,7 @@
 # Note that this code is designed to be run *locally* (not on RW)
 
 # Set up local working directory
+EXDIR=`pwd`
 WRKDIR=`mktemp -d`
 cd $WRKDIR
 
@@ -35,7 +36,7 @@ for dir in src bin; do
 done
 cp -r \
   pancan_germline_wgs/src/g2cpy \
-  pancan_germline_wgs/src/G2C_*.tar.gz \
+  pancan_germline_wgs/src/G2CR_*.tar.gz \
   RLCtools/RLCtools_*.tar.gz \
   gatk-sv/src/svtk \
   $WRKDIR/src/
@@ -54,5 +55,5 @@ gsutil -m cp \
   $rw_bucket/code/refs/
 
 # Clean up
-cd ~
+cd $EXDIR
 rm -rf $WRKDIR

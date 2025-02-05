@@ -528,18 +528,40 @@ submit_cohort_module 16
 ##############################
 
 # Write input .json for SV counting task
-# TODO: implement this
+staging_dir=staging/count_svs_posthoc
+if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
+for k in $( seq 1 22 ) X Y; do
+  # TODO: write path to all 24 chromsharded VCFs to temp file 
+  # >> $staging_dir/vcfs.list
+  # TODO: write path to all 24 chromsharded VCF indexes to temp file 
+  # >> $staging_dir/vcf_idxs.list
+done
+cat << EOF > cromshell/inputs/count_svs_posthoc.inputs.json
+{
+  "CountSvsPerSample.g2c_pipeline_docker": "String",
+  "CountSvsPerSample.output_prefix": "dfci-g2c.v1.gatksv_postCleanVcf",
+  "CountSvsPerSample.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052",
+  "CountSvsPerSample.vcfs": $( collapse_txt $staging_dir/vcfs.list ),
+  "CountSvsPerSample.vcf_idxs": $( collapse_txt $staging_dir/vcf_idxs.list )
+}
+EOF
 
 # Submit SV counting task
-# TODO: implement this
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  code/wdl/gatk-sv/CountSvsPerSample.wdl \
+  cromshell/inputs/count_svs_posthoc.inputs.json
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/count_svs_posthoc.job_ids.list
 
 # Monitor SV counting task
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
+
+# Once complete, download SV counts per sample
 # TODO: implement this
 
-# Once complete, download SV counts per sample and clean up execution bucket
-# TODO: implement this
-
-# Define outliers as in 05B or 08 above
+# Define outliers as in 05B or 08 above (maybe don't consider CNV or BND types?)
 # TODO: implement this
 
 # Write input .json for outlier exclusion task
@@ -551,7 +573,10 @@ submit_cohort_module 16
 # Monitor outlier exclusion task
 # TODO: implement this
 
-# Once complete, stage outputs and cleanup execution bucket
+# Once complete, stage outputs
+# TODO: implement this
+
+# Clean up execution buckets for counting and outlier exclusion workflows
 # TODO: implement this
 
 
@@ -559,12 +584,41 @@ submit_cohort_module 16
 # G2C hard filters #
 ####################
 
+# Write template input .json
+staging_dir=staging/posthoc_hardfilter
+if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
+for k in $( seq 1 22 ) X Y; do
+  # TODO: write path to all 24 chromsharded VCFs to temp file 
+  # >> $staging_dir/vcfs.list
+  # TODO: write path to all 24 chromsharded VCF indexes to temp file 
+  # >> $staging_dir/vcf_idxs.list
+done
+cat << EOF > cromshell/inputs/posthoc_hardfilter.inputs.json
+{
+  "PosthocHardFilter.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PosthocHardFilter.vcfs": $( collapse_txt $staging_dir/vcfs.list ),
+  "PosthocHardFilter.vcf_idxs": $( collapse_txt $staging_dir/vcf_idxs.list ),
+}
+EOF
+
+# Submit SV counting task
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  code/wdl/gatk-sv/PosthocHardFilter.wdl \
+  cromshell/inputs/posthoc_hardfilter.inputs.json
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/posthoc_hardfilter.job_ids.list
+
+# Monitor SV counting task
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/posthoc_hardfilter.job_ids.list )
+
+# Once complete, stage outputs
 # TODO: implement this
-# No BNDs
-# No wham-only deletions
-# Only retain variants with at least one high-quality non-reference genotype (GQ>1?)
-# Maybe split per chromosome at this stage? For downstream parallelization
-# Can use chromsharded job manager for this
+
+# Clean up execution bucket
+# TODO: implement this
+
 
 ##################
 # Raw callset QC #

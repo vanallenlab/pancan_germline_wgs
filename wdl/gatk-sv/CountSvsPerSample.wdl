@@ -99,7 +99,9 @@ task SumCounts {
   command <<<
     set -euo pipefail
 
-    # TBD: python script packaged in g2c docker here
+    opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
+      --outfile "~{outfile}" \
+      ~{sep=" " count_tsvs}
   >>>
 
   output {

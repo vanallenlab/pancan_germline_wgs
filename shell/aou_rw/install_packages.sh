@@ -53,8 +53,8 @@ for lang in "$@"; do
     # Install python packages
     python)
       
-      # Ensure pip is up to date
-      pip install --upgrade pip
+      # Ensure pip version 25.0 is used for compatability with editable install for svtk
+      pip install pip==25.0
 
       # Install various public python packages
       for pkg in Cython; do
@@ -62,8 +62,9 @@ for lang in "$@"; do
       done
 
       # Install svtk & G2C companion package from source
+      if 
       pip install code/src/g2cpy
-      pip install code/src/svtk
+      pip install -e code/src/svtk
 
   esac
 done
