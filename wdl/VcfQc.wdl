@@ -3,7 +3,7 @@
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Quality control of a joint-genotyped VCF (GATK-HC, GATK-SV, or combined)
+# Quality assessment of a joint-genotyped VCF (GATK-HC, GATK-SV, or combined)
 
 
 version 1.0

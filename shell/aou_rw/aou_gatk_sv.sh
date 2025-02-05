@@ -421,16 +421,21 @@ module_submission_routine_all_batches 14A
 # # All cleanup and tracking is handled by a helper routine within submit_cohort_module
 
 # Subset .ped file to those present in VCF
-if [ ! -e staging/14-GenotypeComplexVariants ]; then
-  mkdir staging/14-GenotypeComplexVariants
+samples14A_list=staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list
+if [ ! -e $samples14A_list ]; then
+  echo "ERROR: cannot locate $samples14A_list. Regenerate if necessary."
+else
+  if [ ! -e staging/14-GenotypeComplexVariants ]; then
+    mkdir staging/14-GenotypeComplexVariants
+  fi
+  gsutil -m cat \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped \
+  | fgrep -wf staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list \
+  > staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped
+  gsutil cp \
+    staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/
 fi
-gsutil -m cat \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped \
-| fgrep -wf staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list \
-> staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped
-gsutil cp \
-  staging/14-GenotypeComplexVariants/dfci-g2c.all_samples.gatksv_module14.ped \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/
 
 # Submit workflow
 submit_cohort_module 14
@@ -453,4 +458,117 @@ cleanup_garbage
 #################
 # 15 | CleanVcf #
 #################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Submit workflow
+submit_cohort_module 15
+
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
+
+# CleanVcf processes all chromosomes in parallel but is designed to concatenate 
+# all chromosomes into a single output VCF. However, since all of our downstream
+# steps are parallel by chromosome, there is no point in waiting for CleanVcf to
+# finish concatenating the massive overall VCF. Thus, we can determine whether 
+# CleanVcf is finished by checking if the concatenation task is present in the
+# execution bucket, in which case we can kill the job and relocalize all of the
+# chromosome-sharded outputs
+cvcf_exec_base=$WORKSPACE_BUCKET/cromwell/execution/CleanVcf/$( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
+if [ $( gsutil ls $cvcf_exec_base/call-ConcatCleanedVcfs | wc -l ) -gt 0 ]; then
+  for k in $( seq 0 23 ); do
+    contig_wid=$( basename $( gsutil ls $cvcf_exec_base/call-CleanVcfChromosome/shard-$k/CleanVcfChromosome/ ) )
+    cromshell -t 120 --no_turtle -mc list-outputs $contig_wid \
+    | awk '{ print $2 }' | gsutil -m cp -I \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/15/
+  done
+  cromshell -t 120 abort $( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
+fi
+
+# Once staged, clean up outputs
+gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/CleanVcf/** >> uris_to_delete.list
+cleanup_garbage
+
+
+##############################
+# 16 | RefineComplexVariants #
+##############################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Subset batch sample membership files to those present in VCF
+samples14A_list=staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list
+if [ ! -e $samples14A_list ]; then
+  echo "ERROR: cannot locate $samples14A_list. Regenerate if necessary."
+else
+  for dir in 16-RefineComplexVariants \
+             16-RefineComplexVariants/module14A_batch_sample_lists; do
+    if [ ! -e staging/$dir ]; then mkdir staging/$dir; fi
+  done
+  while read bid; do
+    fgrep -xf $samples14A_list batch_info/sample_lists/$bid.samples.list \
+    > staging/16-RefineComplexVariants/module14A_batch_sample_lists/$bid.gatksv_module14A.samples.list
+  done < batch_info/dfci-g2c.gatk-sv.batches.list
+  gsutil cp -r \
+    staging/16-RefineComplexVariants/module14A_batch_sample_lists \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/
+fi
+
+# Note 2: this module is handled differently by submit_cohort_module since it's
+# parallelized by chromosome with 24 independent submissions
+
+# All cleanup and tracking is handled by a helper routine within submit_cohort_module
+
+submit_cohort_module 16
+
+
+##############################
+# Post hoc outlier exclusion #
+##############################
+
+# Write input .json for SV counting task
+# TODO: implement this
+
+# Submit SV counting task
+# TODO: implement this
+
+# Monitor SV counting task
+# TODO: implement this
+
+# Once complete, download SV counts per sample and clean up execution bucket
+# TODO: implement this
+
+# Define outliers as in 05B or 08 above
+# TODO: implement this
+
+# Write input .json for outlier exclusion task
+# TODO: implement this
+
+# Submit outlier exclusion task
+# TODO: implement this
+
+# Monitor outlier exclusion task
+# TODO: implement this
+
+# Once complete, stage outputs and cleanup execution bucket
+# TODO: implement this
+
+
+####################
+# G2C hard filters #
+####################
+
+# TODO: implement this
+# No BNDs
+# No wham-only deletions
+# Only retain variants with at least one high-quality non-reference genotype (GQ>1?)
+# Maybe split per chromosome at this stage? For downstream parallelization
+# Can use chromsharded job manager for this
+
+##################
+# Raw callset QC #
+##################
+
+# TODO: implement this
 

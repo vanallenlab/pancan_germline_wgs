@@ -38,7 +38,10 @@ task ShuffleAndShard {
     Int uris_per_shard
   }
 
-  Int disk_gb = 10 + ceil(3 * size(uri_list, "GB"))
+  Int input_gb = ceil(size(uri_list, "GB"))
+  Int disk_gb = 10 + ceil(3 * input_gb)
+  Float mem_gb = 2 + ceil(3 * input_gb)
+  Int n_cpu = ceil(mem_gb / 4)
 
   command <<<
     set -eu -o pipefail
@@ -53,7 +56,8 @@ task ShuffleAndShard {
 
   runtime {
     docker: "ubuntu:latest"
-    memory: "2 GB"
+    memory: mem_gb + " GB"
+    cpu: n_cpu
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 5
   }

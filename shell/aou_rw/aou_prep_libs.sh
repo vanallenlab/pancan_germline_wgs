@@ -25,7 +25,7 @@ export rlctools_branch=main
 git clone git@github.com:RCollins13/RLCtools.git --branch=$rlctools_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
-export gatksv_tag=v1.0
+export gatksv_tag=v1.0.1
 git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
 
 # Make & populate directory of libraries and other tools

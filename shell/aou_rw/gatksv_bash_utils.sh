@@ -666,8 +666,12 @@ submit_cohort_module() {
     14)
       module_name="GenotypeComplexVariants"
       ;;
-    14)
+    15)
       module_name="CleanVcf"
+      ;;
+    16)
+      module_name="RefineComplexVariants"
+      max_attempts=2
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
@@ -947,9 +951,57 @@ EOF
     "CleanVcf.min_records_per_shard_step1": 5000,
     "CleanVcf.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.gatksv_module14.ped",
     "CleanVcf.primary_contigs_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "CleanVcf.runtime_attr_override_build_dict_1b": {"max_retries" : 1, "preemptible_tries" : 1, "mem_gb" : 15.5, "cpu_cores" : 4, "disk_gb" : 100, "boot_disk_gb" : 30},
+    "CleanVcf.runtime_override_clean_vcf_5_polish": {"max_retries" : 1, "preemptible_tries" : 1, "mem_gb" : 128, "cpu_cores" : 16, "disk_gb" : 550, "boot_disk_gb" : 30},
+    "CleanVcf.runtime_override_split_vcf_to_clean": {"max_retries" : 1, "preemptible_tries" : 1, "disk_gb" : 1000, "boot_disk_gb" : 20},
     "CleanVcf.samples_per_step2_shard": 100,
     "CleanVcf.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "CleanVcf.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 16 #
+    #############
+    16)
+      wdl="code/wdl/gatk-sv/RefineComplexVariants.wdl"
+
+      # Get batch-specific inputs
+      while read bid; do
+        # Batch membership
+        echo $bid >> $sub_dir/batch_names.list
+        echo \
+          "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/module14A_batch_sample_lists/$bid.gatksv_module14A.samples.list" \
+        >> $sub_dir/batch_sample_lists.list
+
+        # Module 04 outputs
+        mod04_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/04/$bid/$bid.gatksv_module_04.outputs.json
+        gsutil cat $mod04_json | jq .merged_PE | tr -d '"' \
+        >> $sub_dir/pe_evidence.list
+        gsutil cat $mod04_json | jq .merged_PE_index | tr -d '"' \
+        >> $sub_dir/pe_evidence_idx.list
+        gsutil cat $mod04_json | jq .merged_dels | tr -d '"' \
+        >> $sub_dir/depth_dels.list
+        gsutil cat $mod04_json | jq .merged_dups | tr -d '"' \
+        >> $sub_dir/depth_dups.list
+      done < $batches_list
+
+      # Prep input .json
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+{
+    "RefineComplexVariants.Depth_DEL_beds": $( collapse_txt $sub_dir/depth_dels.list ),
+    "RefineComplexVariants.Depth_DUP_beds": $( collapse_txt $sub_dir/depth_dups.list ),
+    "RefineComplexVariants.PE_metrics": $( collapse_txt $sub_dir/pe_evidence.list ),
+    "RefineComplexVariants.PE_metrics_indexes": $( collapse_txt $sub_dir/pe_evidence_idx.list ),
+    "RefineComplexVariants.batch_name_list": $( collapse_txt $sub_dir/batch_names.list ),
+    "RefineComplexVariants.batch_sample_lists": $( collapse_txt $sub_dir/batch_sample_lists.list ),
+    "RefineComplexVariants.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+    "RefineComplexVariants.n_per_split": 15000,
+    "RefineComplexVariants.prefix": "dfci-g2c.v1.\$CONTIG",
+    "RefineComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "RefineComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052",
+    "RefineComplexVariants.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/15/dfci-g2c.v1.\$CONTIG.final_format.vcf.gz"
 }
 EOF
       ;;
@@ -963,8 +1015,8 @@ EOF
 
   # Submit job and add job ID to list of jobs for this module
   case $module_idx in
-    # Submission for module 12 is handled differently due to it being contig-sharded
-    12)
+    # Submission for modules 12 and 16 are handled differently due to them being contig-sharded
+    12|16)
       code/scripts/manage_chromshards.py \
         --wdl $wdl \
         --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
