@@ -3,7 +3,7 @@
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
-# Post hoc SV site-level hard filters for raw GATK-SV output (from module 15/16)
+# Post hoc outlier exclusion and SV site-level hard filters for raw GATK-SV output (from module 15/16)
 
 
 version 1.0
@@ -14,29 +14,23 @@ import "Utilities.wdl" as utils
 
 workflow PosthocHardFilter {
   input {
-    Array[File] vcfs
-    Array[File] vcf_idxs
+    File vcf
+    File vcf_idx
+    File exclude_samples_list
     String bcftools_docker
   }
 
-  Array[Pair[File, File]] vcf_infos = zip(vcfs, vcf_idxs)
-
-  scatter ( vcf_info in vcf_infos ) {
-
-    File vcf = vcf_info.left
-    File vcf_idx = vcf_info.right
-
-    call HardFilter {
-      input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
-        docker = bcftools_docker
-    }
+  call HardFilter {
+    input:
+      vcf = vcf,
+      vcf_idx = vcf_idx,
+      exclude_samples_list = exclude_samples_list,
+      docker = bcftools_docker
   }
 
   output {
-    Array[File] filtered_vcfs = HardFilter.filtered_vcf
-    Array[File] filtered_vcf_idxs = HardFilter.filtered_vcf_idx
+    File filtered_vcf = HardFilter.filtered_vcf
+    File filtered_vcf_idx = HardFilter.filtered_vcf_idx
   }
 }
 
@@ -45,6 +39,7 @@ task HardFilter {
   input {
     File vcf
     File vcf_idx
+    File exclude_samples_list
 
     String docker
     Float mem_gb = 3.75
@@ -58,16 +53,19 @@ task HardFilter {
     set -euo pipefail
 
     # Post hoc filters as follows:
-    # 1. Remove all unresolved variants (breakends)
-    # 2. Remove all deletions called only by the Wham algorithm (>98% FDR)
-    # 3. Exclude variants with no non-reference genotypes with GQ > 1
+    # 1. Exclude outlier samples
+    # 2. Remove all unresolved variants (breakends)
+    # 3. Remove all deletions called only by the Wham algorithm (>98% FDR)
+    # 4. Exclude variants with no non-reference genotypes with GQ > 1
 
-    # First, find all variant IDs with at least one sample with non-ref GQ > 1
-    bcftools query -i '(GT="alt" & FORMAT/GQ>1) | FILTER="MULTIALLELIC"' -f '%ID\n' ~{vcf} \
+    # First, find all variant IDs with at least one non-outlier sample with non-ref GQ > 1
+    bcftools view --samples-file "^~{exclude_samples_list}" ~{vcf} \
+    | bcftools query -i '(GT="alt" & FORMAT/GQ>1) | FILTER="MULTIALLELIC"' -f '%ID\n' \
     | sort -V | uniq > pass_vids.list
 
     # Second, restrict to passing variants above and apply all other filters
     bcftools view \
+      --samples-file "^~{exclude_samples_list}" \
       --include 'ID=@pass_vids.list & (FILTER="PASS" | FILTER="MULTIALLELIC")' \
       -Oz -o "~{outfile}" \
       ~{vcf}

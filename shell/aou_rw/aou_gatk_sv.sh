@@ -523,12 +523,12 @@ fi
 submit_cohort_module 16
 
 
-##############################
-# Post hoc outlier exclusion #
-##############################
+##############################################################
+# Post hoc outlier sample exclusion and hard variant filters #
+##############################################################
 
 # Write input .json for SV counting task
-staging_dir=staging/count_svs_posthoc
+staging_dir=staging/posthoc_filter
 if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
 for k in $( seq 1 22 ) X Y; do
   # TODO: write path to all 24 chromsharded VCFs to temp file 
@@ -558,66 +558,75 @@ cromshell --no_turtle -t 120 -mc submit \
 monitor_workflow \
   $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
 
-# Once complete, download SV counts per sample
+# Once complete, download SV counts per sample and exclude CTXs, CNVs, and BNDs
 # TODO: implement this
 
 # Define outliers as in 05B or 08 above (maybe don't consider CNV or BND types?)
-# TODO: implement this
+code/scripts/define_variant_count_outlier_samples.R \
+  --counts-tsv gatksv_08_outliers/dfci-g2c.08_sv_counts.$alg.tsv \
+  --sample-labels-tsv gatksv_05B_outliers/dfci-g2c.intake_pop_labels.aou_split.tsv \
+  --n-iqr 6 \
+  --no-lower-filter \
+  --plot \
+  --plot-title-prefix "GATK-SV" \
+  --out-prefix $staging_dir/dfci-g2c.v1.gatksv.posthoc_outliers
 
-# Write input .json for outlier exclusion task
-# TODO: implement this
+# Update sample metadata with 08 outlier failure labels
+code/scripts/append_qc_fail_metadata.R \
+  --qc-tsv dfci-g2c.sample_meta.post_filtersites.tsv.gz \
+  --new-column-name gatksv_posthoc_qc_pass \
+  --all-samples-list <( cat batch_info/sample_lists/* | fgrep -wvf \
+                        staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list ) \
+  --fail-samples-list $staging_dir/dfci-g2c.v1.gatksv.posthoc_outliers.samples.list \
+  --outfile dfci-g2c.sample_meta.posthoc_outliers.tsv
+gzip -f dfci-g2c.sample_meta.posthoc_outliers.tsv
 
-# Submit outlier exclusion task
-# TODO: implement this
+# Compress and archive outlier data for future reference
+cd $staging_dir && \
+tar -czvf dfci-g2c.v1.gatksv.posthoc_outliers.tar.gz dfci-g2c.v1.gatksv.posthoc_outliers && \
+gsutil -m cp \
+  dfci-g2c.v1.gatksv.posthoc_outliers.tar.gz \
+  $staging_dir/dfci-g2c.v1.gatksv.posthoc_outliers.samples.list \
+  dfci-g2c.sample_meta.posthoc_outliers.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/
 
-# Monitor outlier exclusion task
-# TODO: implement this
+# Replot sample QC after excluding outliers above
+qcplotdir=dfci-g2c.phase1.gatksv_posthoc_qc_pass.plots
+if [ ! -e $qcplotdir ]; then mkdir $qcplotdir; fi
+code/scripts/plot_intake_qc.R \
+  --qc-tsv dfci-g2c.sample_meta.posthoc_outliers.tsv.gz \
+  --pass-column global_qc_pass \
+  --pass-column batch_qc_pass \
+  --pass-column clusterbatch_qc_pass \
+  --pass-column filtersites_qc_pass \
+  --pass-column gatksv_posthoc_qc_pass \
+  --out-prefix $qcplotdir/dfci-g2c.phase1.gatksv_posthoc_qc_pass
+tar -czvf dfci-g2c.phase1.gatksv_posthoc_qc_pass.plots.tar.gz $qcplotdir
+gsutil -m cp \
+  dfci-g2c.phase1.gatksv_posthoc_qc_pass.plots.tar.gz \
+  $MAIN_WORKSPACE_BUCKET/results/gatksv_qc/
 
-# Once complete, stage outputs
-# TODO: implement this
-
-# Clean up execution buckets for counting and outlier exclusion workflows
-# TODO: implement this
-
-
-####################
-# G2C hard filters #
-####################
-
-# Write template input .json
-staging_dir=staging/posthoc_hardfilter
-if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
-for k in $( seq 1 22 ) X Y; do
-  # TODO: write path to all 24 chromsharded VCFs to temp file 
-  # >> $staging_dir/vcfs.list
-  # TODO: write path to all 24 chromsharded VCF indexes to temp file 
-  # >> $staging_dir/vcf_idxs.list
-done
-cat << EOF > cromshell/inputs/posthoc_hardfilter.inputs.json
+# Write template input .json for outlier exclusion & hard filter task
+cat << EOF > $staging_dir/PosthocHardFilter.inputs.template.json
 {
   "PosthocHardFilter.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "PosthocHardFilter.vcfs": $( collapse_txt $staging_dir/vcfs.list ),
-  "PosthocHardFilter.vcf_idxs": $( collapse_txt $staging_dir/vcf_idxs.list ),
+  "PosthocHardFilter.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/dfci-g2c.v1.gatksv.posthoc_outliers.samples.list",
+  "PosthocHardFilter.vcf": "TBD",
+  "PosthocHardFilter.vcf_idx": "TBD"
 }
 EOF
 
-# Submit SV counting task
-cromshell --no_turtle -t 120 -mc submit \
-  --options-json code/refs/json/aou.cromwell_options.default.json \
-  code/wdl/gatk-sv/PosthocHardFilter.wdl \
-  cromshell/inputs/posthoc_hardfilter.inputs.json
-| jq .id | tr -d '"' \
->> cromshell/job_ids/posthoc_hardfilter.job_ids.list
-
-# Monitor SV counting task
-monitor_workflow \
-  $( tail -n1 cromshell/job_ids/posthoc_hardfilter.job_ids.list )
-
-# Once complete, stage outputs
-# TODO: implement this
-
-# Clean up execution bucket
-# TODO: implement this
+# Submit outlier exclusion & hard filter task using chromsharded manager
+# Reminder that this manager script handles staging & cleanup too
+code/scripts/manage_chromshards.py \
+  --wdl gatk-sv/PosthocHardFilter.wdl \
+  --input-json-template $staging_dir/PosthocHardFilter.inputs.template.json \
+  --staging-bucket $staging_prefix/PosthocHardFilter \
+  --name PosthocHardFilter \
+  --status-tsv cromshell/progress/dfci-g2c.v1.PosthocHardFilter.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --gate 30 \
+  --max-attempts 2
 
 
 ##################
