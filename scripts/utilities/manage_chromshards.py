@@ -360,7 +360,7 @@ def main():
                 break
 
             # Submit new workflow if not already running or staged
-            if status not in 'staged submitted running'.split():
+            if status not in 'staged submitted running status_check_failed'.split():
                 if n_prior_subs < args.max_attempts:
                     status = submit_workflow(contig, args.wdl, args.input_json_template, 
                                              input_json, prev_wids, args.quiet)

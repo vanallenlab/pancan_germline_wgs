@@ -41,7 +41,7 @@ def check_workflow_status(workflow_id, max_retries=20, timeout=30):
     if attempts == max_retries:
         msg = 'Failed to get workflow status for {} after {} retries\n'
         stderr.write(msg.format(workflow_id, attempts))
-        return 'unknown'
+        return 'status_check_failed'
 
 
 def check_gcp_uris(uris, return_uri_list=False):
