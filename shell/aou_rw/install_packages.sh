@@ -65,6 +65,7 @@ for lang in "$@"; do
       if 
       pip install code/src/g2cpy
       pip install -e code/src/svtk
+      ;;
 
   esac
 done

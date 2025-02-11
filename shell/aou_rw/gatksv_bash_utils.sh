@@ -671,7 +671,7 @@ submit_cohort_module() {
       ;;
     16)
       module_name="RefineComplexVariants"
-      max_attempts=2
+      max_attempts=4
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
@@ -992,6 +992,7 @@ EOF
 {
     "RefineComplexVariants.Depth_DEL_beds": $( collapse_txt $sub_dir/depth_dels.list ),
     "RefineComplexVariants.Depth_DUP_beds": $( collapse_txt $sub_dir/depth_dups.list ),
+    "RefineComplexVariants.GenerateCpxReviewScript.script": "$MAIN_WORKSPACE_BUCKET/code/scripts/reformat_CPX_bed_and_generate_script.g2c.py",
     "RefineComplexVariants.PE_metrics": $( collapse_txt $sub_dir/pe_evidence.list ),
     "RefineComplexVariants.PE_metrics_indexes": $( collapse_txt $sub_dir/pe_evidence_idx.list ),
     "RefineComplexVariants.batch_name_list": $( collapse_txt $sub_dir/batch_names.list ),
@@ -1024,7 +1025,7 @@ EOF
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
         --workflow-id-log-prefix "dfci-g2c.v1" \
-        --gate 60 \
+        --gate 45 \
         --max-attempts $max_attempts
       ;;
 
