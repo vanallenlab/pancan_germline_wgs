@@ -52,21 +52,30 @@ workflow CountSvsPerSample {
           docker = sv_pipeline_docker
       }
     }
+
+    if ( length(shard_infos) > 1 ) {
+      call SumCounts as SumPerVcf {
+        input:
+          count_tsvs = CountSvs.counts_tsv,
+          output_prefix = basename(vcf, ".vcf.gz") + ".counts.tsv",
+          docker = g2c_pipeline_docker
+      }
+    }
+
+    File scattered_summed_count = select_first([SumPerVcf.summed_tsv, CountSvs.counts_tsv[0]])
   }
 
-  Array[File] shard_counts = flatten(CountSvs.counts_tsv)
-
-  if ( length(shard_counts) > 1 ) {
-    call SumCounts {
+  if ( length(vcfs) > 1 ) {
+    call SumCounts as SumAll {
       input:
-        count_tsvs = shard_counts,
+        count_tsvs = scattered_summed_count,
         output_prefix = output_prefix,
         docker = g2c_pipeline_docker
     }
   }
 
   output {
-    File sv_counts = select_first([SumCounts.summed_tsv, shard_counts[0]])
+    File sv_counts = select_first([SumAll.summed_tsv, scattered_summed_count[0]])
   }
 }
 
