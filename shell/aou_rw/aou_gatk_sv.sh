@@ -55,6 +55,12 @@ zip gatksv.dependencies.zip *.wdl && \
 mv gatksv.dependencies.zip ~/ && \
 cd ~
 
+# Create dependencies .zip for G2C-specific workflow submissions
+cd code/wdl/pancan_germline_wgs && \
+zip g2c.dependencies.zip *.wdl && \
+mv g2c.dependencies.zip ~/ && \
+cd ~
+
 # Copy sample & batch information
 gsutil -m cp -r \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/batch_info \
@@ -542,7 +548,9 @@ for k in $( seq 1 22 ) X Y; do
 done
 cat << EOF > cromshell/inputs/count_svs_posthoc.inputs.json
 {
-  "CountSvsPerSample.g2c_pipeline_docker": "String",
+  "CountSvsPerSample.ShardVcf.disk_gb": 100,
+  "CountSvsPerSample.ShardVcf.n_preemptible": 0,
+  "CountSvsPerSample.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "CountSvsPerSample.output_prefix": "dfci-g2c.v1.gatksv_postCleanVcf",
   "CountSvsPerSample.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052",
   "CountSvsPerSample.vcfs": $( collapse_txt $staging_dir/vcfs.list ),
@@ -553,8 +561,9 @@ EOF
 # Submit SV counting task
 cromshell --no_turtle -t 120 -mc submit \
   --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip g2c.dependencies.zip \
   code/wdl/gatk-sv/CountSvsPerSample.wdl \
-  cromshell/inputs/count_svs_posthoc.inputs.json
+  cromshell/inputs/count_svs_posthoc.inputs.json \
 | jq .id | tr -d '"' \
 >> cromshell/job_ids/count_svs_posthoc.job_ids.list
 
@@ -563,7 +572,9 @@ monitor_workflow \
   $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
 
 # Once complete, download SV counts per sample and exclude CTXs, CNVs, and BNDs
-# TODO: implement this
+# cromshell -t 120 --no_turtle -mc list-outputs \
+#   $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
+# TODO: finish implementing this
 
 # Define outliers as in 05B or 08 above (maybe don't consider CNV or BND types?)
 code/scripts/define_variant_count_outlier_samples.R \

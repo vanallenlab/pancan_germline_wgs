@@ -90,6 +90,8 @@ check_cromwell_return_codes() {
 
 
 # Simple routine to monitor a single Cromwell workflow
+# Required first positional argument is workflow ID
+# Optional second positional argument is gate window (in minutes)
 monitor_workflow() {
   # Check inputs
   if [ $# -lt 1 ]; then

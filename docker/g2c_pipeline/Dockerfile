@@ -9,7 +9,7 @@
 
 # It is based on the primary sv-pipeline image from GATK-SV, which is available here:
 # us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline
-ARG BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-09-13-v0.28.3-beta-af8362e3
+ARG BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052
 FROM $BASE_IMAGE as base
 
 # Aliases for convenience
