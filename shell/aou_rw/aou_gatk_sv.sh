@@ -531,10 +531,14 @@ submit_cohort_module 16
 staging_dir=staging/posthoc_filter
 if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
 for k in $( seq 1 22 ) X Y; do
-  # TODO: write path to all 24 chromsharded VCFs to temp file 
-  # >> $staging_dir/vcfs.list
-  # TODO: write path to all 24 chromsharded VCF indexes to temp file 
-  # >> $staging_dir/vcf_idxs.list
+  gsutil cat \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/16/chr$k/16-RefineComplexVariants.chr$k.outputs.json \
+  | jq .cpx_refined_vcf | tr -d '"' \
+  >> $staging_dir/vcfs.list
+  gsutil cat \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/16/chr$k/16-RefineComplexVariants.chr$k.outputs.json \
+  | jq .cpx_refined_vcf_index | tr -d '"' \
+  >> $staging_dir/vcf_idxs.list
 done
 cat << EOF > cromshell/inputs/count_svs_posthoc.inputs.json
 {
@@ -611,8 +615,8 @@ cat << EOF > $staging_dir/PosthocHardFilter.inputs.template.json
 {
   "PosthocHardFilter.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocHardFilter.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/dfci-g2c.v1.gatksv.posthoc_outliers.samples.list",
-  "PosthocHardFilter.vcf": "TBD",
-  "PosthocHardFilter.vcf_idx": "TBD"
+  "PosthocHardFilter.vcf": $( collapse_txt $staging_dir/vcfs.list ),
+  "PosthocHardFilter.vcf_idx": $( collapse_txt $staging_dir/vcf_idxs.list )
 }
 EOF
 
@@ -634,4 +638,26 @@ code/scripts/manage_chromshards.py \
 ##################
 
 # TODO: implement this
+
+
+#################
+# 17 | TBD #
+#################
+
+# TODO: implement this
+
+
+#################
+# 18 | TBD #
+#################
+
+# TODO: implement this
+
+
+#################
+# 19 | TBD #
+#################
+
+# TODO: implement this
+
 

@@ -10,10 +10,14 @@
 version 1.0
 
 
+import "Utilities.wdl" as Utils
+
+
 workflow CountSvsPerSample {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
+    Int records_per_shard = 5000
     String output_prefix
     String sv_pipeline_docker
     String g2c_pipeline_docker
@@ -26,25 +30,43 @@ workflow CountSvsPerSample {
     File vcf = vcf_info.left
     File vcf_idx = vcf_info.right
 
-    call CountSvs {
+    call Utils.ShardVcf as ShardVcf {
       input:
         vcf = vcf,
-        vcf_idx = vcf_idx,
-        docker = sv_pipeline_docker
+        vcf_idx = vcf_idx, 
+        records_per_shard = records_per_shard,
+        bcftools_docker = sv_pipeline_docker
+    }
+
+    Array[Pair[File, File]] shard_infos = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs)
+
+    scatter ( shard_info in shard_infos ) {
+
+      File shard_vcf = shard_info.left
+      File shard_vcf_idx = shard_info.right
+
+      call CountSvs {
+        input:
+          vcf = shard_vcf,
+          vcf_idx = shard_vcf_idx,
+          docker = sv_pipeline_docker
+      }
     }
   }
 
-  if ( length(vcfs) > 1 ) {
+  Array[File] shard_counts = flatten(CountSvs.counts_tsv)
+
+  if ( length(shard_counts) > 1 ) {
     call SumCounts {
       input:
-        count_tsvs = CountSvs.counts_tsv,
+        count_tsvs = shard_counts,
         output_prefix = output_prefix,
         docker = g2c_pipeline_docker
     }
   }
 
   output {
-    File sv_counts = select_first([SumCounts.summed_tsv, CountSvs.counts_tsv[0]])
+    File sv_counts = select_first([SumCounts.summed_tsv, shard_counts[0]])
   }
 }
 

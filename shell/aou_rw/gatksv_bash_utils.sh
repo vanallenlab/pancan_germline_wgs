@@ -671,7 +671,7 @@ submit_cohort_module() {
       ;;
     16)
       module_name="RefineComplexVariants"
-      max_attempts=4
+      max_attempts=6
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
