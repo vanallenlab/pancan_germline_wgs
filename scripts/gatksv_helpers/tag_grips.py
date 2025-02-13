@@ -56,7 +56,7 @@ def make_intron_bed(gtf_in):
     return pbt.BedTool(intron_strs, from_string=True)
 
 
-def intron_check(record, introns, ro=0.90):
+def intron_check(record, introns, ro=0.95):
     """
     Check if a record has reciprocal overlap with any introns
     """
@@ -80,6 +80,9 @@ def main():
     parser.add_argument('vcf_in', help='input .vcf [default: stdin]')
     parser.add_argument('vcf_out', help='output .vcf [default: stdout]')
     parser.add_argument('--gtf', required=True, help='input .gtf')
+    parser.add_argument('--drop-grips', help='exclude GRIPs from output .vcf ' +
+                        'instead of tagging them with a FILTER.', 
+                        action='store_true')
     parser.add_argument('--pace', help='Report pace of progress', 
                         action='store_true')
     args = parser.parse_args()
@@ -90,12 +93,13 @@ def main():
     else:
         invcf = pysam.VariantFile(args.vcf_in)
 
-    # Add new FILTER tag to header
+    # Add new FILTER tag to header unless these variants are going to be dropped outright
     header = invcf.header
-    new_filt = '##FILTER=<ID=PREDICTED_GRIP_JXN,Description="This variant is ' + \
-               'predicted to mark a splice junction for a gene retrocopy ' + \
-               'insertion event and should not be evaluated as a canonical deletion.">'
-    header.add_line(new_filt)
+    if not args.drop_grips:
+        new_filt = '##FILTER=<ID=PREDICTED_GRIP_JXN,Description="This deletion is ' + \
+                   'predicted to mark a splice junction for a gene retrocopy ' + \
+                   'insertion event and should not be evaluated as a canonical deletion.">'
+        header.add_line(new_filt)
 
     # Build map of all introns
     introns = make_intron_bed(args.gtf)
@@ -112,9 +116,13 @@ def main():
     prev = start
     for record in invcf.fetch():
         if record.info['SVTYPE'] == 'DEL':
-            if 'RD' not in record.info['EVIDENCE']:
+            if 'RD' not in record.info.get('EVIDENCE', ()) \
+            and 'depth' not in record.info.get('ALGORITHMS', ()):
                 if intron_check(record, introns):
-                    record.filter.add('PREDICTED_GRIP_JXN')
+                    if args.drop_grips:
+                        continue
+                    else:
+                        record.filter.add('PREDICTED_GRIP_JXN')
         outvcf.write(record)
 
         # Check pace if optioned

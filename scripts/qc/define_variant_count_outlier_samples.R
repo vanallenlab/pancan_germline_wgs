@@ -51,7 +51,7 @@ define.outliers <- function(vals, n.iqr=6, filter.lower=TRUE){
   thresh.upper <- max(quarts) + bw
   thresh.lower <- if(filter.lower){min(quarts) - bw}else{NA}
   out.upper <- names(vals)[which(vals > thresh.upper)]
-  out.lower <- if(filter.lower){names(vals)[which(vals < thresh.upper)]}else{c()}
+  out.lower <- if(filter.lower){names(vals)[which(vals < thresh.lower)]}else{c()}
   return(list("iqr.bounds" = quarts,
               "thresholds" = c(thresh.lower, thresh.upper),
               "outliers" = sort(unique(c(out.upper, out.lower)))))
@@ -104,7 +104,7 @@ args <- parser$parse_args()
 # args <- list("counts_tsv" = "~/scratch/dfci-g2c.05_sv_counts.manta.tsv",
 #              "sample_labels_tsv" = NULL,
 #              "n_iqr" = 6,
-#              "no_lower_filter" = TRUE,
+#              "no_lower_filter" = FALSE,
 #              "plot" = TRUE,
 #              "plot_title_prefix" = "Manta",
 #              "out_prefix" = "~/scratch/dfci-g2c.05B")

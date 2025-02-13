@@ -13,7 +13,7 @@ Sum outputs from two or more runs of svtk count-svtypes
 
 import argparse
 import csv
-from sys import stdout
+from sys import stdin, stdout
 
 
 def main():
@@ -23,15 +23,11 @@ def main():
     parser = argparse.ArgumentParser(
              description=__doc__,
              formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('counts', help='Two or more svtk count .tsv files', 
+    parser.add_argument('counts', help='One or more svtk count .tsv files', 
                         nargs='+')
     parser.add_argument('--outfile', help='output .tsv [default: stdout]',
                         default='stdout')
     args = parser.parse_args()
-
-    # Check that at least two counts are supplied
-    if len(args.counts) < 2:
-        exit('At least two counts.tsv files must be supplied')
 
     # Iterate over each input count file and sum in a nested dict
     counter = {}

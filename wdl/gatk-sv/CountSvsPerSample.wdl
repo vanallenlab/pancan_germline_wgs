@@ -130,7 +130,7 @@ task SumCounts {
   command <<<
     set -euo pipefail
 
-    opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
+    /opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
       --outfile "~{outfile}" \
       ~{sep=" " count_tsvs}
   >>>

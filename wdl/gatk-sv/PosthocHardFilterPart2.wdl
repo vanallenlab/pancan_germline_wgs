@@ -5,6 +5,11 @@
 
 # Post hoc outlier exclusion and SV site-level hard filters for raw GATK-SV output (from module 15/16)
 
+# Part 1 of 2, as follows:
+# 1. Basic site-level hard filters
+# [Manual step between] Outlier identification & exclusion
+# 2. Outlier sample exclusion & second layer of GQ-dependent hard filters
+
 
 version 1.0
 
@@ -12,7 +17,7 @@ version 1.0
 import "Utilities.wdl" as utils
 
 
-workflow PosthocHardFilter {
+workflow PosthocHardFilterPart2 {
   input {
     File vcf
     File vcf_idx
@@ -20,7 +25,7 @@ workflow PosthocHardFilter {
     String bcftools_docker
   }
 
-  call HardFilter {
+  call HardFilterPart2 {
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
@@ -29,13 +34,13 @@ workflow PosthocHardFilter {
   }
 
   output {
-    File filtered_vcf = HardFilter.filtered_vcf
-    File filtered_vcf_idx = HardFilter.filtered_vcf_idx
+    File filtered_vcf = HardFilterPart2.filtered_vcf
+    File filtered_vcf_idx = HardFilterPart2.filtered_vcf_idx
   }
 }
 
 
-task HardFilter {
+task HardFilterPart2 {
   input {
     File vcf
     File vcf_idx
@@ -54,21 +59,14 @@ task HardFilter {
 
     # Post hoc filters as follows:
     # 1. Exclude outlier samples
-    # 2. Remove all unresolved variants (breakends)
-    # 3. Remove all deletions called only by the Wham algorithm (>98% FDR)
-    # 4. Exclude variants with no non-reference genotypes with GQ > 1
+    # 2. Exclude variants with no non-reference genotypes with GQ > 1
 
-    # First, find all variant IDs with at least one non-outlier sample with non-ref GQ > 1
-    bcftools view --samples-file "^~{exclude_samples_list}" ~{vcf} \
-    | bcftools query -i '(GT="alt" & FORMAT/GQ>1) | FILTER="MULTIALLELIC"' -f '%ID\n' \
-    | sort -V | uniq > pass_vids.list
-
-    # Second, restrict to passing variants above and apply all other filters
     bcftools view \
       --samples-file "^~{exclude_samples_list}" \
-      --include 'ID=@pass_vids.list & (FILTER="PASS" | FILTER="MULTIALLELIC")' \
+      ~{vcf} \
+    | bcftools view \
       -Oz -o "~{outfile}" \
-      ~{vcf}
+      --include '(GT="alt" & FORMAT/GQ>1)'
 
     tabix -p vcf "~{outfile}"
   >>>
