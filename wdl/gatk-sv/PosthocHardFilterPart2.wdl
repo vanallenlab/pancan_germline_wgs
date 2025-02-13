@@ -58,9 +58,14 @@ task HardFilterPart2 {
     # 1. Exclude outlier samples
     # 2. Exclude variants with no non-reference genotypes with GQ > 1
 
-    bcftools view \
+    # Note that this step also includes an edge-case patch for weird situations
+    # where some biallelic variants have 2/2 genotypes; I suspect this is probably
+    # due to some logical error in the GATK-SV MCNV procedures upstream
+
+    bcftools view ~{vcf} \
+    | sed 's/2\/2/1\/1/g' \
+    | bcftools view \
       --samples-file "^~{exclude_samples_list}" \
-      ~{vcf} \
     | bcftools view \
       -Oz -o "~{outfile}" \
       --include '(GT="alt" & FORMAT/GQ>1)'
