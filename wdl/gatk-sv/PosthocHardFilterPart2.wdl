@@ -14,9 +14,6 @@
 version 1.0
 
 
-import "Utilities.wdl" as utils
-
-
 workflow PosthocHardFilterPart2 {
   input {
     File vcf

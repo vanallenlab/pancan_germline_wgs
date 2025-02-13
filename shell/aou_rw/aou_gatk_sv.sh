@@ -542,7 +542,6 @@ if [ ! -e $staging_dir ]; then mkdir $staging_dir; fi
 cat << EOF > $staging_dir/PosthocHardFilterPart1.inputs.template.json
 {
   "PosthocHardFilterPart1.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "PosthocHardFilterPart1.gtf": "gs://dfci-g2c-refs/gencode/gencode.v47.annotation.sorted.gtf.gz",
   "PosthocHardFilterPart1.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/16/\$CONTIG/ConcatVcfs/dfci-g2c.v1.\$CONTIG.cpx_refined.vcf.gz",
   "PosthocHardFilterPart1.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/16/\$CONTIG/ConcatVcfs/dfci-g2c.v1.\$CONTIG.cpx_refined.vcf.gz.tbi"
 }
@@ -551,9 +550,9 @@ EOF
 # Submit first round of site hard filters using chromsharded manager
 # Reminder that this manager script handles staging & cleanup too
 code/scripts/manage_chromshards.py \
-  --wdl gatk-sv/PosthocHardFilterPart1.wdl \
+  --wdl code/wdl/gatk-sv/PosthocHardFilterPart1.wdl \
   --input-json-template $staging_dir/PosthocHardFilterPart1.inputs.template.json \
-  --staging-bucket $staging_prefix/PosthocHardFilterPart1 \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/PosthocHardFilterPart1 \
   --name PosthocHardFilterPart1 \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocHardFilterPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
