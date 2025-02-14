@@ -685,7 +685,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocHardFilterPart2.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --gate 30 \
-  --max-attempts 2
+  --max-attempts 3
 
 
 ##################

@@ -673,6 +673,9 @@ submit_cohort_module() {
       module_name="RefineComplexVariants"
       max_attempts=6
       ;;
+    17)
+      module_name="JoinRawCalls"
+      ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
       return 2
@@ -1003,6 +1006,51 @@ EOF
     "RefineComplexVariants.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "RefineComplexVariants.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052",
     "RefineComplexVariants.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/15/dfci-g2c.v1.\$CONTIG.final_format.vcf.gz"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 17 #
+    #############
+    17)
+      wdl="code/wdl/gatk-sv/JoinRawCalls.wdl"
+
+      # Get URIs per batch
+      while read bid; do                
+
+        mod05C_output_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/$bid/$bid.gatksv_module_05C.outputs.json
+
+        for alg in depth manta wham melt; do
+          gsutil cat $mod05C_output_json | jq .clustered_${alg}_vcf | tr -d '"' \
+          >> $sub_dir/${alg}_vcfs.list
+          gsutil cat $mod05C_output_json | jq .clustered_${alg}_vcf_index | tr -d '"' \
+          >> $sub_dir/${alg}_vcf_idxs.list
+        done
+
+      done < $batches_list
+
+      # Prep input .json template
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+{
+    "JoinRawCalls.FormatVcfForGatk.formatter_args": "--fix-end",
+    "JoinRawCalls.clustered_depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),
+    "JoinRawCalls.clustered_depth_vcf_indexes": $( collapse_txt $sub_dir/depth_vcf_idxs.list ),
+    "JoinRawCalls.clustered_manta_vcfs":  $( collapse_txt $sub_dir/manta_vcfs.list ),
+    "JoinRawCalls.clustered_manta_vcf_indexes": $( collapse_txt $sub_dir/manta_vcf_idxs.list ),
+    "JoinRawCalls.clustered_melt_vcfs":  $( collapse_txt $sub_dir/melt_vcfs.list ),
+    "JoinRawCalls.clustered_melt_vcf_indexes": $( collapse_txt $sub_dir/melt_vcf_idxs.list ),
+    "JoinRawCalls.clustered_wham_vcfs":  $( collapse_txt $sub_dir/wham_vcfs.list ),
+    "JoinRawCalls.clustered_wham_vcf_indexes": $( collapse_txt $sub_dir/wham_vcf_idxs.list ),
+    "JoinRawCalls.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "JoinRawCalls.gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT",
+    "JoinRawCalls.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
+    "JoinRawCalls.prefix": "dfci-g2c.v1",
+    "JoinRawCalls.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+    "JoinRawCalls.reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+    "JoinRawCalls.reference_fasta_fai": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+    "JoinRawCalls.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "JoinRawCalls.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
 }
 EOF
       ;;
