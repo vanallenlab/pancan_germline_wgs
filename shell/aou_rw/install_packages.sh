@@ -13,10 +13,20 @@
 # subsets of libraries (i.e., which languages) should be installed
 if [ $# -eq 0 ]; then
   echo -e "Error: at least one positional argument must be supplied to install_packages.sh"
-  echo -e "Current options include: R"
+  echo -e "Current options include: R, python"
+  echo -e "Exiting"
   exit 1
 fi
 
+# Check to ensure this is executed from the correct directory
+for dir in code code/src; do
+  if ! [ -e $dir ]; then
+    echo -e "Error: could not locate $dir directory."
+    echo -e "Are you sure you are calling this script from the same directory where G2C code has been staged?"
+    echo -e "Exiting"
+    exit 1
+  fi
+done
 
 # Install all packages as optioned
 for lang in "$@"; do
@@ -25,15 +35,35 @@ for lang in "$@"; do
 
     # Install R libraries
     R)
+
+      # Install all R libraries distributed via CRAN
       for lib in argparse optparse beeswarm bedr caret EQL vioplot DescTools; do
         Rscript -e "if(require('$lib') == FALSE){install.packages('$lib', repos='https://cloud.r-project.org')}"
       done
 
-      export rlctools_version=0.1
-      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('~/code/src/RLCtools_$rlctools_version.tar.gz', repos=NULL, type='source')"
+      # Install RLCtools
+      export RLCtools_version=0.1
+      Rscript -e "if(require('RLCtools') == TRUE){remove.packages('RLCtools')}; install.packages('code/src/RLCtools_$RLCtools_version.tar.gz', repos=NULL, type='source')"
 
-      export g2c_version=0.1.0
-      Rscript -e "if(require('G2C') == TRUE){remove.packages('G2C')}; install.packages('~/code/src/G2C_$g2c_version.tar.gz', repos=NULL, type='source')"
+      # Install G2C companion library
+      export G2CR_version=0.2.0
+      Rscript -e "if(require('G2CR') == TRUE){remove.packages('G2CR')}; install.packages('code/src/G2CR_$G2CR_version.tar.gz', repos=NULL, type='source')"
+      ;;
+
+    # Install python packages
+    python)
+      
+      # Ensure pip version 25.0 is used for compatability with editable install for svtk
+      pip install pip==25.0
+
+      # Install various public python packages
+      for pkg in Cython; do
+        pip install $pkg
+      done
+
+      # Install svtk & G2C companion package from source
+      pip install code/src/g2cpy
+      pip install -e code/src/svtk
       ;;
 
   esac

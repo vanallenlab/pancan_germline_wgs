@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2024-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
+"""
+Updates one .json with values from a second .json, and formats to be more readable
+"""
+
+
+import argparse
+import json
+from sys import stdin, stdout
+
+
+def main():
+    """
+    Main block
+    """
+    parser = argparse.ArgumentParser(
+             description=__doc__,
+             formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-i', '--input-json', help='input .json', default='stdin')
+    parser.add_argument('-u', '--update-json', help='update .json', required=True)
+    parser.add_argument('-o', '--output-json', help='output .json', default='stdout')
+    args = parser.parse_args()
+
+    # Open and read contents of input json
+    if args.input_json in '- stdin /dev/stdin'.split():
+        data = json.load(stdin)
+    else:
+        with open(args.input_json) as jin:
+            data = json.load(jin)
+
+    # Read contents of update json and update input json accordingly
+    with open(args.update_json) as jup:
+        updates = json.load(jup)
+        data.update(updates)
+
+    # Format updated json and print to --output-json
+    if args.output_json in '- stdout /dev/stdout'.split():
+        jout = stdout
+    else:
+        jout = open(args.output_json, 'w')
+    json.dump(data, jout, indent=4, ensure_ascii=True, sort_keys=True)
+
+
+if __name__ == '__main__':
+    main()
+

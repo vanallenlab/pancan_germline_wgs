@@ -16,8 +16,8 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
-require(G2C, quietly=TRUE)
-G2C::load.constants("all")
+require(G2CR, quietly=TRUE)
+G2CR::load.constants("all")
 
 # Declare constants used in variable parsing
 smoking.map <- c("Y" = 1, "N" = 0)

@@ -15,8 +15,8 @@
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
 require(readxl, quietly=TRUE)
-require(G2C, quietly=TRUE)
-G2C::load.constants("all")
+require(G2CR, quietly=TRUE)
+G2CR::load.constants("all")
 
 # Declare constants used in variable parsing
 cohort.map <- c("TRUE" = "proactive-core", "FALSE" = "proactive-other")

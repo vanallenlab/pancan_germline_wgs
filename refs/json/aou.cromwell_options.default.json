@@ -5,5 +5,5 @@
   "final_workflow_outputs_dir": "$WORKSPACE_BUCKET/cromwell/outputs",
   "write_to_cache" : true,
   "read_from_cache" : true,
-  "memory_retry_multiplier" : 1.5
+  "memory_retry_multiplier" : 2.0
 }

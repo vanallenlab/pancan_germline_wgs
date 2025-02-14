@@ -8,6 +8,8 @@
 # Code to copy all necessary WDLs and other Cromwell-related files (e.g., 
 # input .json templates) to AoU RW bucket (as RW has no internet access)
 
+# See aou_prep_libs.sh for libraries & tools to be executed on RW terminal directly
+
 # Note that this code is designed to be run *locally* (not on RW)
 
 # Set up local working directory
@@ -15,16 +17,12 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=g2c_intake_qc_batching
-git clone git@github.com:vanallenlab/pancan_germline_wgs.git && \
-cd pancan_germline_wgs && \
-git checkout $g2c_branch && \
-git pull && \
-cd ../
+export g2c_branch=gatksv
+git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
-export gatsv_tag=v0.26.8-beta
-git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatsv_tag
+export gatksv_tag=v1.0.1
+git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
 
 # Clone GATK-HC workflows repo & checkout release tag of interest
 export gatkhc_tag=2.3.1
@@ -39,6 +37,12 @@ cp pancan_germline_wgs/wdl/*.wdl $WRKDIR/wdl/pancan_germline_wgs/
 cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 
+# Override any GATK-SV WDLs with their corresponding custom G2C copies
+# This is rarely necessary but was deemed the easiest solution for handling 
+# edge cases (like for 06) or situations where we intentionally deviated from
+# GATK-SV default procedures (like for outlier sample definition in 08)
+cp pancan_germline_wgs/wdl/gatk-sv/* $WRKDIR/wdl/gatk-sv/
+
 # Copy WDLs to AoU RW bucket
 # Note: must use AoU Google credentials
 export rw_bucket=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
@@ -47,11 +51,7 @@ gsutil -m cp -r \
   wdl \
   pancan_germline_wgs/refs \
   $rw_bucket/code/
-gsutil -m cp \
-  pancan_germline_wgs/shell/aou_rw/aou_bash_utils.sh \
-  pancan_germline_wgs/shell/aou_rw/setup_sample_info.sh \
-  $rw_bucket/code/refs/
 
 # Clean up
-cd ~
+cd -
 rm -rf $WRKDIR

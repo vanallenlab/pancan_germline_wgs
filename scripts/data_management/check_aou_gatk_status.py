@@ -15,6 +15,7 @@ Check completion status of a variant calling workflow for a single All of Us sam
 import argparse
 import pandas as pd
 import subprocess
+from g2cpy import check_workflow_status, check_gcp_uris, collect_gcp_garbage, relocate_uri
 from os import getenv, path
 from re import sub
 from sys import stdout, stderr
@@ -128,14 +129,7 @@ def check_if_staged(bucket, sid, mode, metrics_optional=False):
             tbi_uri = uri + '.tbi'
             uris.append(tbi_uri)
 
-    # Check for the presence of all expected URIs
-    query = 'gsutil -m ls ' + ' '.join(uris)
-    query_res = subprocess.run(query, capture_output=True, shell=True, 
-                               check=False, text=True)
-    uris_found = query_res.stdout.rstrip().split('\n')
-
-    # Return False unless every output is found in expected location
-    return len(set(uris).intersection(set(uris_found))) == len(uris)
+    return check_gcp_uris(uris)
 
 
 def find_gvcfs(workflow_ids, bucket, sid, uri_fmt=formats['gatk-hc']['gvcf'],
@@ -152,10 +146,7 @@ def find_gvcfs(workflow_ids, bucket, sid, uri_fmt=formats['gatk-hc']['gvcf'],
     # Find GCP URIs for all final output gVCFs
     expected_gvcfs = {uri_fmt.format(bucket, wid, sid, suffix) : wid \
                       for wid in workflow_ids}
-    gvcf_query = 'gsutil -m ls ' + ' '.join(expected_gvcfs.keys())
-    gvcf_query_res = subprocess.run(gvcf_query, capture_output=True, 
-                                    shell=True, check=False, text=True)
-    gvcfs_found = gvcf_query_res.stdout.rstrip().split('\n')
+    gvcfs_found = check_gcp_uris(expected_gvcfs.keys(), return_uri_list=True)
 
     # Extract workflow IDs for gVCFs found, if any
     return [uri.split('/')[6] for uri in gvcfs_found if uri.startswith('gs://')]
@@ -174,10 +165,7 @@ def find_sv_files(workflow_ids, bucket, sid, uri_fmt):
     # Find GCP URIs for all final output files
     expected_uris = {uri_fmt.format(bucket, wid, sid) : wid \
                      for wid in workflow_ids}
-    query = 'gsutil -m ls ' + ' '.join(expected_uris.keys())
-    query_res = subprocess.run(query, capture_output=True, shell=True, 
-                               check=False, text=True)
-    uris_found = query_res.stdout.rstrip().split('\n')
+    uris_found = check_gcp_uris(expected_uris.keys(), return_uri_list=True)
 
     # Extract workflow IDs for output files found, if any
     return [uri.split('/')[6] for uri in uris_found if uri.startswith('gs://')]
@@ -210,31 +198,6 @@ def find_complete_wids(workflow_ids, bucket, sid, mode, metrics_optional=False):
 
     elif mode == 'read-metrics':
         return []
-    
-
-def check_workflow_status(workflow_id, max_retries=20, timeout=5):
-    """
-    Ping Cromwell server to check status of a single workflow
-    """
-
-    crom_query_res = ''
-    attempts = 0
-    while attempts < max_retries:
-        crom_query = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc status ' + workflow_id
-        crom_query_res = subprocess.run(crom_query, capture_output=True, 
-                                        shell=True, check=False, text=True).stdout
-        res_splits = [sub('[,"]', '', s.split('":"')[1]) 
-                      for s in crom_query_res.split('\n') 
-                      if 'status' in s]
-        if len(res_splits) > 0:
-            return res_splits[0].lower()
-        else:
-            attempts += 1
-    
-    if attempts == max_retries:
-        msg = 'Failed to get workflow status for {} after {} retries\n'
-        stderr.write(msg.format(workflow_id, attempts))
-        return 'unknown'        
 
 
 def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode, 
@@ -249,27 +212,20 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode,
         # Relocate gVCF
         src_gvcf = formats[mode]['gvcf'].format(bucket, workflow_id, sid, 'vcf.gz')
         dest_gvcf = formats[mode]['dest'].format(staging_bucket, sid)
-        if verbose:
-            stdout.write(msg.format(src_gvcf, dest_gvcf))
-        subprocess.run(' '.join(['gsutil -m', action, src_gvcf, dest_gvcf]), shell=True)
+        relocate_uri(src_gvcf, dest_gvcf, action, verbose)
 
         # Relocate tabix index
         src_tbi = src_gvcf + '.tbi'
         dest_tbi = dest_gvcf + '.tbi'
-        if verbose:
-            stdout.write(msg.format(src_tbi, dest_tbi))
-        subprocess.run(' '.join(['gsutil -m', action, src_tbi, dest_tbi]), shell=True)
+        relocate_uri(src_tbi, dest_tbi, action, verbose)
 
     elif mode == 'gatk-sv':
         for key, has_index in sv_has_index.items():
             src_uri = formats[mode][key]['src'].format(bucket, workflow_id, sid)
             dest_uri = formats[mode][key]['dest'].format(staging_bucket, sid)
-            if verbose:
-                stdout.write(msg.format(src_uri, dest_uri))
-            subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
+            relocate_uri(src_uri, dest_uri, action, verbose)
             if has_index:
-                subprocess.run(' '.join(['gsutil -m', action, src_uri + '.tbi', 
-                                         dest_uri + '.tbi']), shell=True)
+                relocate_uri(src_uri + '.tbi', dest_uri + '.tbi', action, verbose)
 
 
 def collect_trash(workflow_ids, bucket, dumpster_path, mode, sample_id, 
@@ -294,13 +250,7 @@ def collect_trash(workflow_ids, bucket, dumpster_path, mode, sample_id,
 
     # Find list of all files present in execution or output buckets
     # and mark those files for deletion by writing their URIs to the dumpster
-    garbage_raw = subprocess.run('gsutil -m ls ' + ' '.join(all_uris), 
-                                 check=False, capture_output=True, 
-                                 shell=True, text=True).stdout
-    with open(dumpster_path, 'a') as fout:
-        for uri in garbage_raw.rstrip().split('\n'):
-            if uri.startswith('gs://'):
-                fout.write(uri + '\n')
+    collect_gcp_garbage(all_uris, dumpster_path=dumpster_path)
 
 
 def main():
