@@ -19,26 +19,16 @@ This repository contains the working code and scripts used to detect, genotype, 
 | Directory | Description |  
 | :--- | :--- |  
 | [`docker/`](https://github.com/talkowski-lab/dsmap/tree/main/docker) | Instructions for building project-related Docker images |   
+| [`refs/`](https://github.com/talkowski-lab/dsmap/tree/main/refs) | Reference .jsons and dotfiles |   
 | [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/main/scripts) | Stand-alone scripts called by various workflows |   
-| [`shell/`](https://github.com/talkowski-lab/dsmap/tree/main/shell) | Shell snippets for running specific processes or analyses |   
+| [`shell/`](https://github.com/talkowski-lab/dsmap/tree/main/shell) | Shell snippets for running specific processes or analyses |  
+| [`src/`](https://github.com/talkowski-lab/dsmap/tree/main/src) | Source code for the `g2cpy` and `G2CR` companion libraries |  
 | [`wdl/`](https://github.com/talkowski-lab/dsmap/tree/main/wdl) | Stand-alone WDL workflows |   
 
 ---  
 
-## Storage
+## Data Access  
 
-All sample-level input data is stored in a secure Google Cloud bucket. Note that permissions must be granted for bucket access.  
+All site-frequency information and derived summary statistics will be made publicly available from this project to the extent permissible by sample consent and data use agreements. At this time, no public data is yet available, and we do not anticipate any public data becoming available prior to 2026.  
 
-The bucket is organized as follows:
-* One directory per cohort
-* Each cohort has the following subdirectories:
-    * `gatk-hc/reblocked` : reblocked GATK-HC gVCFs and indexes
-    * `gatk-sv` : evidence and metrics files collected by GATK-SV  
-        * `gatk-sv/coverage` : coverage counts files  
-        * `gatk-sv/metrics` : per-sample metrics generated during GATK-SV module 01  
-        * `gatk-sv/pesr` : PE/SR metadata files  
-    * `manta` : raw Manta VCFs and indexes  
-    * `melt` : raw MELT VCFs and indexes  
-  * `wham` : raw Wham VCFs and indexes  
-
-_Note: all raw gVCFs previously hosted in `gatk-hc/` were deleted on Feb 7, 2024, but the nested directory structure of `gatk-hc/reblocked/` was preserved for legacy code compatability_  
+All sample-level data is stored in a secure Google Cloud bucket. Note that permissions must be granted for bucket access, and permissions cannot be granted to any users outside of those explicitly covered by the numerous data use agreements between DFCI/Van Allen lab and other organization. Contact [Ryan L. Collins](mailto:Ryan_Collins@dfci.harvard.edu) or [Erin Shannon](ErinE_Shannon@dfci.harvard.edu) if you believe you qualify for access.  
