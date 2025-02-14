@@ -36,6 +36,8 @@ workflow GnarlyJointGenotypingPart1 {
 
     File dbsnp_vcf
 
+    Boolean make_hard_filtered_sites = true
+
     Int small_disk = 100
     Int medium_disk = 200
     Int large_disk = 1000
@@ -83,18 +85,20 @@ workflow GnarlyJointGenotypingPart1 {
         batch_size = 50
     }
 
-    call Tasks.SplitIntervalList as GnarlyIntervalScatterDude {
-      input:
-        interval_list = unpadded_intervals[idx],
-        scatter_count = gnarly_scatter_count,
-        ref_fasta = ref_fasta,
-        ref_fasta_index = ref_fasta_index,
-        ref_dict = ref_dict,
-        disk_size_gb = small_disk,
-        sample_names_unique_done = CheckSamplesUnique.samples_unique
+    if ( gnarly_scatter_count > 1 ) {
+      call Tasks.SplitIntervalList as GnarlyIntervalScatterDude {
+        input:
+          interval_list = unpadded_intervals[idx],
+          scatter_count = gnarly_scatter_count,
+          ref_fasta = ref_fasta,
+          ref_fasta_index = ref_fasta_index,
+          ref_dict = ref_dict,
+          disk_size_gb = small_disk,
+          sample_names_unique_done = CheckSamplesUnique.samples_unique
+      }
     }
 
-    Array[File] gnarly_intervals = GnarlyIntervalScatterDude.output_intervals
+    Array[File] gnarly_intervals = select_first([GnarlyIntervalScatterDude.output_intervals, unpadded_intervals[idx]])
 
     scatter (gnarly_idx in range(length(gnarly_intervals))) {
       call Tasks.GnarlyGenotyper {
@@ -121,22 +125,27 @@ workflow GnarlyJointGenotypingPart1 {
     File genotyped_vcf = TotallyRadicalGatherVcfs.output_vcf
     File genotyped_vcf_index = TotallyRadicalGatherVcfs.output_vcf_index
 
-    call Tasks.HardFilterAndMakeSitesOnlyVcf {
-      input:
-        vcf = genotyped_vcf,
-        vcf_index = genotyped_vcf_index,
-        excess_het_threshold = 54.69,
-        variant_filtered_vcf_filename = callset_name + "." + idx + ".variant_filtered.vcf.gz",
-        sites_only_vcf_filename = callset_name + "." + idx + ".sites_only.variant_filtered.vcf.gz",
-        disk_size_gb = medium_disk
+    if ( make_hard_filtered_sites ){
+      call Tasks.HardFilterAndMakeSitesOnlyVcf {
+        input:
+          vcf = genotyped_vcf,
+          vcf_index = genotyped_vcf_index,
+          excess_het_threshold = 54.69,
+          variant_filtered_vcf_filename = callset_name + "." + idx + ".variant_filtered.vcf.gz",
+          sites_only_vcf_filename = callset_name + "." + idx + ".sites_only.variant_filtered.vcf.gz",
+          disk_size_gb = medium_disk
+      }
     }
+
+    File jg_vcf_shard = select_first([HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf, genotyped_vcf])
+    File jg_vcf_shard_idx = select_first([HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf_index, genotyped_vcf_index])
   }
 
   output {
-    Array[File] variant_filtered_vcfs = HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf
-    Array[File] variant_filtered_vcfs_index = HardFilterAndMakeSitesOnlyVcf.variant_filtered_vcf_index
-    Array[File] sites_only_vcfs = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf
-    Array[File] sites_only_vcfs_index = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf_index
+    Array[File] joint_genotyped_vcf = jg_vcf_shard
+    Array[File] joint_genotyped_vcf_index = jg_vcf_shard_idx
+    Array[File?] sites_only_vcfs = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf
+    Array[File?] sites_only_vcfs_index = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf_index
   }
 }
 

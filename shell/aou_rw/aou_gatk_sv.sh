@@ -593,8 +593,7 @@ cromshell --no_turtle -t 120 -mc submit \
 >> cromshell/job_ids/count_svs_posthoc.job_ids.list
 
 # Monitor SV counting task
-monitor_workflow \
-  $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
+monitor_workflow $( tail -n1 cromshell/job_ids/count_svs_posthoc.job_ids.list )
 
 # Ensure R packages are installed
 . code/refs/install_packages.sh R
@@ -699,7 +698,8 @@ submit_cohort_module 17
 
 # Monitor submission
 monitor_workflow \
-  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.17-JoinRawCalls.job_ids.list )
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.17-JoinRawCalls.job_ids.list ) \
+  20
 
 # Once complete, stage outputs
 cromshell -t 120 --no_turtle -mc list-outputs \

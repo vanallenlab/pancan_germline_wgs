@@ -17,16 +17,18 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=gatksv
+export g2c_branch=gatkhc
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
 export gatksv_tag=v1.0.1
 git clone git@github.com:broadinstitute/gatk-sv.git --branch=$gatksv_tag
 
-# Clone GATK-HC workflows repo & checkout release tag of interest
+# Clone GATK-HC workflow repos & checkout release tag of interest
 export gatkhc_tag=2.3.1
 git clone git@github.com:gatk-workflows/gatk4-germline-snps-indels.git --branch=$gatkhc_tag
+git clone git@github.com:gatk-workflows/utility-wdls.git
+git clone git@github.com:broadinstitute/warp.git
 
 # Make & populate directory of all WDLs and other reference files
 for dir in wdl wdl/pancan_germline_wgs wdl/gatk-sv wdl/gatk-hc; do
@@ -36,6 +38,8 @@ done
 cp pancan_germline_wgs/wdl/*.wdl $WRKDIR/wdl/pancan_germline_wgs/
 cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
+cp utility-wdls/*.wdl $WRKDIR/wdl/gatk-hc/
+cp warp/tasks/broad/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
 
 # Override any GATK-SV WDLs with their corresponding custom G2C copies
 # This is rarely necessary but was deemed the easiest solution for handling 

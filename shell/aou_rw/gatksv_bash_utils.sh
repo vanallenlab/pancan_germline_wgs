@@ -1055,6 +1055,7 @@ EOF
     "JoinRawCalls.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
     "JoinRawCalls.reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
     "JoinRawCalls.reference_fasta_fai": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+    "JoinRawCalls.runtime_attr_svcluster": { "disk_gb" : 250, "mem_gb" : 128, cpu_cores : 32, "boot_disk_gb" : 20 },
     "JoinRawCalls.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "JoinRawCalls.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
 }
