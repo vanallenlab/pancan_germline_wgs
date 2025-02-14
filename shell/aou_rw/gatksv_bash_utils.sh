@@ -1016,22 +1016,28 @@ EOF
     17)
       wdl="code/wdl/gatk-sv/JoinRawCalls.wdl"
 
-      # Get URIs per batch
-      while read bid; do                
+      # For speed, since so many jq calls are required, we can copy all
+      # output json files from module 05 into the submission directory
+      gsutil -m cp \
+        $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/*/*.gatksv_module_05C.outputs.json \
+        $sub_dir/
 
-        mod05C_output_json=$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/05C/$bid/$bid.gatksv_module_05C.outputs.json
+      # Get URIs per batch
+      while read bid; do
+
+        mod05C_output_json=$sub_dir/$bid.gatksv_module_05C.outputs.json
 
         for alg in depth manta wham melt; do
-          gsutil cat $mod05C_output_json | jq .clustered_${alg}_vcf | tr -d '"' \
+          jq .clustered_${alg}_vcf $mod05C_output_json | tr -d '"' \
           >> $sub_dir/${alg}_vcfs.list
-          gsutil cat $mod05C_output_json | jq .clustered_${alg}_vcf_index | tr -d '"' \
+          jq .clustered_${alg}_vcf_index $mod05C_output_json | tr -d '"' \
           >> $sub_dir/${alg}_vcf_idxs.list
         done
 
       done < $batches_list
 
       # Prep input .json template
-      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+      cat << EOF > cromshell/inputs/dfci-g2c.v1.$sub_name.inputs.json
 {
     "JoinRawCalls.FormatVcfForGatk.formatter_args": "--fix-end",
     "JoinRawCalls.clustered_depth_vcfs": $( collapse_txt $sub_dir/depth_vcfs.list ),

@@ -688,18 +688,28 @@ code/scripts/manage_chromshards.py \
   --max-attempts 3
 
 
-##################
-# Raw callset QC #
-##################
+#####################
+# 17 | JoinRawCalls #
+#####################
 
-# TODO: implement this
+# Note: this module only needs to be run once in one workspace for the whole cohort
 
+# Submit workflow
+submit_cohort_module 17
 
-#################
-# 17 | TBD #
-#################
+# Monitor submission
+monitor_workflow \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.17-JoinRawCalls.job_ids.list )
 
-# TODO: implement this
+# Once complete, stage outputs
+cromshell -t 120 --no_turtle -mc list-outputs \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.17-JoinRawCalls.job_ids.list ) \
+| awk '{ print $2 }' | gsutil -m cp -I \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/17/
+
+# Once staged, clean up outputs
+gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/JoinRawCalls/** >> uris_to_delete.list
+cleanup_garbage
 
 
 #################
@@ -714,5 +724,13 @@ code/scripts/manage_chromshards.py \
 #################
 
 # TODO: implement this
+
+
+##################
+# Raw callset QC #
+##################
+
+# TODO: implement this
+
 
 
