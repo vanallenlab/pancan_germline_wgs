@@ -139,37 +139,58 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
     remove(json_fout)
 
 
-def submit_workflow(contig, wdl, input_template, input_json, prev_wids, quiet=False):
+def submit_workflow(contig, wdl, input_template, input_json, prev_wids, 
+                    dependencies_zip=None, contig_var_overrides=None, 
+                    dry_run=False, quiet=False):
     """
     Submit a workflow for a single contig to Cromwell and store the workflow ID in a log
     """
 
-    # Substitute environment variables from input template to specific input
+    # Assign contig to all protected environment variables
     for vbl in 'CHR CHROM CONTIG chr chrom contig'.split():
         environ[vbl] = contig
-        with open(input_template) as fin:
-            with open(input_json, 'w') as fout:
-                for line in fin.readlines():
-                    fout.write(path.expandvars(line))
+
+    # Substitute contig-specific environment variables provided as optional .json
+    if contig_var_overrides is not None:
+        with open(contig_var_overrides) as fin:
+            cvo = json.load(fin)
+            if contig in cvo.keys():
+                for key, value in cvo[contig].items():
+                    environ[key] = str(value)
+
+    # Substitute variables into .json template
+    with open(input_template) as fin:
+        with open(input_json, 'w') as fout:
+            for line in fin.readlines():
+                fout.write(path.expandvars(line))
 
     # Build the workflow submission command
     cmd = 'cromshell --no_turtle -t 120 -mc submit'
     cmd += ' --options-json code/refs/json/aou.cromwell_options.default.json'
-    cmd += ' --dependencies-zip gatksv.dependencies.zip ' + wdl + ' ' + input_json
+    if dependencies_zip is not None:
+        cmd += ' --dependencies-zip ' + dependencies_zip
+    cmd += ' ' + wdl + ' ' + input_json
 
     # Submit the workflow
-    sub_res = subprocess.run(cmd, capture_output=True, shell=True, 
-                             check=False, text=True)
-    try:
-        new_wid = json.loads(sub_res.stdout)['id']
-        with open(prev_wids, 'a') as fout:
-            fout.write(new_wid + '\n')
-        status = 'submitted'
+    if dry_run:
         if not quiet:
-            msg = '[{}] Submitted {} for contig {} (workflow ID: {})'
-            print(msg.format(clean_date(), path.basename(wdl), contig, new_wid))
-    except:
-        status = 'submission_error'
+            print('Would submit new workflow with the following command if not ' + \
+                  'for --dry-run:')
+            print(cmd)
+        status = 'dry_run_skipped'
+    else:
+        sub_res = subprocess.run(cmd, capture_output=True, shell=True, 
+                                 check=False, text=True)
+        try:
+            new_wid = json.loads(sub_res.stdout)['id']
+            with open(prev_wids, 'a') as fout:
+                fout.write(new_wid + '\n')
+            status = 'submitted'
+            if not quiet:
+                msg = '[{}] Submitted {} for contig {} (workflow ID: {})'
+                print(msg.format(clean_date(), path.basename(wdl), contig, new_wid))
+        except:
+            status = 'submission_error'
 
     return status
 
@@ -192,6 +213,13 @@ def main():
                         'bucket. Must provide terminal bucket within which ' +
                         'each chromosome will have outputs staged in separate ' +
                         'directory.')
+    parser.add_argument('-D', '--dependencies-zip', help='WDL dependencies .zip')
+    parser.add_argument('-V', '--contig-variable-overrides', help='Optional .json' +
+                        'of \{ $contig : \{ variable : value, ...\}\} pairs ' +
+                        'that will be treated as environment variables for ' +
+                        'substitution in --input-json-template, and will ' +
+                        'supercede any global or local shell  environment ' +
+                        'variables, if relevant.')
     parser.add_argument('-n', '--name', help='Method name or nickname. If ' +
                         'not provided, the basename of --wdl will be used.')
     parser.add_argument('--bucket', help='Root bucket [defaut: use ' +
@@ -214,6 +242,8 @@ def main():
                         'minutes to wait between monitor cycles')
     parser.add_argument('--workflow-id-log-prefix', help='Optional prefix for ' +
                         'logger files for submitted workflow IDs')
+    parser.add_argument('--dry-run', default=False, action='store_true',help='Do ' +
+                        'not actually submit jobs or manipulate cloud objects.')
     parser.add_argument('--quiet', default=False, action='store_true',help='Do ' +
                         'not print logging, progress, and diagnostics to stdout')
     args = parser.parse_args()
@@ -261,6 +291,7 @@ def main():
         startup_report({'Method name' : method_name,
                         'WDL' : args.wdl,
                         'Input .json template' : args.input_json_template,
+                        'WDL dependencies .zip' : args.dependencies_zip,
                         'Status tracker .tsv' : args.status_tsv,
                         'Workspace bucket' : bucket,
                         'Staging bucket' : args.staging_bucket,
@@ -268,6 +299,7 @@ def main():
                         'Dumpster' : args.dumpster,
                         'Contigs' : ', '.join(contigs),
                         'Max attempts' : args.max_attempts,
+                        'Dry run' : args.dry_run,
                         'Quiet' : args.quiet})
 
     # If --status-tsv is provided and exists, load this file as a dict
@@ -346,15 +378,21 @@ def main():
                 # If most recent workflow was successful, stage outputs and clear all 
                 # files from Cromwell execution & output buckets
                 if status == 'succeeded':
-                    relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
-                    status = 'staged'
-                    g2cpy.collect_workflow_trash(wids, bucket, wdl_name,
-                                                 args.dumpster)
-                    subprocess.run('. code/refs/general_bash_utils.sh ' + \
-                                   '&& cleanup_garbage', shell=True, check=False, 
-                                   text=True, executable='/bin/bash')
-                    if not args.quiet:
-                        print('')
+                    if args.dry_run:
+                        if not args.quiet:
+                            msg = 'Found successful workflow ({}); would stage ' + \
+                                  'outputs and clean garbage if not for --dry-run'
+                            print(msg.format(wid))
+                    else:
+                        relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
+                        status = 'staged'
+                        g2cpy.collect_workflow_trash(wids, bucket, wdl_name,
+                                                     args.dumpster)
+                        subprocess.run('. code/refs/general_bash_utils.sh ' + \
+                                       '&& cleanup_garbage', shell=True, check=False, 
+                                       text=True, executable='/bin/bash')
+                        if not args.quiet:
+                            print('')
 
                 # Exit loop after processing most recent workflow ID
                 break
@@ -363,7 +401,10 @@ def main():
             if status not in 'staged submitted running status_check_failed'.split():
                 if n_prior_subs < args.max_attempts:
                     status = submit_workflow(contig, args.wdl, args.input_json_template, 
-                                             input_json, prev_wids, args.quiet)
+                                             input_json, prev_wids, 
+                                             args.dependencies_zip, 
+                                             args.contig_variable_overrides, 
+                                             args.dry_run, args.quiet)
                 else:
                     if not args.quiet:
                         msg = '[{}] Contig {} has reached the maximum number of ' + \

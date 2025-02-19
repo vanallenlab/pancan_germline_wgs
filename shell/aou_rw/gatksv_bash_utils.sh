@@ -1137,6 +1137,7 @@ EOF
       code/scripts/manage_chromshards.py \
         --wdl $wdl \
         --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
+        --dependencies-zip gatksv.dependencies.zip \
         --staging-bucket $staging_prefix/$module_idx \
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
