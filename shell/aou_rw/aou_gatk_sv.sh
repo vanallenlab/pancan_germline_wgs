@@ -712,18 +712,32 @@ gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/JoinRawCalls/** >> uris_to_delete.list
 cleanup_garbage
 
 
-#################
-# 18 | TBD #
-#################
+######################
+# 18 | SVConcordance #
+######################
 
-# TODO: implement this
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Note 2: this module is handled differently by submit_cohort_module since it's
+# parallelized by chromosome with 24 independent submissions
+
+# All cleanup and tracking is handled by a helper routine within submit_cohort_module
+
+submit_cohort_module 18
 
 
-#################
-# 19 | TBD #
-#################
+########################
+# 19 | FilterGenotypes #
+########################
 
-# TODO: implement this
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Note 2: this module is handled differently by submit_cohort_module since it's
+# parallelized by chromosome with 24 independent submissions
+
+# All cleanup and tracking is handled by a helper routine within submit_cohort_module
+
+submit_cohort_module 19
 
 
 ##################
@@ -731,6 +745,4 @@ cleanup_garbage
 ##################
 
 # TODO: implement this
-
-
 
