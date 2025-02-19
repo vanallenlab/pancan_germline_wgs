@@ -96,15 +96,14 @@ $CODEDIR/scripts/sample_info/phenotypes/curate_copdgene_phenotypes.R \
   --out-tsv $WRKDIR/copdgene.phenos.tsv
 
 # CEPH
-# Note: working on getting complete phenotype data access for CEPH
-# For now, just using the minimal data available online
-# We can udpate this later if/when we get access to detailed health history info
 export CEPHDIR=$BASEDIR/data_and_cohorts/ceph/phenotypes
 gsutil -m cp gs://dfci-g2c-inputs/sample-lists/ceph.samples.list $WRKDIR/
 $CODEDIR/scripts/sample_info/phenotypes/curate_ceph_phenotypes.R \
   --sample-ids $WRKDIR/ceph.samples.list \
   --pedigree-tsv $CEPHDIR/phs001872.v1.pht009364.v1.p1.CEPH_Utah_Pedigree.MULTI.txt.gz \
   --subject-info-tsv $CEPHDIR/phs001872.v1.pht009363.v1.p1.CEPH_Utah_Subject.MULTI.txt.gz \
+  --sample-info-tsv $CEPHDIR/phs001872.v1.pht009365.v1.p1.CEPH_Utah_Sample.MULTI.txt.gz \
+  --uou-cancer-tsv $BASEDIR/data_and_cohorts/ceph/CEPH_cancer_data.UoU.jan_2025.tsv \
   --out-tsv $WRKDIR/ceph.phenos.tsv
 
 # GTEx

@@ -29,6 +29,9 @@ def main():
                         help='Path to input .interval_list', default='stdin')
     parser.add_argument('-t', '--target-size', help='Desired average interval size',
                         type=float, default=10e10, required=True)
+    parser.add_argument('--gatk-style', action='store_true', default=False,
+                        help='Write output as simple GATK-style intervals ' +
+                        '[default: write Picard-style intervals with header]')
     parser.add_argument('-o', '--output-intervals', required=True,
                         help='Path to output .interval_list', default='stdin')
     args = parser.parse_args()
@@ -51,7 +54,8 @@ def main():
 
         # Write header from input to output
         if line.startswith('@'):
-            outfile.write(line)
+            if not args.gatk_style:
+                outfile.write(line)
 
         # Store input intervals as tuples of (interval size, list of fields)
         else:
@@ -87,7 +91,10 @@ def main():
 
     # Sort sharded intervals and write to output file
     for vals in sorted(int_df.fields.tolist(), key=lambda x: int(x[1])):
-        outfile.write('\t'.join([str(x) for x in vals]) + '\n')
+        if args.gatk_style:
+            outfile.write('{}:{}-{}\n'.format(*vals[:3]))
+        else:
+            outfile.write('\t'.join([str(x) for x in vals]) + '\n')
 
     # Clear buffer
     outfile.close()

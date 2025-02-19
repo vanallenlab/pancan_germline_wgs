@@ -678,7 +678,7 @@ submit_cohort_module() {
       ;;
     18)
       module_name="SVConcordance"
-      max_attempts=2
+      max_attempts=3
       ;;
     19)
       module_name="FilterGenotypes"
@@ -1080,7 +1080,7 @@ EOF
       cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
 {
     "SVConcordance.contig_list": "gs://dfci-g2c-refs/hg38/contig_lists/\$CONTIG.list",
-    "SVConcordance.eval_vcf": "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/dfci-g2c-callsets/gatk-sv/module-outputs/16/\$CONTIG/ConcatVcfs/dfci-g2c.v1.\$CONTIG.cpx_refined.vcf.gz",
+    "SVConcordance.eval_vcf": "$staging_prefix/PosthocHardFilterPart2/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.cpx_refined.posthoc_filtered.posthoc_filtered.vcf.gz",
     "SVConcordance.gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT",
     "SVConcordance.output_prefix": "dfci-g2c.v1.\$CONTIG",
     "SVConcordance.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",

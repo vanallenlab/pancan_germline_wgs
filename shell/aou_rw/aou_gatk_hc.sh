@@ -125,12 +125,13 @@ for k in $( seq 1 22 ) X Y; do
   code/scripts/split_intervals.py \
     -i $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list \
     -t 200000 \
-    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.interval_list
+    --gatk-style \
+    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals
 done
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \
-  $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.sharded.interval_list \
+  $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.sharded.intervals \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/
 
 
@@ -149,7 +150,7 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 echo "{ " > $staging_dir/contig_variable_overrides.json
 for k in $( seq 1 22 ) X Y; do
   kc=$( fgrep -v "@" \
-          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.interval_list \
+          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals \
         | wc -l | awk '{ printf "%i\n", $1 / 10 }' )
   echo "\"chr$k\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done | paste -s -d\  | sed 's/,$//g' \
@@ -161,18 +162,22 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.wdl
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.gnarly_scatter_count" : 10,
-  "GnarlyJointGenotypingPart1.make_hard_filtered_sites" : false,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 10,
+  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 96000,
+  "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
+  "GnarlyJointGenotypingPart1.medium_disk": 500,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
   "GnarlyJointGenotypingPart1.sample_name_map": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
   "GnarlyJointGenotypingPart1.top_level_scatter_count": \$CONTIG_SCATTER_COUNT,
-  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.interval_list"
+  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals"
 }
 EOF
 
 # Joint genotype per chromosome using chromsharded manager
+# Note: all cleanup and tracking is handled by the chromshard manager, so
+# no outputs or execution buckets need to be manually staged/cleared
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/GnarlyJointGenotypingPart1.wdl \
   --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.wdl \
@@ -183,6 +188,5 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --gate 45 \
-  --max-attempts 2
-
+  --max-attempts 3
 

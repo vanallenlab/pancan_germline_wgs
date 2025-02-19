@@ -174,13 +174,16 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
     # Submit the workflow
     if dry_run:
         if not quiet:
-            print('Would submit new workflow with the following command if not ' + \
-                  'for --dry-run:')
-            print(cmd)
+            print('[{}] Would submit new workflow with the following command if ' + \
+                  'not for --dry-run:')
+            print(cmd.format(clean_date()))
         status = 'dry_run_skipped'
     else:
         sub_res = subprocess.run(cmd, capture_output=True, shell=True, 
                                  check=False, text=True)
+        if not quiet:
+            msg = '[{}] Standard output from Cromwell submission command:\n{}'
+            print(msg.format(clean_date(), sub_res.stdout))
         try:
             new_wid = json.loads(sub_res.stdout)['id']
             with open(prev_wids, 'a') as fout:
@@ -380,9 +383,9 @@ def main():
                 if status == 'succeeded':
                     if args.dry_run:
                         if not args.quiet:
-                            msg = 'Found successful workflow ({}); would stage ' + \
+                            msg = '[{}] Found successful workflow ({}); would stage ' + \
                                   'outputs and clean garbage if not for --dry-run'
-                            print(msg.format(wid))
+                            print(msg.format(clean_date(), wid))
                     else:
                         relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
                         status = 'staged'
