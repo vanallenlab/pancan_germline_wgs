@@ -9,7 +9,7 @@
 version 1.0
 
 
-import "Utilities.wdl" as utils
+import "Utilities.wdl" as Utils
 
 
 workflow CollectVcfQcMetrics {
@@ -31,7 +31,7 @@ workflow CollectVcfQcMetrics {
   }
 
   # Get list of samples present in input VCFs
-  call utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
+  call Utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
@@ -51,7 +51,7 @@ workflow CollectVcfQcMetrics {
   }
 
   # Clean scatter intervals
-  call ParseIntervals {
+  call Utils.ParseIntervals {
     input:
       intervals_list = scatter_intervals_list,
       docker = linux_docker
@@ -90,35 +90,6 @@ workflow CollectVcfQcMetrics {
   }
 
   output {}
-}
-
-
-# Parse an intervals list and output as Pair[index, interval_string] for scattering
-task ParseIntervals {
-  input {
-    File intervals_list
-    String docker
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
-    | awk -v OFS="\t" '{ print $NF, $0 }' > intervals.clean.tsv
-  >>>
-
-  output {
-    Array[Pair[String, String]] interval_info = read_tsv("intervals.clean.tsv")
-  }
-
-  runtime {
-    docker: docker
-    memory: "2 GB"
-    cpu: 1
-    disks: "local-disk 25 HDD"
-    preemptible: 3
-    max_retries: 1
-  }
 }
 
 

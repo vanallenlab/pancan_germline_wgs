@@ -41,11 +41,13 @@ cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 cp utility-wdls/*.wdl $WRKDIR/wdl/gatk-hc/
 cp warp/tasks/broad/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
 
-# Override any GATK-SV WDLs with their corresponding custom G2C copies
+# Override any GATK WDLs with their corresponding custom G2C copies
 # This is rarely necessary but was deemed the easiest solution for handling 
-# edge cases (like for 06) or situations where we intentionally deviated from
-# GATK-SV default procedures (like for outlier sample definition in 08)
+# edge cases (like for SV module 06) or situations where we intentionally 
+# deviated from GATK default procedures (like for outlier sample definition 
+# in SV module 08)
 cp pancan_germline_wgs/wdl/gatk-sv/* $WRKDIR/wdl/gatk-sv/
+cp pancan_germline_wgs/wdl/gatk-hc/* $WRKDIR/wdl/gatk-hc/
 
 # Copy WDLs to AoU RW bucket
 # Note: must use AoU Google credentials

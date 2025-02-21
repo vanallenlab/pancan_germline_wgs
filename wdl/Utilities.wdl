@@ -269,6 +269,35 @@ task IndexVcf {
 }
 
 
+# Parse a GATK-style interval_list and output as Array[Pair[index, interval_string]] for scattering
+task ParseIntervals {
+  input {
+    File intervals_list
+    String docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
+    | awk -v OFS="\t" '{ print $NF, $0 }' > intervals.clean.tsv
+  >>>
+
+  output {
+    Array[Pair[String, String]] interval_info = read_tsv("intervals.clean.tsv")
+  }
+
+  runtime {
+    docker: docker
+    memory: "2 GB"
+    cpu: 1
+    disks: "local-disk 25 HDD"
+    preemptible: 3
+    max_retries: 1
+  }
+}
+
+
 task ShardVcf {
   input {
     File vcf
@@ -314,5 +343,41 @@ task ShardVcf {
     docker: bcftools_docker
     preemptible: n_preemptible
     maxRetries: 1
+  }
+}
+
+
+task SumSvCountsPerSample {
+  input {
+    Array[File] count_tsvs   # Expects svtk count-svtypes output format
+    String output_prefix
+
+    String docker
+    Float mem_gb = 3.75
+    Int n_cpu = 2
+  }
+
+  Int disk_gb = ceil(2 * size(count_tsvs, "GB")) + 10
+  String outfile = output_prefix + ".counts.tsv"
+
+  command <<<
+    set -euo pipefail
+
+    /opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
+      --outfile "~{outfile}" \
+      ~{sep=" " count_tsvs}
+  >>>
+
+  output {
+    File summed_tsv = "~{outfile}"
+  }
+
+  runtime {
+    docker: docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }

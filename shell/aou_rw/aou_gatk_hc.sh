@@ -182,7 +182,7 @@ EOF
 # Note: all cleanup and tracking is handled by the chromshard manager, so
 # no outputs or execution buckets need to be manually staged/cleared
 code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/GnarlyJointGenotypingPart1.wdl \
+  --wdl code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
   --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \

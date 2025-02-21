@@ -41,7 +41,6 @@ workflow GnarlyJointGenotypingPart1 {
     Int small_disk = 100
     Int medium_disk = 200
     Int large_disk = 1000
-    String bcftools_docker
 
     Int? top_level_scatter_count
     Float unbounded_scatter_count_scale_factor = 0.15
@@ -112,17 +111,9 @@ workflow GnarlyJointGenotypingPart1 {
           ref_dict = ref_dict,
           dbsnp_vcf = dbsnp_vcf
       }
-
-      # Additional cleanup step added for G2C to coerce to parsimonious format
-      call NormalizeShortVariants as NormalizeVcf {
-        input:
-          vcf = GnarlyGenotyper.output_vcf,
-          ref_fasta = ref_fasta,
-          bcftools_docker = bcftools_docker
-      }
     }
 
-    Array[File] gnarly_gvcfs = NormalizeVcf.norm_vcf
+    Array[File] gnarly_gvcfs = GnarlyGenotyper.output_vcf
 
     call Tasks.GatherVcfs as TotallyRadicalGatherVcfs {
       input:
@@ -155,49 +146,6 @@ workflow GnarlyJointGenotypingPart1 {
     Array[File] joint_genotyped_vcf_index = jg_vcf_shard_idx
     Array[File?] sites_only_vcfs = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf
     Array[File?] sites_only_vcfs_index = HardFilterAndMakeSitesOnlyVcf.sites_only_vcf_index
-  }
-}
-
-
-task NormalizeShortVariants {
-  input {
-    File vcf
-    File ref_fasta
-    String bcftools_docker
-  }
-
-  String outfile = basename(vcf, ".vcf.gz") + ".norm.vcf.gz"
-  Int disk_gb = ceil(3 * size([vcf, ref_fasta], "GB")) + 10
-
-  command <<<
-    set -eu -o pipefail
-
-    bcftools norm \
-      --fasta-ref ~{ref_fasta} \
-      --check-ref s \
-      --multiallelics - \
-      --site-win 10000 \
-      --threads 4 \
-      ~{vcf} \
-    | bcftools view \
-      --exclude 'alt[0] == "*"' \
-      -Oz -o ~{outfile}
-
-    tabix -p vcf ~{outfile}
-  >>>
-
-  output {
-    File norm_vcf = outfile
-    File norm_vcf_idx = "~{outfile}.tbi"
-  }
-
-  runtime {
-    docker: bcftools_docker
-    memory: "7.5 GB"
-    cpu: 4
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-    maxRetries: 1
   }
 }
 
