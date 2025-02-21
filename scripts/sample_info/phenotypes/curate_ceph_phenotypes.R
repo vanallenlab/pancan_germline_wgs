@@ -29,7 +29,7 @@ cancer.map <- c("breast cancer" = "breast",
                 "thyroid" = "thyroid",
                 "skin, breast" = "breast",
                 "sarcoma on skull" = "sarcoma",
-                "colon, melanoma" = "colorectal,melanoma")
+                "colon, melanoma" = "colorectal;melanoma")
 
 
 ##################

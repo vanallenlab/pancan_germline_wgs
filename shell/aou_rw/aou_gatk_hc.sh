@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # The Germline Genomics of Cancer (G2C)
-# Copyright (c) 2024-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Copyright (c) 2025-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
 # Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
 # Distributed under the terms of the GNU GPL v2.0
 
@@ -158,10 +158,13 @@ done | paste -s -d\  | sed 's/,$//g' \
 echo " }" >> $staging_dir/contig_variable_overrides.json
 
 # Write template .json for input
-cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.wdl
+cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
+  "GnarlyJointGenotypingPart1.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 250,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 32000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 10,
   "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 96000,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
@@ -180,7 +183,7 @@ EOF
 # no outputs or execution buckets need to be manually staged/cleared
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/GnarlyJointGenotypingPart1.wdl \
-  --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.wdl \
+  --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
   --name JointGenotyping \
@@ -189,4 +192,24 @@ code/scripts/manage_chromshards.py \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --gate 45 \
   --max-attempts 3
+
+
+###############
+# VCF cleanup #
+###############
+
+
+###########################
+# Outlier sample analysis #
+###########################
+
+
+#############################################################
+# Exclude outlier samples and apply site-level hard filters #
+#############################################################
+
+
+###########################################
+# Exclude outliers also from GATK-SV VCFs #
+###########################################
 

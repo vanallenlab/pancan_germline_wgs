@@ -636,7 +636,19 @@ code/scripts/append_qc_fail_metadata.R \
                         staging/14A-FilterCoverageSamples/dfci-g2c.gatksv.present_at_module14.samples.list ) \
   --fail-samples-list $staging_dir/dfci-g2c.v1.gatksv.posthoc_outliers.outliers.samples.list \
   --outfile dfci-g2c.sample_meta.posthoc_outliers.tsv
-gzip -f dfci-g2c.sample_meta.posthoc_outliers.tsv
+
+# Update CEPH phenotypes in sample metadata .tsv
+# This is necessary because we gained access to the CEPH cancer data now,
+# chronologically months after sample processing had started. There will be a slight
+# discrepancy between batching case:control labels for the 130 CEPH cancer cases
+gsutil cp \
+  gs://dfci-g2c-inputs/phenotypes/ceph.phenos.tsv.gz \
+  ./
+code/scripts/update_metadata_phenotypes.R \
+  --metadata-tsv dfci-g2c.sample_meta.posthoc_outliers.tsv \
+  --phenotypes-tsv ceph.phenos.tsv.gz \
+  --out-tsv dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv
+gzip -f dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv
 
 # Compress and archive outlier data for future reference
 cd $staging_dir && \
@@ -644,7 +656,7 @@ tar -czvf dfci-g2c.v1.gatksv.posthoc_outliers.tar.gz dfci-g2c.v1.gatksv.posthoc_
 gsutil -m cp \
   dfci-g2c.v1.gatksv.posthoc_outliers.tar.gz \
   dfci-g2c.v1.gatksv.posthoc_outliers.outliers.samples.list \
-  ~/dfci-g2c.sample_meta.posthoc_outliers.tsv.gz \
+  ~/dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/ && \
 cd ~
 
@@ -652,7 +664,7 @@ cd ~
 qcplotdir=dfci-g2c.phase1.gatksv_posthoc_qc_pass.plots
 if [ ! -e $qcplotdir ]; then mkdir $qcplotdir; fi
 code/scripts/plot_intake_qc.R \
-  --qc-tsv dfci-g2c.sample_meta.posthoc_outliers.tsv.gz \
+  --qc-tsv dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
   --pass-column global_qc_pass \
   --pass-column batch_qc_pass \
   --pass-column clusterbatch_qc_pass \
@@ -738,11 +750,4 @@ submit_cohort_module 18
 # All cleanup and tracking is handled by a helper routine within submit_cohort_module
 
 submit_cohort_module 19
-
-
-##################
-# Raw callset QC #
-##################
-
-# TODO: implement this
 

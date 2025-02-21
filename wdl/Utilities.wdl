@@ -162,18 +162,20 @@ task GetContigsFromFai {
 task GetContigsFromVcfHeader {
   input {
     File vcf
-    File? vcf_idx
+    File vcf_idx
     String docker
   }
 
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
   command <<<
     set -eu -o pipefail
-
-    if [ ~{defined(vcf_idx)} == "false" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
 
     tabix -H ~{vcf} \
     | fgrep "##contig" \
@@ -202,19 +204,25 @@ task GetContigsFromVcfHeader {
 task GetSamplesFromVcfHeader {
   input {
     File vcf
-    File? vcf_idx
+    File vcf_idx
     String bcftools_docker
   }
 
   String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
   command <<<
     set -eu -o pipefail
 
-    if [ ~{defined(vcf_idx)} == "false" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
+    ln -s ~{vcf_idx} .
+
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools query -l ~{vcf} > ~{out_filename}
   >>>
