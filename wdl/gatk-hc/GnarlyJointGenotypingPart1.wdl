@@ -98,7 +98,7 @@ workflow GnarlyJointGenotypingPart1 {
       }
     }
 
-    Array[File] gnarly_intervals = select_first([GnarlyIntervalScatterDude.output_intervals, unpadded_intervals[idx]])
+    Array[File] gnarly_intervals = select_first([GnarlyIntervalScatterDude.output_intervals, [unpadded_intervals[idx]]])
 
     scatter (gnarly_idx in range(length(gnarly_intervals))) {
       call Tasks.GnarlyGenotyper {

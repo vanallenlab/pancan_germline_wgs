@@ -21,6 +21,13 @@ chr22
 chrY
 EOF
 
+# Add three more small contigs to w3 for joint genotyping resource optimization
+cat << EOF > dfci-g2c.v1.contigs.w3.list
+chr18
+chr19
+chr20
+EOF
+
 # Copy all contig lists to central directory
 gsutil -m cp \
   dfci-g2c.v1.contigs.w*.list \

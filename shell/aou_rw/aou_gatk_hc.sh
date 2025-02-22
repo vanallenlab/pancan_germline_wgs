@@ -146,12 +146,20 @@ gsutil cp \
 staging_dir=staging/JointGenotyping
 if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 
+# Check to ensure there is a local copy of calling intervals
+if ! [ -e staging/PrepIntervals ]; then
+  mkdir staging/PrepIntervals
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/*.sharded.intervals \
+    staging/PrepIntervals/
+fi
+
 # Write .json of contig-specific scatter counts
 echo "{ " > $staging_dir/contig_variable_overrides.json
 for k in $( seq 1 22 ) X Y; do
   kc=$( fgrep -v "@" \
           staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals \
-        | wc -l | awk '{ printf "%i\n", $1 / 10 }' )
+        | wc -l | awk '{ printf "%i\n", $1 }' )
   echo "\"chr$k\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
@@ -160,15 +168,14 @@ echo " }" >> $staging_dir/contig_variable_overrides.json
 # Write template .json for input
 cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
-  "GnarlyJointGenotypingPart1.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 250,
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 32000,
-  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 10,
-  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 96000,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
+  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 36000,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
-  "GnarlyJointGenotypingPart1.medium_disk": 500,
+  "GnarlyJointGenotypingPart1.medium_disk": 125,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
@@ -190,26 +197,80 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --gate 45 \
-  --max-attempts 3
+  --gate 60 \
+  --max-attempts 4
 
 
 ###############
 # VCF cleanup #
 ###############
 
+# Note: this workflow is scattered across all five workspaces for max parallelization
+# It must be submitted as below in each workspace
+
+# Refresh staging directory
+staging_dir=staging/PosthocCleanup
+if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
+
+# Write template .json for input
+cat << EOF > $staging_dir/PosthocCleanupPart1.inputs.template.json
+{
+  "PosthocCleanupPart1.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PosthocCleanupPart1.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
+  "PosthocCleanupPart1.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "PosthocCleanupPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+  "PosthocCleanupPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
+  "PosthocCleanupPart1.vcf": "TBD",
+  "PosthocCleanupPart1.vcf_idx": "TBD"
+}
+EOF
+
+# Perform post hoc VCF cleanup (split multiallelics, minimize indel representation)
+# Also count variants by type per sample (needed for outlier definition; see below)
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-hc/PosthocCleanupPart1.wdl \
+  --input-json-template $staging_dir/PosthocCleanupPart1.inputs.template.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/ \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --gate 45 \
+  --max-attempts 3
+
 
 ###########################
 # Outlier sample analysis #
 ###########################
+
+# Note that this section only needs to be run from one workspace for the entire cohort
+
+# Reaffirm staging directory
+staging_dir=staging/PosthocCleanup
+
+# TODO: implement this
 
 
 #############################################################
 # Exclude outlier samples and apply site-level hard filters #
 #############################################################
 
+# Note: this workflow is scattered across all five workspaces for max parallelization
+# It must be submitted as below in each workspace
+
+# Reaffirm staging directory
+staging_dir=staging/PosthocCleanup
+
+# TODO: implement this
+
 
 ###########################################
 # Exclude outliers also from GATK-SV VCFs #
 ###########################################
+
+# Note that this section only needs to be run from one workspace for the entire cohort
+
+# Reaffirm staging directory
+staging_dir=staging/PosthocCleanup
+
+# TODO: implement this
 

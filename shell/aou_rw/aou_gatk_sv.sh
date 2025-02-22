@@ -536,6 +536,8 @@ submit_cohort_module 16
 # Post hoc site hard filters and outlier sample exclusion #
 ###########################################################
 
+# Note that this section only needs to be run from one workspace for the entire cohort
+
 # Write template input .json for hard filters, part 1
 staging_dir=staging/posthoc_filter
 if [ -e $staging_dir ]; then rm -rf $staging_dir; fi

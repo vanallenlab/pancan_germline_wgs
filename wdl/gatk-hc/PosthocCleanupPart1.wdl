@@ -64,7 +64,8 @@ workflow PosthocCleanupPart1 {
     input:
       vcfs = NormalizeVcf.norm_vcf,
       vcf_idxs = NormalizeVcf.norm_vcf_idx,
-      out_prefix = basename(vcf, "vcf.gz") + ".norm.vcf.gz"
+      out_prefix = basename(vcf, "vcf.gz") + ".norm.vcf.gz",
+      bcftools_docker = bcftools_docker
   }
 
   # Sum variant counts
