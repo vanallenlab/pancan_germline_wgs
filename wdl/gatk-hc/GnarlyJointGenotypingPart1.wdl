@@ -29,6 +29,7 @@ workflow GnarlyJointGenotypingPart1 {
 
     String callset_name
     File sample_name_map
+    Int import_gvcf_batch_size = 50
 
     File ref_fasta
     File ref_fasta_index
@@ -82,7 +83,7 @@ workflow GnarlyJointGenotypingPart1 {
         ref_dict = ref_dict,
         workspace_dir_name = "genomicsdb",
         disk_size_gb = medium_disk,
-        batch_size = 50
+        batch_size = import_gvcf_batch_size
     }
 
     if ( gnarly_scatter_count > 1 ) {
