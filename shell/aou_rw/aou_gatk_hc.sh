@@ -159,7 +159,7 @@ echo "{ " > $staging_dir/contig_variable_overrides.json
 for k in $( seq 1 22 ) X Y; do
   kc=$( fgrep -v "@" \
           staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals \
-        | wc -l | awk '{ printf "%i\n", $1 }' )
+        | wc -l | awk '{ printf "%i\n", $1 / 3 }' )
   echo "\"chr$k\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
@@ -172,7 +172,7 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
   "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
   "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
-  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 3,
   "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 36000,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.medium_disk": 125,
@@ -199,6 +199,10 @@ code/scripts/manage_chromshards.py \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --gate 60 \
   --max-attempts 4
+
+
+
+#### DEV - carefully benchmarking & optimizing resources
 
 
 ###############
