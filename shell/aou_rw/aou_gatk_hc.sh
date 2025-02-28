@@ -159,7 +159,7 @@ echo "{ " > $staging_dir/contig_variable_overrides.json
 for k in $( seq 1 22 ) X Y; do
   kc=$( fgrep -v "@" \
           staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals \
-        | wc -l | awk '{ printf "%i\n", $1 / 3 }' )
+        | wc -l | awk '{ printf "%i\n", $1 }' )
   echo "\"chr$k\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
@@ -172,8 +172,9 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
   "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
   "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
-  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 3,
-  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 36000,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
+  "GnarlyJointGenotypingPart1.import_gvcf_batch_size": 100,
+  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.medium_disk": 125,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
@@ -197,12 +198,42 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --gate 60 \
+  --outer-gate 60 \
+  --submission-gate 5 \
   --max-attempts 4
 
 
 
-#### DEV - carefully benchmarking & optimizing resources
+
+#### DEV - carefully benchmarking & optimizing resources just on chr19
+
+export CONTIG=chr19
+export CONTIG_SCATTER_COUNT=279
+
+code/scripts/envsubst.py \
+  -i $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
+  -o cromshell/inputs/GnarlyJointGenotypingPart1.inputs.chr19.json
+
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
+  cromshell/inputs/GnarlyJointGenotypingPart1.inputs.chr19.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/dfci-g2c.v1.JointGenotyping.chr19.job_ids.list
+
+while [ TRUE ]; do
+  echo -e "\n\n"
+  date
+  cromshell -t 120 counts -x \
+    $( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.chr19.job_ids.list )
+  sleep 10m
+done
+
+# Optimized resources based on chr19 -- need to update input json above once workflow completes
+# import_gvcf_disk_gb = 30
+# "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 25,
+# "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16,
+
 
 
 ###############
@@ -238,7 +269,7 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --gate 45 \
+  --outer-gate 45 \
   --max-attempts 3
 
 

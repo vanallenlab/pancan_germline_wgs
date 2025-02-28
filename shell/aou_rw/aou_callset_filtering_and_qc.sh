@@ -32,6 +32,7 @@ find code/ -name "*.py" | xargs -I {} chmod a+x {}
 find code/ -name "*.R" | xargs -I {} chmod a+x {}
 
 # Source .bashrc and bash utility functions
+. code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 
 # Install necessary packages
@@ -70,7 +71,7 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectShortVariantQcMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1.gatkhc" \
-  --gate 30 \
+  --outer-gate 30 \
   --max-attempts 2
 
 
@@ -91,7 +92,7 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectSvQcMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1.gatksv" \
-  --gate 30 \
+  --outer-gate 30 \
   --max-attempts 2
 
 

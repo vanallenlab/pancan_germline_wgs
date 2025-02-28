@@ -56,7 +56,8 @@ def startup_report(inputs):
     print(textwrap.dedent(start_log))
 
     for key, val in inputs.items():
-        print('  - {} : {}'.format(key, val))
+        if val is not None:
+            print('  - {} : {}'.format(key, val))
     print('')
 
 
@@ -141,7 +142,7 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
 
 def submit_workflow(contig, wdl, input_template, input_json, prev_wids, 
                     dependencies_zip=None, contig_var_overrides=None, 
-                    dry_run=False, quiet=False):
+                    dry_run=False, quiet=False, verbose=False):
     """
     Submit a workflow for a single contig to Cromwell and store the workflow ID in a log
     """
@@ -181,7 +182,7 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
     else:
         sub_res = subprocess.run(cmd, capture_output=True, shell=True, 
                                  check=False, text=True)
-        if not quiet:
+        if verbose and not quiet:
             msg = '[{}] Standard output from Cromwell submission command:\n{}'
             print(msg.format(clean_date(), sub_res.stdout))
         try:
@@ -241,14 +242,19 @@ def main():
                         'not overwrite it.')
     parser.add_argument('-m', '--max-attempts', type=int, default=3, 
                         help='Maximum number of submission attempts for any one contig')
-    parser.add_argument('-g', '--gate', type=float, default=20, help='Number of ' +
+    parser.add_argument('-g', '--outer-gate', type=float, default=20, help='Number of ' +
                         'minutes to wait between monitor cycles')
+    parser.add_argument('--submission-gate', type=float, default=None, help='Number of ' +
+                        'minutes to pause after a new workflow submission ' +
+                        '[default: no wait]')
     parser.add_argument('--workflow-id-log-prefix', help='Optional prefix for ' +
                         'logger files for submitted workflow IDs')
     parser.add_argument('--dry-run', default=False, action='store_true',help='Do ' +
                         'not actually submit jobs or manipulate cloud objects.')
     parser.add_argument('--quiet', default=False, action='store_true',help='Do ' +
                         'not print logging, progress, and diagnostics to stdout')
+    parser.add_argument('--verbose', default=False, action='store_true',
+                        help='Print extra logging')
     args = parser.parse_args()
 
     # Infer method name if not provided
@@ -302,6 +308,8 @@ def main():
                         'Dumpster' : args.dumpster,
                         'Contigs' : ', '.join(contigs),
                         'Max attempts' : args.max_attempts,
+                        'Outer gate' : args.outer_gate,
+                        'Submission gate' : args.submission_gate,
                         'Dry run' : args.dry_run,
                         'Quiet' : args.quiet})
 
@@ -407,7 +415,14 @@ def main():
                                              input_json, prev_wids, 
                                              args.dependencies_zip, 
                                              args.contig_variable_overrides, 
-                                             args.dry_run, args.quiet)
+                                             args.dry_run, args.quiet, args.verbose)
+                    if args.submission_gate is not None:
+                        if not args.quiet:
+                            msg = '[{}] Pausing {:,} minutes before proceeding ' + \
+                                  'according to `--submission-gate {}`...\n'
+                            print(msg.format(clean_date(), args.outer_gate, args.outer_gate))
+                        sleep(60 * args.submission_gate)
+
                 else:
                     if not args.quiet:
                         msg = '[{}] Contig {} has reached the maximum number of ' + \
@@ -443,8 +458,8 @@ def main():
                 report_status(all_status)
                 msg = '[{}] Finished checking status for all {:,} contigs. ' + \
                       'Waiting {:,} minutes before checking again...\n'
-                print(msg.format(clean_date(), len(contigs), args.gate))
-            sleep(60 * args.gate)
+                print(msg.format(clean_date(), len(contigs), args.outer_gate))
+            sleep(60 * args.outer_gate)
 
     # Report completion once all contigs are staged
     msg = '[{}] All contig outputs have been staged! Exiting management routine.'

@@ -13,9 +13,10 @@ cd $WRKDIR
 
 # TODO: eventually implement this for all five workspaces before scaling up
 
-# For now, we're writing chr21, chr22, and chrY to the "w2" list
+# For now, we're writing chr19, chr21, chr22, and chrY to the "w2" list
 # This is only for development purposes of GATK-HC joint genotyping
 cat << EOF > dfci-g2c.v1.contigs.w2.list
+chr19
 chr21
 chr22
 chrY
@@ -23,8 +24,8 @@ EOF
 
 # Add three more small contigs to w3 for joint genotyping resource optimization
 cat << EOF > dfci-g2c.v1.contigs.w3.list
+chr17
 chr18
-chr19
 chr20
 EOF
 

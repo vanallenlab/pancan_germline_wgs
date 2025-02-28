@@ -559,7 +559,7 @@ code/scripts/manage_chromshards.py \
   --name PosthocHardFilterPart1 \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocHardFilterPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --gate 30 \
+  --outer-gate 30 \
   --max-attempts 3
 
 # Write input .json for SV counting task
@@ -697,7 +697,7 @@ code/scripts/manage_chromshards.py \
   --name PosthocHardFilterPart2 \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocHardFilterPart2.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --gate 30 \
+  --outer-gate 30 \
   --max-attempts 3
 
 

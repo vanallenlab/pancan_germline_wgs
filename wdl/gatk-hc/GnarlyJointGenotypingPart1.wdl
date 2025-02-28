@@ -40,7 +40,8 @@ workflow GnarlyJointGenotypingPart1 {
     Boolean make_hard_filtered_sites = true
 
     Int small_disk = 100
-    Int medium_disk = 200
+    Int import_gvcfs_disk_gb = 200
+    Int make_sites_disk_gb = 200
     Int large_disk = 1000
 
     Int? top_level_scatter_count
@@ -82,7 +83,7 @@ workflow GnarlyJointGenotypingPart1 {
         ref_fasta_index = ref_fasta_index,
         ref_dict = ref_dict,
         workspace_dir_name = "genomicsdb",
-        disk_size_gb = medium_disk,
+        disk_size_gb = import_gvcfs_disk_gb,
         batch_size = import_gvcf_batch_size
     }
 
@@ -114,17 +115,20 @@ workflow GnarlyJointGenotypingPart1 {
       }
     }
 
-    Array[File] gnarly_gvcfs = GnarlyGenotyper.output_vcf
+    Array[File] gnarly_vcfs = GnarlyGenotyper.output_vcf
+    Array[File] gnarly_vcf_idxs = GnarlyGenotyper.output_vcf_index
 
-    call Tasks.GatherVcfs as TotallyRadicalGatherVcfs {
-      input:
-        input_vcfs = gnarly_gvcfs,
-        output_vcf_name = callset_name + "." + idx + ".gnarly.vcf.gz",
-        disk_size_gb = large_disk
+    if ( length(gnarly_vcfs) > 1 ) {
+      call Tasks.GatherVcfs as TotallyRadicalGatherVcfs {
+        input:
+          input_vcfs = gnarly_vcfs,
+          output_vcf_name = callset_name + "." + idx + ".gnarly.vcf.gz",
+          disk_size_gb = large_disk
+      }
     }
 
-    File genotyped_vcf = TotallyRadicalGatherVcfs.output_vcf
-    File genotyped_vcf_index = TotallyRadicalGatherVcfs.output_vcf_index
+    File genotyped_vcf = select_first([TotallyRadicalGatherVcfs.output_vcf, gnarly_vcfs[0]])
+    File genotyped_vcf_index = select_first([TotallyRadicalGatherVcfs.output_vcf_index, gnarly_vcf_idxs[0]])
 
     if ( make_hard_filtered_sites ){
       call Tasks.HardFilterAndMakeSitesOnlyVcf {
@@ -134,7 +138,7 @@ workflow GnarlyJointGenotypingPart1 {
           excess_het_threshold = 54.69,
           variant_filtered_vcf_filename = callset_name + "." + idx + ".variant_filtered.vcf.gz",
           sites_only_vcf_filename = callset_name + "." + idx + ".sites_only.variant_filtered.vcf.gz",
-          disk_size_gb = medium_disk
+          disk_size_gb = make_sites_disk_gb
       }
     }
 

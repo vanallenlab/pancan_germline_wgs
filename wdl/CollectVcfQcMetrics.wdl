@@ -10,6 +10,7 @@ version 1.0
 
 
 import "Utilities.wdl" as Utils
+import "QcTasks.wdl" as QcTasks
 
 
 workflow CollectVcfQcMetrics {
@@ -75,7 +76,12 @@ workflow CollectVcfQcMetrics {
     }
 
     # Compute site-level metrics
-    # TODO: implement this
+    call QcTasks.CollectSiteMetrics {
+      input:
+        vcf = SliceAndCleanVcf.sites_vcf,
+        vcf_idx = SliceAndCleanVcf.sites_vcf_idx,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
 
     # Compute site-level benchmarking metrics
     # TODO: implement this

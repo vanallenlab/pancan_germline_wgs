@@ -229,6 +229,7 @@ task GetSamplesFromVcfHeader {
 
   output {
     String sample_list = out_filename
+    Int n_samples = length(read_lines(out_filename))
   }
 
   runtime {
