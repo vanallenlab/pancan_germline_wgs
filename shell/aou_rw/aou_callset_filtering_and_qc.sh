@@ -97,7 +97,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1.GnomadSiteMetrics" \
   --outer-gate 30 \
-  --max-attempts 5
+  --max-attempts 6
 
 
 ############################################

@@ -80,9 +80,11 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Concatenate sites BEDs for indels
+  Array[File] indel_beds = flatten(select_all([select_all(CollectSnvMetrics.indel_sites), 
+                                   select_all(CollectSvMetrics.indel_sites)]))
   call Utils.ConcatTextFiles as ConcatIndels {
     input:
-      shards = select_all(CollectSnvMetrics.indel_sites),
+      shards = indel_beds,
       concat_command = "zcat",
       sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
       compression_command = "bgzip -c",
@@ -126,9 +128,11 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Concatenate sites BEDs for SVs
+  Array[File] sv_beds = flatten(select_all([select_all(CollectSnvMetrics.sv_sites), 
+                                select_all(CollectSvMetrics.sv_sites)]))
   call Utils.ConcatTextFiles as ConcatSvs {
     input:
-      shards = select_all(CollectSnvMetrics.sv_sites),
+      shards = sv_beds,
       concat_command = "zcat",
       sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
       compression_command = "bgzip -c",
