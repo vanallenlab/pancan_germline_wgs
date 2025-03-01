@@ -15,23 +15,52 @@ MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 # configured in g2c_analysis_base, which is used as the base image for this build
 COPY --from=g2c_analysis_base /venv /venv
 
-# Aliases for convenience
-RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
-    echo 'alias less="zless"' >> ~/.bashrc
+# Make bash default shell & load conda environment on container startup
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+RUN echo "source /venv/bin/activate" >> ~/.bashrc
+ENV VIRTUAL_ENV=/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install git
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends git
 
+# Clone GATK-SV repo, check out specified hash, and only keep svtk
+ARG SVTK_TAG=v1.0.1
+RUN git clone \
+    https://github.com/broadinstitute/gatk-sv.git \
+    opt/gatk-sv \
+    --branch=$SVTK_TAG && \
+    mv opt/gatk-sv/src/svtk opt/ && \
+    rm -rf opt/gatk-sv
+
+# Install svtk
+RUN cd opt/svtk && pip install -e .
+
+# Clone RLCtools repo and check out specified hash
+ARG RLCTOOLS_TAG=main
+RUN git clone \
+    https://github.com/RCollins13/RLCtools.git \
+    opt/RLCtools \
+    --branch=$RLCTOOLS_TAG
+
+# Install RLCtools
+ARG RLCTOOLS_VERSION=0.1
+RUN Rscript -e 'install.packages("opt/RLCtools/RLCtools_$RLCTOOLS_VERSION.tar.gz", repos=NULL, type="source")'
+
 # Clone pancan_germline_wgs repo and check out specified hash
-ARG G2C_REPO_HASH=main
+ARG G2C_TAG=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
     opt/pancan_germline_wgs \
-    --branch=$G2C_REPO_HASH
+    --branch=$G2C_TAG
 
-# Install missing R libraries as necessary
-RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'
+# Install G2C helper libraries
+
+
+# Aliases for convenience
+RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
+    echo 'alias less="zless"' >> ~/.bashrc
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]

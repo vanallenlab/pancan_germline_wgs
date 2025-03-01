@@ -18,22 +18,27 @@ RUN apt-get -qqy update --fix-missing && \
 # Clone pancan_germline_wgs repo and check out specified hash
 # Note that this is only used for pulling the version-tracked conda environment .yaml
 # It will be re-cloned when building the child image, g2c_analysis
-ARG REPO_HASH=main
+ARG G2C_TAG=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
     opt/pancan_germline_wgs \
-    --branch=$REPO_HASH
+    --branch=$G2C_TAG
 
 # Create default python environment (environment must be present in build context)
 ENV CONDA_SUBDIR=linux-64
 RUN conda config --env --set subdir linux-64 && \
     mamba update --all && \
-    mamba env create --file=/opt/pancan_germline_wgs/refs/env/environment.g2c_analysis.yml
+    mamba env create --file=/opt/pancan_germline_wgs/refs/config/environment.g2c_analysis.yml
 
-# # Manually install packages
-# mamba install bioconda::bcftools bioconda::pysam bioconda::tabix conda-forge::biopython conda-forge::conda-pack
+# Manually install packages (only necessary for local debugging/environment rework)
+# mamba install bioconda::bcftools bioconda::pysam bioconda::tabix \
+#               conda-forge::biopython conda-forge::conda-pack
 # mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy
-# mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot conda-forge::r-viridis
+# mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse \
+#               conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret \
+#               conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot \
+#               conda-forge::r-viridis conda-forge::r-optparse
+# mamba install conda-forge::google-cloud-sdk
 
 # Use conda-pack to create a standalone enviornment
 RUN conda-pack -n g2c -o /tmp/env.tar && \
