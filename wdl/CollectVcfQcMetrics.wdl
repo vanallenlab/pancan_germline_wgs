@@ -22,7 +22,9 @@ workflow CollectVcfQcMetrics {
     File? sample_priority_list                # Rank-ordered list of samples to retain for sample-level analyses
     Int n_for_sample_level_analyses = 1000    # Number of samples to use for sample-level summary analyses
 
-    File scatter_intervals_list               # GATK-style intervals file for scattering over vcf (any tabix-compliant interval definitions should work)
+    Boolean shard_vcf = true                  # Should the input VCF be sharded for QC collection?
+    File? scatter_intervals_list              # GATK-style intervals file for scattering over vcf (any tabix-compliant interval definitions should work)
+    Int n_records_per_shard = 25000           # Number of records per shard. This will only be used as a backup if scatter_intervals_list is not provided
 
     String output_prefix
 
@@ -51,35 +53,95 @@ workflow CollectVcfQcMetrics {
       docker = bcftools_docker
   }
 
-  # Clean scatter intervals
-  call Utils.ParseIntervals {
-    input:
-      intervals_list = scatter_intervals_list,
-      docker = linux_docker
+  # Preprocess VCF according to desired scatter behavior
+  if ( shard_vcf ) {
+
+    # Default to scattering over prespecified intervals, as this is most compute efficient
+    if ( defined(scatter_intervals_list) ) {        
+
+      # Clean scatter intervals
+      call Utils.ParseIntervals {
+        input:
+          intervals_list = select_first([scatter_intervals_list]),
+          docker = linux_docker
+      }
+
+      # Parallelize over scatter intervals to prepare VCF shards
+      scatter ( interval_info in ParseIntervals.interval_info ) {
+
+        String interval_coords = interval_info.right
+        String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info.left
+
+        # Extract region, update INFO, and create VCF subsets as needed
+        call PreprocessVcf as PreprocessIntervals {
+          input:
+            vcf = vcf,
+            vcf_idx = vcf_idx,
+            interval = interval_coords,
+            target_samples = ChooseTargetSamples.target_samples,
+            out_prefix = shard_prefix,
+            docker = bcftools_docker
+        }
+      }
+    }
+
+    # If scatter_intervals_list is not provided, shard the VCF the old fashioned way
+    if ( !defined(scatter_intervals_list) ) {
+
+      # Shard VCF on a VM (costly & slow)
+      call Utils.ShardVcf {
+        input:
+          vcf = vcf,
+          vcf_idx = vcf_idx,
+          records_per_shard = n_records_per_shard,
+          bcftools_docker = bcftools_docker,
+          n_preemptible = 1
+      }
+
+      # Preprocess each VCF shard
+      Array[Pair[File, File]] vcf_shard_info = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs)
+      scatter ( shard_info in vcf_shard_info ) {
+        call PreprocessVcf as PreprocessShards {
+          input:
+            vcf = shard_info.left,
+            vcf_idx = shard_info.right,
+            target_samples = ChooseTargetSamples.target_samples,
+            out_prefix = basename(shard_info.left, ".vcf.gz"),
+            docker = bcftools_docker
+        }
+      }
+    }
   }
 
-  # Parallelize over scatter intervals
-  scatter ( interval_info in ParseIntervals.interval_info ) {
-
-    String interval_coords = interval_info.right
-    String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info.left
-
-    # Extract region, update INFO, and create VCF subsets as needed
-    call SliceAndCleanVcf {
+  # If no sharding is elected, the entire VCF needs to be preprocessed
+  if ( !shard_vcf ) {
+    call PreprocessVcf as PreprocessFullVcf {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
-        interval = interval_coords,
         target_samples = ChooseTargetSamples.target_samples,
-        out_prefix = shard_prefix,
+        out_prefix = basename(vcf, ".vcf.gz"),
         docker = bcftools_docker
     }
+  }
+
+  Array[File] site_vcf_shards = select_all(select_first([PreprocessIntervals.sites_vcf, 
+                                                         PreprocessShards.sites_vcf, 
+                                                         [PreprocessFullVcf.sites_vcf]]))
+  Array[File] site_vcf_shard_idxs = select_all(select_first([PreprocessIntervals.sites_vcf_idx, 
+                                                             PreprocessShards.sites_vcf_idx, 
+                                                             [PreprocessFullVcf.sites_vcf_idx]]))
+  Array[Pair[File, File]] site_vcf_info = zip(site_vcf_shards, site_vcf_shard_idxs)
+
+  # Collect site-level metrics for all preprocessed shards
+  scatter ( shard_info in site_vcf_info ) {
 
     # Compute site-level metrics
     call QcTasks.CollectSiteMetrics {
       input:
-        vcf = SliceAndCleanVcf.sites_vcf,
-        vcf_idx = SliceAndCleanVcf.sites_vcf_idx,
+        vcf = shard_info.left,
+        vcf_idx = shard_info.right,
+        n_samples = ChooseTargetSamples.n_samples_all,
         g2c_analysis_docker = g2c_analysis_docker
     }
 
@@ -93,9 +155,43 @@ workflow CollectVcfQcMetrics {
     # TODO: implement this
 
     # Compute sample-level benchmarking metrics
+    # TODO: implement this
   }
 
-  output {}
+  # Collapse SV sites
+  # TODO: implement this
+
+  # Collapse size distributions
+  call QcTasks.SumCompressedDistribs as SumSizeDistribs {
+    input:
+      distrib_tsvs = CollectSiteMetrics.size_distrib,
+      out_prefix = output_prefix + ".size_distribution",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
+  # Collapse freq distributions
+  call QcTasks.SumCompressedDistribs as SumAfDistribs {
+    input:
+      distrib_tsvs = CollectSiteMetrics.af_distrib,
+      out_prefix = output_prefix + ".af_distribution",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
+  # Collapse size X freq distributions
+  call QcTasks.SumCompressedDistribs as SumJointDistribs {
+    input:
+      distrib_tsvs = CollectSiteMetrics.size_vs_af_distrib,
+      n_key_columns = 3,
+      out_prefix = output_prefix + ".size_vs_af_distribution",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
+  output {
+    # For now, just outputting the merged distribution files
+    File size_distrib = SumSizeDistribs.merged_distrib
+    File af_distrib = SumAfDistribs.merged_distrib
+    File size_vs_af_distrib = SumJointDistribs.merged_distrib
+  }
 }
 
 
@@ -131,6 +227,7 @@ task ChooseTargetSamples {
 
   output {
     File target_samples = outfile
+    Int n_samples_all = length(read_lines(all_samples_list))
   }
 
   runtime {
@@ -144,8 +241,10 @@ task ChooseTargetSamples {
 }
 
 
-# Slice a VCF to a prespecified interval and update all INFO required for QC metric collection
-task SliceAndCleanVcf {
+# Update all VCF INFO required for QC metric collection, make all necessary 
+# genotype subsets, and slice to a prespecified interval (if desired)
+# TODO: make slicing optional
+task PreprocessVcf {
   input {
     File vcf
     File vcf_idx

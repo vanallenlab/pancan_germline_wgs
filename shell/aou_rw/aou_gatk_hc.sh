@@ -230,9 +230,9 @@ while [ TRUE ]; do
 done
 
 # Optimized resources based on chr19 -- need to update input json above once workflow completes
-# import_gvcf_disk_gb = 30
-# "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 25,
-# "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16,
+# import_gvcf_disk_gb = 40
+# "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 50,
+# "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20,
 
 
 

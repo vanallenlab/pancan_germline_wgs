@@ -45,6 +45,12 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
+# Create dependencies .zip for workflow submissions
+cd code/wdl/pancan_germline_wgs && \
+zip g2c.dependencies.zip *.wdl && \
+mv g2c.dependencies.zip ~/ && \
+cd ~
+
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
 
@@ -52,6 +58,63 @@ export WN=$( get_workspace_number )
 gsutil cp -r \
   gs://dfci-g2c-refs/hg38/contig_lists \
   ./
+
+
+###################################################################
+# Collect summary distributions from gnomAD v4.1 for benchmarking #
+###################################################################
+
+# Refresh staging directory
+staging_dir=staging/GnomadSiteMetrics
+if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
+
+  "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
+  "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
+  "GnarlyJointGenotypingPart1.import_gvcf_batch_size": 100,
+  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
+  "GnarlyJointGenotypingPart1.medium_disk": 125,
+  "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+  "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+  "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+  "GnarlyJointGenotypingPart1.sample_name_map": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
+  "GnarlyJointGenotypingPart1.top_level_scatter_count": \$CONTIG_SCATTER_COUNT,
+  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals"
+
+
+# Write template .json of inputs for chromsharded manager
+cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
+{
+  "PreprocessGnomadSiteMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "TBD",
+  "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1",
+  "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
+  "PreprocessGnomadSiteMetrics.snv_scatter_intervals": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
+  "PreprocessGnomadSiteMetrics.snv_vcf": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz",
+  "PreprocessGnomadSiteMetrics.snv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz.tbi",
+  "PreprocessGnomadSiteMetrics.sv_n_samples": 63046,
+  "PreprocessGnomadSiteMetrics.sv_scatter_intervals": "gs://dfci-g2c-refs/hg38/contig_lists/dfci-g2c.v1.contigs.W$WN.list",
+  "PreprocessGnomadSiteMetrics.sv_vcf": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz",
+  "PreprocessGnomadSiteMetrics.sv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz.tbi"
+}
+EOF
+
+# Submit, monitor, stage, and cleanup short variant QC metadata task
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/pancan_germline_wgs/PreprocessGnomadSiteMetrics.wdl \
+  --input-json-template $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json \
+  --dependencies-zip g2c.dependencies.zip \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ \
+  --name GnomadSiteMetrics \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1.GnomadSiteMetrics" \
+  --outer-gate 30 \
+  --max-attempts 2
 
 
 ############################################

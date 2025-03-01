@@ -15,6 +15,7 @@ import argparse
 import csv
 import gzip
 import numpy as np
+import subprocess
 from Bio import bgzf
 from g2cpy import classify_variant
 from os import remove
@@ -94,7 +95,7 @@ def main():
                         help='Number of discrete bins to use per order of ' +
                         'magnitude when summarizing size distributions',
                         metavar='[int]')
-    parser.add_argument('--max-size-bin', default=10e5, type=int,
+    parser.add_argument('--max-size-bin', default=1e6, type=int,
                         help='Maximum size for binning; all variants larger than ' +
                         'this size will be included in the top bin.',
                        metavar='[int]')
@@ -112,6 +113,13 @@ def main():
     af_lt = make_af_bins(args.bins_per_log10_af, args.sample_count)
     af_counter = {vc : {vsc : [0] * len(af_lt) for vsc in var_subclasses[vc]}
                   for vc in var_classes}
+
+    # Create nested counters for compressed size vs. AF distribution
+    x_size_ge = np.insert(10 ** np.arange(0, np.log10(args.max_size_bin) + 1), 0, 0)
+    x_af_lt = 10 ** np.arange(np.ceil(np.log10(af_lt[0])), 1, 1)
+    x_af_lt[-1] = x_af_lt[-1] + 1e-6
+    x_counter = {vc : {vsc : {size : [0] * len(x_af_lt) for size in x_size_ge} 
+                       for vsc in var_subclasses[vc]} for vc in var_classes}
 
     # Open connection to input file
     if args.input in '- stdin /dev/stdin'.split():
@@ -156,13 +164,20 @@ def main():
         size_counter[vc][vsc][np.argmin(varlen >= size_ge)-1] += 1
 
         # Add variant count to binned AF by class & subclass
-        af = float(af)
-        af_counter[vc][vsc][np.argmax(af < af_lt)] += 1
+        if af != '.':
+            af = float(af)
+            af_counter[vc][vsc][np.argmax(af < af_lt)] += 1
+            
+            # Add variant count to binned 2D size X AF by class & subclass
+            x_counter[vc][vsc][x_size_ge[np.argmin(varlen >= x_size_ge)-1]][np.argmax(af < x_af_lt)] += 1
 
         # Convert long floats to scientific notation
-        af = '{:.2e}'.format(af)
-        hwe = '{:.2e}'.format(float(hwe))
-        exhet = '{:.2e}'.format(float(exhet))
+        if af != '.':
+            af = '{:.2e}'.format(af)
+        if hwe != '.':
+            hwe = '{:.2e}'.format(float(hwe))
+        if exhet != '.':            
+            exhet = '{:.2e}'.format(float(exhet))
 
         # Write reformatted variant data to out .bed
         outvals = [chrom, pos, end, vid, vc, vsc, varlen, ac, af, hwe, exhet]
@@ -175,12 +190,19 @@ def main():
 
     # Delete site-level summary files for which no qualifying variants were observred
     for vc, seen in vc_seen.items():
+        if args.gzip:
+            fpath = site_fouts[vc]._handle.name
+        else:
+            fpath = site_fouts[vc].name
+        
+        # Delete file if empty
         if not seen:
+            remove(fpath)
+
+        # Otherwise, index summary files with tabix if --gzip is optioned
+        else:
             if args.gzip:
-                delpath = site_fouts[vc]._handle.name
-            else:
-                delpath = site_fouts[vc].name
-            remove(delpath)
+                subprocess.run(['tabix', '-f', fpath], check=True)
 
     # Write compressed variant size distributions to file
     fnbase = args.output_prefix + '.size_distrib.tsv'
@@ -210,6 +232,22 @@ def main():
             if sum(counts) > 0:
                 outvals = [vc, vsc] + [str(k) for k in counts]
                 fout.write('\t'.join(outvals) + '\n')
+    fout.close()
+
+    # Write compressed 2D size X AF distributions to file
+    fnbase = args.output_prefix + '.size_vs_af_distrib.tsv'
+    if args.gzip:
+        fout = gzip.open(fnbase + '.gz', mode='wt', encoding='utf-8')
+    else:
+        fout = open(fnbase, mode='w')
+    header = '#class subclass size'.split() + ['lt{:.2e}'.format(k) for k in x_af_lt]
+    fout.write('\t'.join(header) + '\n')
+    for vc, vsc_dat in x_counter.items():
+        for vsc, size_dat in vsc_dat.items():
+            for size, counts in size_dat.items():
+                if sum(counts) > 0:
+                    outvals = [vc, vsc, 'ge{:d}'.format(int(size))] + [str(k) for k in counts]
+                    fout.write('\t'.join(outvals) + '\n')
     fout.close()
 
 
