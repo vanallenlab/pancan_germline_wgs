@@ -29,9 +29,8 @@ workflow PreprocessGnomadSiteMetrics {
     String output_prefix
 
     String linux_docker
-    String g2c_pipeline_docker
-    String g2c_pipeline_docker
     String g2c_analysis_docker
+    String g2c_pipeline_docker
   }
 
   # Clean SNV scatter intervals
