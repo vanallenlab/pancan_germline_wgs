@@ -32,8 +32,9 @@ RUN conda config --env --set subdir linux-64 && \
 
 # Manually install packages (only necessary for local debugging/environment rework)
 # mamba install bioconda::bcftools bioconda::pysam bioconda::tabix \
-#               conda-forge::biopython conda-forge::conda-pack
-# mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy
+#               conda-forge::biopython conda-forge::conda-pack bioconda::pybedtools
+# mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy pip==25.0 \
+#               conda-forge::scikit-learn conda-forge::cython
 # mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse \
 #               conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret \
 #               conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot \
