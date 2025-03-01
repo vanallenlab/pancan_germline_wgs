@@ -29,7 +29,8 @@ workflow PreprocessGnomadSiteMetrics {
     String output_prefix
 
     String linux_docker
-    String bcftools_docker
+    String g2c_pipeline_docker
+    String g2c_pipeline_docker
     String g2c_analysis_docker
   }
 
@@ -54,7 +55,7 @@ workflow PreprocessGnomadSiteMetrics {
         vcf_idx = snv_vcf_idx,
         interval = snv_interval_coords,
         out_prefix = snv_shard_prefix,
-        bcftools_docker = bcftools_docker
+        g2c_pipeline_docker = g2c_pipeline_docker
     }
 
     # Collect site metrics for SNVs
@@ -76,7 +77,7 @@ workflow PreprocessGnomadSiteMetrics {
       compression_command = "bgzip -c",
       input_has_header = true,
       output_filename = output_prefix + ".snv.sites.bed.gz",
-      docker = bcftools_docker
+      docker = g2c_pipeline_docker
   }
 
   # Concatenate sites BEDs for indels
@@ -88,7 +89,7 @@ workflow PreprocessGnomadSiteMetrics {
       compression_command = "bgzip -c",
       input_has_header = true,
       output_filename = output_prefix + ".indel.sites.bed.gz",
-      docker = bcftools_docker
+      docker = g2c_pipeline_docker
   }
 
   # Clean SV scatter intervals
@@ -112,7 +113,7 @@ workflow PreprocessGnomadSiteMetrics {
         vcf_idx = sv_vcf_idx,
         interval = sv_interval_coords,
         out_prefix = sv_shard_prefix,
-        bcftools_docker = bcftools_docker
+        g2c_pipeline_docker = g2c_pipeline_docker
     }
 
     # Collect site metrics for SVs
@@ -134,7 +135,7 @@ workflow PreprocessGnomadSiteMetrics {
       compression_command = "bgzip -c",
       input_has_header = true,
       output_filename = output_prefix + ".sv.sites.bed.gz",
-      docker = bcftools_docker
+      docker = g2c_pipeline_docker
   }
 
   # Collapse size distributions
@@ -186,7 +187,7 @@ task SliceVcf {
     String out_prefix
 
     Int disk_gb = 25
-    String bcftools_docker
+    String g2c_pipeline_docker
   }
 
   parameter_meta {
@@ -231,7 +232,7 @@ task SliceVcf {
   }
 
   runtime {
-    docker: bcftools_docker
+    docker: g2c_pipeline_docker
     memory: "2 GB"
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"

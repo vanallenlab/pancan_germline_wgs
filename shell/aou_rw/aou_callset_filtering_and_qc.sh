@@ -71,8 +71,8 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 # Write template .json of inputs for chromsharded manager
 cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
 {
-  "PreprocessGnomadSiteMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial",
+  "PreprocessGnomadSiteMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1",
   "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
@@ -80,7 +80,7 @@ cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
   "PreprocessGnomadSiteMetrics.snv_vcf": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz",
   "PreprocessGnomadSiteMetrics.snv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz.tbi",
   "PreprocessGnomadSiteMetrics.sv_n_samples": 63046,
-  "PreprocessGnomadSiteMetrics.sv_scatter_intervals": "gs://dfci-g2c-refs/hg38/contig_lists/dfci-g2c.v1.contigs.w$WN.list",
+  "PreprocessGnomadSiteMetrics.sv_scatter_intervals": "gs://dfci-g2c-refs/hg38/contig_lists/\$CONTIG.list",
   "PreprocessGnomadSiteMetrics.sv_vcf": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz",
   "PreprocessGnomadSiteMetrics.sv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz.tbi"
 }
@@ -97,7 +97,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1.GnomadSiteMetrics" \
   --outer-gate 30 \
-  --max-attempts 2
+  --max-attempts 4
 
 
 ############################################
