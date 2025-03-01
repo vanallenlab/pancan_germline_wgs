@@ -41,7 +41,8 @@ RUN conda config --env --set subdir linux-64 && \
 # mamba install conda-forge::google-cloud-sdk
 
 # Use conda-pack to create a standalone enviornment
-RUN conda-pack -n g2c -o /tmp/env.tar && \
+RUN mamba install conda-pack && \
+    conda-pack -n g2c -o /tmp/env.tar && \
     mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
     rm /tmp/env.tar && \
     /venv/bin/conda-unpack

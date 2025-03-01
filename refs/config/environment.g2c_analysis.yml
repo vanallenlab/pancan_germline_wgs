@@ -24,7 +24,6 @@ dependencies:
   - colorama=0.4.6=pyhd8ed1ab_1
   - conda=25.1.1=py312h7900ff3_1
   - conda-libmamba-solver=25.1.1=pyhd8ed1ab_0
-  - conda-pack=0.8.1=pyhd8ed1ab_1
   - conda-package-handling=2.4.0=pyh7900ff3_2
   - conda-package-streaming=0.11.0=pyhd8ed1ab_0
   - cpp-expected=1.1.0=hf52228f_0
@@ -117,7 +116,7 @@ dependencies:
   - pango=1.56.1=h861ebed_0
   - pcre2=10.44=hba22ea6_2
   - perl=5.32.1=7_hd590300_perl5
-  - pip=25.0.1=pyh8b19718_0
+  - pip=25.0=pyh8b19718_0
   - pixman=0.44.2=h29eaf8c_0
   - platformdirs=4.3.6=pyhd8ed1ab_1
   - pluggy=1.5.0=pyhd8ed1ab_1

@@ -35,7 +35,7 @@ RUN git clone \
     rm -rf opt/gatk-sv
 
 # Install svtk
-RUN cd opt/svtk && pip install -e .
+RUN pip install -e opt/svtk
 
 # Clone RLCtools repo and check out specified hash
 ARG RLCTOOLS_TAG=main
@@ -56,7 +56,9 @@ RUN git clone \
     --branch=$G2C_TAG
 
 # Install G2C helper libraries
-
+ARG G2CR_VERSION=0.2.0
+RUN Rscript -e 'install.packages("opt/pancan_germline_wgs/src/G2CR/G2CR_$G2CR_version.tar.gz", repos=NULL, type="source")'
+pip install code/src/g2cpy
 
 # Aliases for convenience
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
