@@ -68,28 +68,11 @@ gsutil cp -r \
 staging_dir=staging/GnomadSiteMetrics
 if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 
-  "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
-  "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
-  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
-  "GnarlyJointGenotypingPart1.import_gvcf_batch_size": 100,
-  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
-  "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
-  "GnarlyJointGenotypingPart1.medium_disk": 125,
-  "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-  "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-  "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-  "GnarlyJointGenotypingPart1.sample_name_map": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
-  "GnarlyJointGenotypingPart1.top_level_scatter_count": \$CONTIG_SCATTER_COUNT,
-  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals"
-
-
 # Write template .json of inputs for chromsharded manager
 cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
 {
   "PreprocessGnomadSiteMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "TBD",
+  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial",
   "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1",
   "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
