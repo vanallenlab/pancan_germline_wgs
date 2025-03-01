@@ -270,7 +270,8 @@ task IndexVcf {
 }
 
 
-# Parse a GATK-style interval_list and output as Array[Pair[index, interval_string]] for scattering
+# Parse a GATK-style interval_list and output as Array[[index, interval_string]] for scattering
+# It appears WDL read_tsv does not allow coercion to Pair objects, so we output as Array[Array[String]]
 task ParseIntervals {
   input {
     File intervals_list
@@ -285,7 +286,7 @@ task ParseIntervals {
   >>>
 
   output {
-    Array[Pair[String, String]] interval_info = read_tsv("intervals.clean.tsv")
+    Array[Array[String]] interval_info = read_tsv("intervals.clean.tsv")
   }
 
   runtime {

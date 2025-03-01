@@ -39,13 +39,13 @@ workflow PreprocessGnomadSiteMetrics {
       intervals_list = snv_scatter_intervals,
       docker = linux_docker
   }
-  Array[Pair[String, String]] snv_interval_infos = MakeSnvIntervals.interval_info
+  Array[Array[String]] snv_interval_infos = MakeSnvIntervals.interval_info
 
   # Scatter SNV VCF over intervals
   scatter ( snv_interval_info in snv_interval_infos ) {
 
-    String snv_interval_coords = snv_interval_info.right
-    String snv_shard_prefix = output_prefix + ".snv." + snv_interval_info.left
+    String snv_interval_coords = snv_interval_info[1]
+    String snv_shard_prefix = output_prefix + ".snv." + snv_interval_info[0]
 
     # Slice gnomAD SNV VCF to interval and drop unnecessary annotations
     call SliceVcf as SliceSnvShard {
@@ -97,14 +97,13 @@ workflow PreprocessGnomadSiteMetrics {
       intervals_list = sv_scatter_intervals,
       docker = linux_docker
   }
-  Array[Pair[String, String]] sv_interval_infos = MakeSvIntervals.interval_info
-
+  Array[Array[String]] sv_interval_infos = MakeSvIntervals.interval_info
 
   # Scatter SV VCF over intervals
   scatter ( sv_interval_info in sv_interval_infos ) {
 
-    String sv_interval_coords = sv_interval_info.right
-    String sv_shard_prefix = output_prefix + ".snv." + sv_interval_info.left
+    String sv_interval_coords = sv_interval_info[1]
+    String sv_shard_prefix = output_prefix + ".snv." + sv_interval_info[0]
 
     # Slice gnomAD SV VCF to interval and drop unnecessary annotations
     call SliceVcf as SliceSvShard {
