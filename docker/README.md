@@ -11,3 +11,5 @@ Example build command executed from this directory:
     --tag vanallenlab/g2c_pipeline:$TAG \
     ./
 ```
+
+Note that the main G2C analysis image, `g2c_analysis`, has its environment pre-packaged in `g2c_analysis_base`. Thus, if you are trying to update `g2c_analysis`, you should usually first rebuild `g2c_analysis_base`.  

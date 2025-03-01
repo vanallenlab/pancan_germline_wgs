@@ -7,10 +7,13 @@
 # variant calling (e.g., starting with quality control/filtering and proceeding
 # through final formal analyses)
 
+# Bare bones ubuntu is used as base
+FROM ubuntu:focal-20230301 AS runtime
+MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
+
 # Essentially all dependencies, libraries, and environments are installed and
 # configured in g2c_analysis_base, which is used as the base image for this build
-FROM condaforge/mambaforge:24.9.2-0 AS build
-MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
+COPY --from=g2c_analysis_base /venv /venv
 
 # Aliases for convenience
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
@@ -21,11 +24,11 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends git
 
 # Clone pancan_germline_wgs repo and check out specified hash
-ARG REPO_HASH=main
+ARG G2C_REPO_HASH=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
     opt/pancan_germline_wgs \
-    --branch=$REPO_HASH
+    --branch=$G2C_REPO_HASH
 
 # Install missing R libraries as necessary
 RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'

@@ -30,15 +30,13 @@ RUN conda config --env --set subdir linux-64 && \
     mamba update --all && \
     mamba env create --file=/opt/pancan_germline_wgs/refs/env/environment.g2c_analysis.yml
 
-# Manually install packages
-mamba install bioconda::bcftools bioconda::pysam bioconda::tabix conda-forge::biopython
-mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy
-mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot conda-forge::r-viridis
-
+# # Manually install packages
+# mamba install bioconda::bcftools bioconda::pysam bioconda::tabix conda-forge::biopython conda-forge::conda-pack
+# mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy
+# mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot conda-forge::r-viridis
 
 # Use conda-pack to create a standalone enviornment
-RUN mamba install conda-pack && \
-    conda-pack -n pedsv -o /tmp/env.tar && \
+RUN conda-pack -n g2c -o /tmp/env.tar && \
     mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
     rm /tmp/env.tar && \
     /venv/bin/conda-unpack
