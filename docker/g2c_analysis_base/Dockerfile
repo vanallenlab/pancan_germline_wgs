@@ -8,7 +8,7 @@
 # through final formal analyses)
 
 # Base image: conda-forge's miniconda build with mamba pre-installed (for building python environment prior to conda-pack)
-FROM condaforge/mambaforge:24.9.2-0 AS build
+FROM condaforge/mambaforge:24.9.2-0
 MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 
 # Install git
@@ -16,6 +16,8 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends git
 
 # Clone pancan_germline_wgs repo and check out specified hash
+# Note that this is only used for pulling the version-tracked conda environment .yaml
+# It will be re-cloned when building the child image, g2c_analysis
 ARG REPO_HASH=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
@@ -26,7 +28,20 @@ RUN git clone \
 ENV CONDA_SUBDIR=linux-64
 RUN conda config --env --set subdir linux-64 && \
     mamba update --all && \
-    mamba env create --file=/opt/ped_germline_SV/config/environment.pedsv.yml
+    mamba env create --file=/opt/pancan_germline_wgs/refs/env/environment.g2c_analysis.yml
+
+# Manually install packages
+mamba install bioconda::bcftools bioconda::pysam bioconda::tabix conda-forge::biopython
+mamba install conda-forge::pandas conda-forge::numpy conda-forge::scipy
+mamba install conda-forge::r-base conda-forge::r-desctools r::r-eql conda-forge::r-argparse conda-forge::r-bedr conda-forge::r-beeswarm conda-forge::r-caret conda-forge::r-readxl conda-forge::r-survival conda-forge::r-vioplot conda-forge::r-viridis
+
+
+# Use conda-pack to create a standalone enviornment
+RUN mamba install conda-pack && \
+    conda-pack -n pedsv -o /tmp/env.tar && \
+    mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
+    rm /tmp/env.tar && \
+    /venv/bin/conda-unpack
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]
