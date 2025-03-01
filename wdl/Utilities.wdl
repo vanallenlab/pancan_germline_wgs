@@ -282,7 +282,7 @@ task ParseIntervals {
     set -eu -o pipefail
 
     fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
-    | awk -v OFS="\t" '{ print NF, $0 }' > intervals.clean.tsv
+    | awk -v OFS="\t" '{ print NR, $0 }' > intervals.clean.tsv
   >>>
 
   output {
