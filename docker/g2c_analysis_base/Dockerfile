@@ -21,8 +21,11 @@ RUN apt-get -qqy update --fix-missing && \
 ARG G2C_TAG=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
-    opt/pancan_germline_wgs \
-    --branch=$G2C_TAG
+    opt/pancan_germline_wgs && \
+    cd opt/pancan_germline_wgs && \
+    git pull && \
+    git checkout $G2C_TAG && \
+    cd -
 
 # Create default python environment (environment must be present in build context)
 ENV CONDA_SUBDIR=linux-64

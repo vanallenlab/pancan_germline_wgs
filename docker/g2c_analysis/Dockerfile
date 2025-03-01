@@ -63,20 +63,20 @@ RUN git clone \
 RUN source activate g2c
 
 # Install svtk
-# RUN pip install -e opt/svtk
+RUN pip install -e opt/svtk
 
-# # Install RLCtools
-# ARG RLCTOOLS_VERSION=0.1
-# RUN Rscript -e 'install.packages("opt/RLCtools/RLCtools_$RLCTOOLS_VERSION.tar.gz", repos=NULL, type="source")'
+# Install RLCtools
+ARG RLCTOOLS_VERSION=0.1
+RUN Rscript -e "install.packages('opt/RLCtools/RLCtools_$RLCTOOLS_VERSION.tar.gz', repos=NULL, type='source')"
 
-# # Install G2C helper libraries
-# ARG G2CR_VERSION=0.2.0
-# RUN Rscript -e 'install.packages("opt/pancan_germline_wgs/src/G2CR/G2CR_$G2CR_version.tar.gz", repos=NULL, type="source")'
-# pip install code/src/g2cpy
+# Install G2C helper libraries
+ARG G2CR_VERSION=0.2.0
+RUN Rscript -e "install.packages('opt/pancan_germline_wgs/src/G2CR_$G2CR_VERSION.tar.gz', repos=NULL, type='source')"
+RUN pip install opt/pancan_germline_wgs/src/g2cpy
 
-# # Aliases for convenience
-# RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
-#     echo 'alias less="zless"' >> ~/.bashrc
+# Aliases for convenience
+RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
+    echo 'alias less="zless"' >> ~/.bashrc
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]
