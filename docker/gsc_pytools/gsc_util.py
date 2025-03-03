@@ -75,7 +75,7 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
 
 
 
-
+    model_name = None
     # Try regular logistic regression
     try:
         # Prepare the predictor (X) and response (y) variables
@@ -112,8 +112,9 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
             # Convert the confidence interval from log odds to odds ratio
             conf_int_or = np.exp(conf_int_coef)
 
+            model_name = "logreg"
             # Return the results: odds ratio, p-value, and confidence intervals
-            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1]
+            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1],model_name
         
         else:
             raise ValueError("Regular logistic regression failed to converge.")
@@ -122,7 +123,7 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
     except Exception as e:
         print(f"Regular logistic regression failed: {e}")
         print("Falling back to Firth logistic regression...")
-        
+        model_name = "firth-logreg"
         try:
             # Prepare the predictor (X) and response (y) variables
             X = df[[germline_event] + covariates]
@@ -146,7 +147,7 @@ def logistic_regression_with_fallback(df, cancer_type, germline_event, somatic_g
             conf_int_or = np.exp(conf_int_coef)
             print("Firth Logistic Regression successfully converged!!!")
 
-            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1]
+            return odds_ratio, p_value, conf_int_or[0], conf_int_or[1], model_name
 
         except Exception as e:
             print(f"Firth logistic regression failed: {e}")
@@ -461,6 +462,8 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
     covariates=['male','pca_1','pca_2','pca_3','age','TMB','tumorPurity','primary']
   elif cohort == "PROFILE":
     covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary','late_stage']
+  elif cohort == "TCGA":
+    covariates=['male','pca_1','pca_2','pca_3','pca_4','age','tumorPurity','primary','late_stage']
 
   # Alternate slate of covariates for hormone sensitive cancers and pancancer
   covariates_hsc = [cov for cov in covariates if cov != 'male'] 
@@ -587,7 +590,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
       somatic_output = find_mutation_frequency(patient_df, cancer_type, somatic_event + somatic_suffix)
           
       # Assign values using ternary operators for cleaner code
-      OR, p_val, ci_OR_low, ci_OR_high = regression_output if regression_output else (pd.NA, pd.NA, pd.NA, pd.NA)
+      OR, p_val, ci_OR_low, ci_OR_high, model_name = regression_output if regression_output else (pd.NA, pd.NA, pd.NA, pd.NA, pd.NA)
 
       filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size = (
         filtered_germline_output if filtered_germline_output else (pd.NA, pd.NA, pd.NA)
@@ -614,7 +617,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer, model_name
         ])
       elif germline_context == "noncoding" and somatic_context == "coding":
         # Append the results to the list
@@ -625,7 +628,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer, model_name
         ])
       elif germline_context == "coding" and somatic_context == "noncoding":
         # Append the results to the list
@@ -636,7 +639,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer, model_name
         ])           
       elif germline_context == "noncoding" and somatic_context == "noncoding":
         # Append the results to the list
@@ -647,7 +650,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
             filtered_germline_plp_frequency, filtered_germline_plp_count, filtered_germline_sample_size,
             somatic_plp_frequency, somatic_plp_count, somatic_sample_size,
             filtered_somatic_plp_frequency, filtered_somatic_plp_count, filtered_somatic_sample_size,
-            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer
+            OR, p_val, ci_OR_low, ci_OR_high, relevant_cancer, model_name
         ])
 
 
@@ -660,7 +663,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer'
+        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer', f'model_name_{cohort}'
     ])
   elif germline_context == "noncoding" and somatic_context == "coding":
     # Convert the results to a DataFrame
@@ -671,7 +674,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer'
+        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer', f'model_name_{cohort}'
     ])
 
   elif germline_context == "coding" and somatic_context == "noncoding":
@@ -683,7 +686,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer'
+        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer', f'model_name_{cohort}'
     ])
 
   elif germline_context == "noncoding" and somatic_context == "noncoding":
@@ -695,7 +698,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
         f'filtered_germline_plp_frequency_{cohort}', f'filtered_germline_plp_count_{cohort}', f'filtered_germline_sample_size_{cohort}',
         f'somatic_plp_frequency_{cohort}', f'somatic_plp_count_{cohort}', f'somatic_sample_size_{cohort}',
         f'filtered_somatic_plp_frequency_{cohort}', f'filtered_somatic_plp_count_{cohort}', f'filtered_somatic_sample_size_{cohort}',
-        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer'
+        f'OR_{cohort}', f'p_val_{cohort}', f'ci_OR_low_{cohort}', f'ci_OR_high_{cohort}', 'relevant_cancer', f'model_name_{cohort}'
     ])
 
   # Eliminate duplicate rows based on all columns
@@ -825,20 +828,29 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     grouped = subset.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
 
     # Step 3: Find the row with the smallest p_val_final
-    def assign_sentinal_snp(group):
+    def assign_sentinel_snp(group):
         if group['p_val_final'].notna().any():
             min_idx = group['p_val_final'].idxmin()
-            group['sentinal_snp'] = 0
-            group.loc[min_idx, 'sentinal_snp'] = 1
+            group['sentinel_snp'] = 0
+            group.loc[min_idx, 'sentinel_snp'] = 1
         else:
-            group['sentinal_snp'] = -1
+            group['sentinel_snp'] = -1
         return group
 
-    subset = grouped.apply(assign_sentinal_snp)
+    subset = grouped.apply(assign_sentinel_snp)
 
     # Step 4: Add this back to the original df, replacing the old subset
-    df = df.drop(columns=['sentinal_snp'], errors='ignore')  # Drop existing column to avoid conflicts
+    df = df.drop(columns=['sentinel_snp'], errors='ignore')  # Drop existing column to avoid conflicts
     df = pd.concat([df[df['germline_context'] != 'noncoding'], subset], ignore_index=True)
 
     df.to_csv(output_path,sep='\t',index=False)
     return
+
+def aggregate_allele_frequency(df):
+    df['germline_plp_frequency_meta'] = df['filtered_germline_plp_frequency_HMF'] * df['filtered_germline_sample_size_HMF'] + df['filtered_germline_plp_frequency_PROFILE'] * df['filtered_germline_sample_size_PROFILE']
+    return df
+    
+
+def remove_duplicate_alleles_in_profile(df):
+    df[['chr', 'pos', 'allele']] = df['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
+    pass
