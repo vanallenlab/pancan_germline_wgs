@@ -18,13 +18,15 @@ workflow CollectVcfQcMetrics {
     File vcf
     File vcf_idx
 
-    File? trios_ped_file                      # .ped file of known families for Mendelian transmission analyses
-    File? sample_priority_list                # Rank-ordered list of samples to retain for sample-level analyses
-    Int n_for_sample_level_analyses = 1000    # Number of samples to use for sample-level summary analyses
+    File? trios_ped_file                         # .ped file of known families for Mendelian transmission analyses
+    File? sample_priority_list                   # Rank-ordered list of samples to retain for sample-level analyses
+    Int n_for_sample_level_analyses = 1000       # Number of samples to use for sample-level summary analyses
 
-    Boolean shard_vcf = true                  # Should the input VCF be sharded for QC collection?
-    File? scatter_intervals_list              # GATK-style intervals file for scattering over vcf (any tabix-compliant interval definitions should work)
-    Int n_records_per_shard = 25000           # Number of records per shard. This will only be used as a backup if scatter_intervals_list is not provided
+    Boolean shard_vcf = true                     # Should the input VCF be sharded for QC collection?
+    File? scatter_intervals_list                 # GATK-style intervals file for scattering over vcf (any tabix-compliant interval definitions should work)
+    Int n_records_per_shard = 25000              # Number of records per shard. This will only be used as a backup if scatter_intervals_list is not provided
+
+    Float common_af_cutoff = 0.001               # Minimum AF for a variant to be included in common variant subsets
 
     String output_prefix
 
@@ -142,6 +144,7 @@ workflow CollectVcfQcMetrics {
         vcf = shard_info.left,
         vcf_idx = shard_info.right,
         n_samples = ChooseTargetSamples.n_samples_all,
+        common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }
 

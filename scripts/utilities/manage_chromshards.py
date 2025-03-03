@@ -240,6 +240,8 @@ def main():
                         help='Path to file collecting all GCP URIs to be deleted. ' +
                         'Note that this script will only ever append to this file, ' +
                         'not overwrite it.')
+    parser.add_argument('--no-cleanup', action='store_true', help='Disable ' +
+                        'automatic cleanup of Cromwell execution buckets.')
     parser.add_argument('-m', '--max-attempts', type=int, default=3, 
                         help='Maximum number of submission attempts for any one contig')
     parser.add_argument('-g', '--outer-gate', type=float, default=20, help='Number of ' +
@@ -306,6 +308,7 @@ def main():
                         'Staging bucket' : args.staging_bucket,
                         'Local root' : args.base_directory,
                         'Dumpster' : args.dumpster,
+                        'Automatic cleanup' : not args.no_cleanup,
                         'Contigs' : ', '.join(contigs),
                         'Max attempts' : args.max_attempts,
                         'Outer gate' : args.outer_gate,
@@ -397,11 +400,12 @@ def main():
                     else:
                         relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
                         status = 'staged'
-                        g2cpy.collect_workflow_trash(wids, bucket, wdl_name,
-                                                     args.dumpster)
-                        subprocess.run('. code/refs/general_bash_utils.sh ' + \
-                                       '&& cleanup_garbage', shell=True, check=False, 
-                                       text=True, executable='/bin/bash')
+                        if not args.no_cleanup:
+                            g2cpy.collect_workflow_trash(wids, bucket, wdl_name,
+                                                         args.dumpster)
+                            subprocess.run('. code/refs/general_bash_utils.sh ' + \
+                                           '&& cleanup_garbage', shell=True, check=False, 
+                                           text=True, executable='/bin/bash')
                         if not args.quiet:
                             print('')
 

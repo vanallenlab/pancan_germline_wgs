@@ -16,11 +16,15 @@ task CollectSiteMetrics {
 
     Int n_samples
 
+    Float? common_af_cutoff
+
     String g2c_analysis_docker
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
+
+  String common_cmd = if defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
 
   command <<<
     set -eu -o pipefail
@@ -35,6 +39,7 @@ task CollectSiteMetrics {
     | bcftools query \
       -f '%CHROM\t%POS\t%END\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/AC\t%INFO/AF\t%INFO/HWE\t%INFO/ExcHet\n' \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_site_metrics.py \
+      ~{common_cmd} \
       -o ~{out_prefix} \
       --gzip \
       -N ~{n_samples}
@@ -42,8 +47,17 @@ task CollectSiteMetrics {
 
   output {
     File? snv_sites = out_prefix + ".snv.sites.bed.gz"
+    File? snv_sites_idx = out_prefix + ".snv.sites.bed.gz.tbi"
     File? indel_sites = out_prefix + ".indel.sites.bed.gz"
+    File? indel_sites_idx = out_prefix + ".indel.sites.bed.gz.tbi"
     File? sv_sites = out_prefix + ".sv.sites.bed.gz"
+    File? sv_sites_idx = out_prefix + ".sv.sites.bed.gz.tbi"
+    File? common_snv_sites = out_prefix + ".snv.sites.common.bed.gz"
+    File? common_snv_sites_idx = out_prefix + ".snv.sites.common.bed.gz.tbi"
+    File? common_indel_sites = out_prefix + ".indel.sites.common.bed.gz"
+    File? common_indel_sites_idx = out_prefix + ".indel.sites.common.bed.gz.tbi"
+    File? common_sv_sites = out_prefix + ".sv.sites.common.bed.gz"
+    File? common_sv_sites_idx = out_prefix + ".sv.sites.common.bed.gz.tbi"
     File size_distrib = out_prefix + ".size_distrib.tsv.gz"
     File af_distrib = out_prefix + ".af_distrib.tsv.gz"
     File size_vs_af_distrib = out_prefix + ".size_vs_af_distrib.tsv.gz"

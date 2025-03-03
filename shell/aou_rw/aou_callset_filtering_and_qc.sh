@@ -74,7 +74,7 @@ cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
   "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial",
   "PreprocessGnomadSiteMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-  "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1",
+  "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1.\$CONTIG",
   "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
   "PreprocessGnomadSiteMetrics.snv_scatter_intervals": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
   "PreprocessGnomadSiteMetrics.snv_vcf": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz",
@@ -91,13 +91,13 @@ code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/PreprocessGnomadSiteMetrics.wdl \
   --input-json-template $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json \
   --dependencies-zip g2c.dependencies.zip \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics \
   --name GnomadSiteMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
-  --workflow-id-log-prefix "dfci-g2c.v1.GnomadSiteMetrics" \
+  --workflow-id-log-prefix "gnomad.v4.site_metrics" \
   --outer-gate 30 \
-  --max-attempts 6
+  --max-attempts 2
 
 
 ############################################

@@ -39,26 +39,24 @@ def make_size_bins(bins_per_log10, max_size):
     Bin ranges are defined as the inclusive lower bound for each bin, which
     stops exclusively at the incrementally next larger bin lower bound
 
-    Note we use integer counts for size ~ [0, 9], then default to
-    --size-bins-per-log10 after that for a cleaner representation of indels
+    Fractional bp are not permitted, so in practice there will only be seven bins
+    from 1bp - 9bp (1, 2, 3, 4, 5, 6, 8)
     """
 
     size_steps = np.arange(0, 1, 1 / bins_per_log10)
     size_log_ceil = int(np.ceil(np.log10(max_size)) + 1)
-    size_ge = list(np.concatenate([10 ** (o + size_steps) for o in range(1, size_log_ceil)]))
-    return np.array([int(round(x, 0)) for x in list(range(0, 10)) + size_ge if x <= max_size])
+    size_ge = np.concatenate([10 ** (o + size_steps) for o in range(0, size_log_ceil)])
+    size_ge = np.insert(np.unique(np.round(size_ge)), 0, 0)
+    return np.array([int(x) for x in size_ge if x <= max_size])
 
 
-def make_af_bins(bins_per_log10, sample_size):
+def make_af_bins(bins_per_log10, sample_size, min_af_bin):
     """
     Create AF bin boundaries for compressed AF distribution counter
 
     Note that here each bin is defined in the opposite direction as size;
     namely, the count of variants with AF less than the threshold, down to
     the threshold defined by the previous bin
-    
-    Same as for size bins, we use integer counts for AC ~ [1, 9]
-    then revert to log-uniformly spaced steps according to --bins-per-log10-af
     """
 
     max_an = 2 * sample_size
@@ -66,11 +64,11 @@ def make_af_bins(bins_per_log10, sample_size):
     af_log_floor = int(np.floor(np.log10(1 / max_an)))
     af_lt = list(np.concatenate([10 ** (o + af_steps) for o in range(0, af_log_floor, -1)]))
     af_lt.reverse()
-    smallest_nonac_bin = 10 / max_an
-    ac_bins = [ac / max_an for ac in range(2, 10)]
-    af_lt = ac_bins + [k for k in af_lt if k >= smallest_nonac_bin]
+    if min_af_bin is None:
+        min_af_bin = 2 / max_an
+    af_lt = [k for k in af_lt if k >= min_af_bin]
     af_lt[-1] = af_lt[-1] + 10e-6
-    return np.array(af_lt)
+    return np.unique(np.array(af_lt))
 
 
 def main():
@@ -91,6 +89,9 @@ def main():
                         help='Number of discrete bins to use per order of ' +
                         'magnitude when summarizing AF distributions',
                         metavar='[int]')
+    parser.add_argument('--min-af-bin', type=float, help='Smallest AF cutoff ' +
+                        'for second-smallest AF bin [default: doubletons; e.g., ' + 
+                        '2 / (2 * --sample-count)]')
     parser.add_argument('--bins-per-log10-size', default=10, type=int,
                         help='Number of discrete bins to use per order of ' +
                         'magnitude when summarizing size distributions',
@@ -99,6 +100,10 @@ def main():
                         help='Maximum size for binning; all variants larger than ' +
                         'this size will be included in the top bin.',
                        metavar='[int]')
+    parser.add_argument('--common-af', type=float, help='AF cutoff for common ' +
+                        'variants. If provided, will generate separate sites.bed ' +
+                        'output files restricted to common variants. [default: ' +
+                        'do not generate common variant-only .bed outputs]')
     parser.add_argument('-z', '--gzip', action='store_true', help='Compress ' +
                         'output files with gzip/bgzip [default: write ' + 
                         'uncompressed .tsv/.bed]')
@@ -110,7 +115,7 @@ def main():
                      for vc in var_classes}
 
     # Create counter for compressed AF distribution
-    af_lt = make_af_bins(args.bins_per_log10_af, args.sample_count)
+    af_lt = make_af_bins(args.bins_per_log10_af, args.sample_count, args.min_af_bin)
     af_counter = {vc : {vsc : [0] * len(af_lt) for vsc in var_subclasses[vc]}
                   for vc in var_classes}
 
@@ -130,18 +135,27 @@ def main():
 
     # Open connections to output BEDs with all site information
     site_fouts = {}
+    common_fouts = {}
     site_header = '#chrom start end vid class subclass size ac af hwe exhet'.split()
     for vc in var_classes:
-        fnbase = args.output_prefix + '.' + vc + '.sites.bed'
+        fnbase = args.output_prefix + '.' + vc + '.sites'
         if args.gzip:
-            fout = bgzf.BgzfWriter(fnbase + '.gz', mode='wt')
+            fout = bgzf.BgzfWriter(fnbase + '.bed.gz', mode='wt')
         else:
-            fout = open(fnbase, mode='w')
+            fout = open(fnbase + '.bed', mode='w')
         fout.write('\t'.join(site_header) + '\n')
         site_fouts[vc] = fout
+        if args.common_af is not None:
+            if args.gzip:
+                cfout = bgzf.BgzfWriter(fnbase + '.common.bed.gz', mode='wt')
+            else:
+                cfout = open(fnbase + '.common.bed', mode='w')
+            cfout.write('\t'.join(site_header) + '\n')
+            common_fouts[vc] = cfout
 
     # Iterate over each line in metrics and process variants one at a time
     vc_seen = {vc : False for vc in var_classes}
+    common_seen = {vc : False for vc in var_classes}
     for chrom, pos, end, ref, alt, svlen, ac, af, hwe, exhet in indat:
 
         # Clean up length based on ref/alt and svlen
@@ -167,6 +181,9 @@ def main():
         if af != '.':
             af = float(af)
             af_counter[vc][vsc][np.argmax(af < af_lt)] += 1
+            if args.common_af is not None \
+            and af >= args.common_af:
+                common_seen[vc] = True
             
             # Add variant count to binned 2D size X AF by class & subclass
             x_counter[vc][vsc][x_size_ge[np.argmin(varlen >= x_size_ge)-1]][np.argmax(af < x_af_lt)] += 1
@@ -183,12 +200,16 @@ def main():
         outvals = [chrom, pos, end, vid, vc, vsc, varlen, ac, af, hwe, exhet]
         lout = '\t'.join([str(x) for x in outvals])
         site_fouts[vc].write(lout + '\n')
+        if args.common_af is not None \
+        and af != '.':
+            if float(af) >= args.common_af:
+                common_fouts[vc].write(lout + '\n')
 
     # Close connections to all site-level output files to flush buffer
-    for fc in site_fouts.values():
+    for fc in list(site_fouts.values()) + list(common_fouts.values()):
         fc.close()
 
-    # Delete site-level summary files for which no qualifying variants were observred
+    # Delete site-level summary files for which no qualifying variants were observed
     for vc, seen in vc_seen.items():
         if args.gzip:
             fpath = site_fouts[vc]._handle.name
@@ -203,6 +224,23 @@ def main():
         else:
             if args.gzip:
                 subprocess.run(['tabix', '-f', fpath], check=True)
+
+    # Delete site-level common variant summary files for which no qualifying variants were observed
+    if args.common_af is not None:
+        for vc, seen in common_seen.items():
+            if args.gzip:
+                fpath = common_fouts[vc]._handle.name
+            else:
+                fpath = common_fouts[vc].name
+            
+            # Delete file if empty
+            if not seen:
+                remove(fpath)
+
+            # Otherwise, index summary files with tabix if --gzip is optioned
+            else:
+                if args.gzip:
+                    subprocess.run(['tabix', '-f', fpath], check=True)
 
     # Write compressed variant size distributions to file
     fnbase = args.output_prefix + '.size_distrib.tsv'
