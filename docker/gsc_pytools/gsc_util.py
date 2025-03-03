@@ -463,7 +463,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
   elif cohort == "PROFILE":
     covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary','late_stage']
   elif cohort == "TCGA":
-    covariates=['male','pca_1','pca_2','pca_3','pca_4','age','tumorPurity','primary','late_stage']
+    covariates=['male','pca_1','pca_2','pca_3','pca_4','age','tumorPurity','late_stage']
 
   # Alternate slate of covariates for hormone sensitive cancers and pancancer
   covariates_hsc = [cov for cov in covariates if cov != 'male'] 
