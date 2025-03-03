@@ -26,6 +26,8 @@ workflow PreprocessGnomadSiteMetrics {
     File sv_scatter_intervals
     Int sv_n_samples
 
+    Float? min_af_bin
+
     String output_prefix
 
     String linux_docker
@@ -63,6 +65,7 @@ workflow PreprocessGnomadSiteMetrics {
         vcf = SliceSnvShard.cleaned_vcf,
         vcf_idx = SliceSnvShard.cleaned_vcf_idx,
         n_samples = snv_n_samples,
+        min_af_bin = min_af_bin,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -123,6 +126,7 @@ workflow PreprocessGnomadSiteMetrics {
         vcf = SliceSvShard.cleaned_vcf,
         vcf_idx = SliceSvShard.cleaned_vcf_idx,
         n_samples = snv_n_samples,
+        min_af_bin = min_af_bin,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }

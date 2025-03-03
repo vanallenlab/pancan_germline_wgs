@@ -16,6 +16,7 @@ task CollectSiteMetrics {
 
     Int n_samples
 
+    Float? min_af_bin
     Float? common_af_cutoff
 
     String g2c_analysis_docker
@@ -24,6 +25,7 @@ task CollectSiteMetrics {
   String out_prefix = basename(vcf, ".vcf.gz")
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
+  String min_af_cmd = if defined(min_af_bin) then "--min-af-bin ~{min_af_bin}" else ""
   String common_cmd = if defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
 
   command <<<
@@ -39,6 +41,7 @@ task CollectSiteMetrics {
     | bcftools query \
       -f '%CHROM\t%POS\t%END\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/AC\t%INFO/AF\t%INFO/HWE\t%INFO/ExcHet\n' \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_site_metrics.py \
+      ~{min_af_cmd} \
       ~{common_cmd} \
       -o ~{out_prefix} \
       --gzip \

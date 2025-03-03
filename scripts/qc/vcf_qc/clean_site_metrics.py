@@ -57,6 +57,8 @@ def make_af_bins(bins_per_log10, sample_size, min_af_bin):
     Note that here each bin is defined in the opposite direction as size;
     namely, the count of variants with AF less than the threshold, down to
     the threshold defined by the previous bin
+
+    The first bin break will always be min_af_bin, if provided
     """
 
     max_an = 2 * sample_size
@@ -66,7 +68,7 @@ def make_af_bins(bins_per_log10, sample_size, min_af_bin):
     af_lt.reverse()
     if min_af_bin is None:
         min_af_bin = 2 / max_an
-    af_lt = [k for k in af_lt if k >= min_af_bin]
+    af_lt = [min_af_bin] + [k for k in af_lt if k > min_af_bin]
     af_lt[-1] = af_lt[-1] + 10e-6
     return np.unique(np.array(af_lt))
 

@@ -29,13 +29,13 @@ def _sort_output(agg):
     def __parse_key(x):
         parts = x.split('\t')
         p1 = vc_sort_priority.get(parts[0], 10e10)
-        p2 = vc_sort_priority.get(parts[1], 10e10)
+        p2 = vsc_sort_priority.get(parts[1], 10e10)
         if len(parts) == 2:
             return p1, p2
         else:
-            return p1, p2, *parts[2:]
+            return (p1, p2, *parts[2:])
 
-    ordered_keys = natsorted(agg, key=lambda x: __parse_key(x))[::-1]
+    ordered_keys = natsorted(agg, key=lambda x: __parse_key(x))
 
     return {k : agg[k] for k in ordered_keys}
 
