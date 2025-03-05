@@ -472,17 +472,134 @@ def merge_and_analyze_three_cohorts(tsv1_path, tsv2_path, tsv3_path, germline_co
     merged_df['log_OR_PROFILE'] = np.log(merged_df['OR_PROFILE'])
     merged_df['log_OR_TCGA'] = np.log(merged_df['OR_TCGA'])
 
-    # Calculate combined log OR using inverse variance weighting
-    merged_df['log_OR_final'] = (
-        (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] + merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE'] + merged_df['log_OR_TCGA'] / merged_df['variance_OR_TCGA']) /
-        (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA'])
+    # Initialize the final column
+    merged_df['log_OR_final'] = np.nan
+
+    # Case 1: All three cohorts are present
+    merged_df['log_OR_final'] = np.where(
+        merged_df[['log_OR_HMF', 'log_OR_PROFILE', 'log_OR_TCGA']].notna().all(axis=1),
+        (
+            (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] +
+             merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE'] +
+             merged_df['log_OR_TCGA'] / merged_df['variance_OR_TCGA']) /
+            (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA'])
+        ),
+        merged_df['log_OR_final']  # Keep NaN if not all present
     )
+
+    # Case 2: If 'log_OR_final' is still NaN, check for two cohorts present (HMF + PROFILE)
+    merged_df['log_OR_final'] = np.where(
+        merged_df[['log_OR_HMF', 'log_OR_PROFILE']].notna().all(axis=1) & merged_df['log_OR_final'].isna(),
+        (
+            (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] +
+             merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE']) /
+            (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'])
+        ),
+        merged_df['log_OR_final']  # Keep previous result (either NaN or calculated value)
+    )
+
+    # Case 3: If 'log_OR_final' is still NaN, check for two cohorts present (HMF + TCGA)
+    merged_df['log_OR_final'] = np.where(
+        merged_df[['log_OR_HMF', 'log_OR_TCGA']].notna().all(axis=1) & merged_df['log_OR_final'].isna(),
+        (
+            (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] +
+             merged_df['log_OR_TCGA'] / merged_df['variance_OR_TCGA']) /
+            (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_TCGA'])
+        ),
+        merged_df['log_OR_final']
+    )
+
+    # Case 4: If 'log_OR_final' is still NaN, check for two cohorts present (PROFILE + TCGA)
+    merged_df['log_OR_final'] = np.where(
+        merged_df[['log_OR_PROFILE', 'log_OR_TCGA']].notna().all(axis=1) & merged_df['log_OR_final'].isna(),
+        (
+            (merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE'] +
+             merged_df['log_OR_TCGA'] / merged_df['variance_OR_TCGA']) /
+            (1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA'])
+        ),
+        merged_df['log_OR_final']
+    )
+
+    # Case 5: If 'log_OR_final' is still NaN, check for one cohort present (HMF)
+    merged_df['log_OR_final'] = np.where(
+        merged_df['log_OR_HMF'].notna() & merged_df['log_OR_final'].isna(),
+        merged_df['log_OR_HMF'],  # Just use HMF if it's the only cohort
+        merged_df['log_OR_final']
+    )
+
+    # Case 6: If 'log_OR_final' is still NaN, check for one cohort present (PROFILE)
+    merged_df['log_OR_final'] = np.where(
+        merged_df['log_OR_PROFILE'].notna() & merged_df['log_OR_final'].isna(),
+        merged_df['log_OR_PROFILE'],  # Just use PROFILE if it's the only cohort
+        merged_df['log_OR_final']
+    )
+
+    # Case 7: If 'log_OR_final' is still NaN, check for one cohort present (TCGA)
+    merged_df['log_OR_final'] = np.where(
+        merged_df['log_OR_TCGA'].notna() & merged_df['log_OR_final'].isna(),
+        merged_df['log_OR_TCGA'],  # Just use TCGA if it's the only cohort
+        merged_df['log_OR_final']
+    )
+
 
     # Convert combined log OR back to OR
     merged_df['OR_final'] = np.exp(merged_df['log_OR_final'])
 
     # Step 5: Calculate the variance of the combined OR using inverse variance
-    merged_df['variance_OR_final'] = 1 / (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'])
+    # Initialize the final variance column
+    merged_df['variance_OR_final'] = np.nan
+
+    # Case 1: All three cohorts are present
+    merged_df['variance_OR_final'] = np.where(
+        merged_df[['variance_OR_HMF', 'variance_OR_PROFILE', 'variance_OR_TCGA']].notna().all(axis=1),
+        (
+            (1/(1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA']))
+        ),
+        merged_df['variance_OR_final']  # Keep NaN if not all present
+    )
+
+    # Case 2: Both HMF and PROFILE cohorts are present
+    merged_df['variance_OR_final'] = np.where(
+        merged_df[['variance_OR_HMF', 'variance_OR_PROFILE']].notna().all(axis=1) & merged_df['variance_OR_final'].isna(),
+        1 / (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE']),
+        merged_df['variance_OR_final']  # Keep NaN if not both present
+    )
+
+    # Case 3: If 'variance_OR_final' is still NaN, check for HMF and TCGA cohorts
+    merged_df['variance_OR_final'] = np.where(
+        merged_df[['variance_OR_HMF', 'variance_OR_TCGA']].notna().all(axis=1) & merged_df['variance_OR_final'].isna(),
+        1 / (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_TCGA']),
+        merged_df['variance_OR_final']
+    )
+
+    # Case 4: If 'variance_OR_final' is still NaN, check for PROFILE and TCGA cohorts
+    merged_df['variance_OR_final'] = np.where(
+        merged_df[['variance_OR_PROFILE', 'variance_OR_TCGA']].notna().all(axis=1) & merged_df['variance_OR_final'].isna(),
+        1 / (1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA']),
+        merged_df['variance_OR_final']
+    )
+
+    # Case 5: If 'variance_OR_final' is still NaN, check for only HMF cohort
+    merged_df['variance_OR_final'] = np.where(
+        merged_df['variance_OR_HMF'].notna() & merged_df['variance_OR_final'].isna(),
+        merged_df['variance_OR_HMF'],  # Just use HMF if it's the only cohort
+        merged_df['variance_OR_final']
+    )
+
+    # Case 6: If 'variance_OR_final' is still NaN, check for only PROFILE cohort
+    merged_df['variance_OR_final'] = np.where(
+        merged_df['variance_OR_PROFILE'].notna() & merged_df['variance_OR_final'].isna(),
+        merged_df['variance_OR_PROFILE'],  # Just use PROFILE if it's the only cohort
+        merged_df['variance_OR_final']
+    )
+
+    # Case 7: If 'variance_OR_final' is still NaN, check for only TCGA cohort
+    merged_df['variance_OR_final'] = np.where(
+        merged_df['variance_OR_TCGA'].notna() & merged_df['variance_OR_final'].isna(),
+        merged_df['variance_OR_TCGA'],  # Just use TCGA if it's the only cohort
+        merged_df['variance_OR_final']
+    )
+
 
     # Step 6: Calculate Z-scores as OR_final / variance_OR_final
     merged_df['z_final'] = np.log(merged_df['OR_final']) / np.sqrt(merged_df['variance_OR_final'])
