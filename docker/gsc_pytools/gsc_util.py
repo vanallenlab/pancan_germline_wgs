@@ -417,6 +417,85 @@ def merge_and_analyze(tsv1_path, tsv2_path, germline_context, somatic_context, o
     # Return the merged DataFrame
     return merged_df
 
+def merge_and_analyze_three_cohorts(tsv1_path, tsv2_path, tsv3_path, germline_context, somatic_context, output_path='merged_with_combined_OR_and_p_values.tsv'):
+    """
+    This function merges two TSV files, performs inverse variance analysis on odds ratios (ORs),
+    and combines p-values using Stouffer's Z-score method.
+
+    Args:
+    tsv1_path (str): File path to the HMF TSV file.
+    tsv2_path (str): File path to the PROFILE TSV file.
+    tsv3_path (str): File path to the TCGA TSV file.
+    output_path (str): Path to save the output TSV file (default: 'merged_with_combined_OR_and_p_values.tsv').
+
+    Returns:
+    merged_df (DataFrame): The resulting DataFrame with combined OR and p-values.
+    """
+
+    # Step 1: Read the data into pandas DataFrames
+    df1 = pd.read_csv(tsv1_path, sep='\t')
+    df2 = pd.read_csv(tsv2_path, sep='\t')
+    df3 = pd.read_csv(tsv3_path, sep='\t')
+
+    # Step 1: Replace 'Renal' with 'Kidney' in the 'cancer_type' column in both DataFrames
+    df1['cancer_type'] = df1['cancer_type'].replace('renal', 'kidney')
+    df2['cancer_type'] = df2['cancer_type'].replace('renal', 'kidney')
+    df3['cancer_type'] = df3['cancer_type'].replace('renal', 'kidney')
+
+    # Step 2: Merge the DataFrames on the relevant columns, including 'criteria'
+    merged_df = None
+    if germline_context == "noncoding" and somatic_context == "coding":
+        merged_df = pd.merge(df1, df2, how='outer', 
+                         on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer','tier'],
+                         suffixes=('_HMF', '_PROFILE'))
+        merged_df = pd.merge(merged_df, df3, how='outer', 
+                     on=['criteria', 'cancer_type', 'germline_risk_allele', 'germline_gene', 
+                         'germline_context', 'somatic_gene', 'somatic_context', 
+                         'relevant_cancer', 'tier'],
+                     suffixes=('', '_TCGA'))
+
+    if germline_context == "coding" and somatic_context == "coding":
+        merged_df = pd.merge(df1, df2, how='outer', 
+                             on=['criteria', 'cancer_type', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer','tier'],
+                             suffixes=('_HMF', '_PROFILE'))
+        merged_df = pd.merge(merged_df, df3, how='outer', 
+                             on=['criteria', 'cancer_type', 'germline_gene', 'germline_context', 'somatic_gene', 'somatic_context','relevant_cancer','tier'],
+                             suffixes=('', '_TCGA'))
+
+    # Step 3: Calculate variance for ORs based on confidence intervals (CI)
+    merged_df['variance_OR_HMF'] = ((np.log(merged_df['ci_OR_high_HMF']) - np.log(merged_df['ci_OR_low_HMF'])) / (2 * 1.96)) ** 2
+    merged_df['variance_OR_PROFILE'] = ((np.log(merged_df['ci_OR_high_PROFILE']) - np.log(merged_df['ci_OR_low_PROFILE'])) / (2 * 1.96)) ** 2
+    merged_df['variance_OR_TCGA'] = ((np.log(merged_df['ci_OR_high_TCGA']) - np.log(merged_df['ci_OR_low_TCGA'])) / (2 * 1.96)) ** 2
+
+    # Step 4: Perform inverse variance weighting for OR
+    merged_df['log_OR_HMF'] = np.log(merged_df['OR_HMF'])
+    merged_df['log_OR_PROFILE'] = np.log(merged_df['OR_PROFILE'])
+    merged_df['log_OR_TCGA'] = np.log(merged_df['OR_TCGA'])
+
+    # Calculate combined log OR using inverse variance weighting
+    merged_df['log_OR_final'] = (
+        (merged_df['log_OR_HMF'] / merged_df['variance_OR_HMF'] + merged_df['log_OR_PROFILE'] / merged_df['variance_OR_PROFILE'] + merged_df['log_OR_TCGA'] / merged_df['variance_OR_TCGA']) /
+        (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'] + 1 / merged_df['variance_OR_TCGA'])
+    )
+
+    # Convert combined log OR back to OR
+    merged_df['OR_final'] = np.exp(merged_df['log_OR_final'])
+
+    # Step 5: Calculate the variance of the combined OR using inverse variance
+    merged_df['variance_OR_final'] = 1 / (1 / merged_df['variance_OR_HMF'] + 1 / merged_df['variance_OR_PROFILE'])
+
+    # Step 6: Calculate Z-scores as OR_final / variance_OR_final
+    merged_df['z_final'] = np.log(merged_df['OR_final']) / np.sqrt(merged_df['variance_OR_final'])
+
+    # Step 7: Calculate p-value from Z-score
+    merged_df['p_val_final'] = 2 * stats.norm.sf(np.abs(merged_df['z_final']))
+
+    # Step 8: Save the merged DataFrame with final OR and p-values
+    merged_df.to_csv(output_path, sep='\t', index=False)
+
+    # Return the merged DataFrame
+    return merged_df
+
 def filter_by_pvalues(input_tsv, output_tsv = "filtered.tsv"):
     """
     This function filters the rows where (p_val_HMF or p_val_PROFILE < 0.05) 
@@ -851,6 +930,16 @@ def aggregate_allele_frequency(df):
     return df
     
 
-def remove_duplicate_alleles_in_profile(df):
+def remove_duplicate_alleles_in_meta_analysis(df):
     df[['chr', 'pos', 'allele']] = df['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
-    pass
+
+    # Add a new column that counts the number of TRUE values across the three presence columns
+    df['presence_count'] = df[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].eq('TRUE').sum(axis=1)
+
+    # Sort by presence_count in descending order so the most frequent ones appear first
+    df = df.sort_values(by='presence_count', ascending=False)
+
+    # Drop duplicates based on ['cancer_type', 'chr', 'pos', 'allele'], keeping the first occurrence (which has the highest count)
+    df = df.drop_duplicates(subset=['cancer_type', 'chr', 'pos'], keep='first')
+    return df
+
