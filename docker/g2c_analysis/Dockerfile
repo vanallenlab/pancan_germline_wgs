@@ -40,24 +40,33 @@ RUN apt-get clean && \
 ARG GATKSV_TAG=v1.0.1
 RUN git clone \
     https://github.com/broadinstitute/gatk-sv.git \
-    opt/gatk-sv \
-    --branch=$GATKSV_TAG && \
-    mv opt/gatk-sv/src/svtk opt/ && \
+    opt/gatk-sv && \
+    cd opt/gatk-sv && \
+    git pull && \
+    git checkout $GATKSV_TAG && \
+    mv src/svtk /opt/ && \
+    cd - && \
     rm -rf opt/gatk-sv
 
 # Clone RLCtools repo and check out specified hash
 ARG RLCTOOLS_TAG=main
 RUN git clone \
     https://github.com/RCollins13/RLCtools.git \
-    opt/RLCtools \
-    --branch=$RLCTOOLS_TAG
+    opt/RLCtools && \
+    cd opt/RLCtools && \
+    git pull && \
+    git checkout $RLCTOOLS_TAG && \
+    cd -
 
 # Clone pancan_germline_wgs repo and check out specified hash
 ARG G2C_TAG=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
-    opt/pancan_germline_wgs \
-    --branch=$G2C_TAG
+    opt/pancan_germline_wgs && \
+    cd opt/pancan_germline_wgs && \
+    git pull && \
+    git checkout $G2C_TAG && \
+    cd -
 
 # Activate virtual environment before installing helper libraries
 RUN source activate g2c

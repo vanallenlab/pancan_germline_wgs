@@ -27,7 +27,7 @@ from sys import stdin
 # Note that short variant subclasses are lowercase and structural variant
 # subclasses are uppercase to distinguish them by size
 var_classes = 'snv indel sv'.split()
-var_subclasses = {'snv' : ['snv'],
+var_subclasses = {'snv' : 'ti tv'.split(),
                   'indel' : 'ins del'.split(),
                   'sv' : 'DEL DUP CNV INS INV CPX CTX'.split()}
 
@@ -80,8 +80,8 @@ def main():
     parser = argparse.ArgumentParser(
              description=__doc__,
              formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-i', '--input', help='Tab-separated QC metrics',
-                        default='stdin')
+    parser.add_argument('-i', '--input', default='stdin', metavar='file',
+                        help='Tab-separated QC metrics [default: stdin]')
     parser.add_argument('-o', '--output-prefix', help='Prefix for all output files',
                         metavar='[path]', default='./vcf_qc')
     parser.add_argument('-N', '--sample-count', type=int, required=True,
@@ -93,7 +93,7 @@ def main():
                         metavar='[int]')
     parser.add_argument('--min-af-bin', type=float, help='Smallest AF cutoff ' +
                         'for second-smallest AF bin [default: doubletons; e.g., ' + 
-                        '2 / (2 * --sample-count)]')
+                        '2 / (2 * --sample-count)]', metavar='[float]')
     parser.add_argument('--bins-per-log10-size', default=10, type=int,
                         help='Number of discrete bins to use per order of ' +
                         'magnitude when summarizing size distributions',
@@ -105,7 +105,8 @@ def main():
     parser.add_argument('--common-af', type=float, help='AF cutoff for common ' +
                         'variants. If provided, will generate separate sites.bed ' +
                         'output files restricted to common variants. [default: ' +
-                        'do not generate common variant-only .bed outputs]')
+                        'do not generate common variant-only .bed outputs]',
+                        metavar='[float]')
     parser.add_argument('-z', '--gzip', action='store_true', help='Compress ' +
                         'output files with gzip/bgzip [default: write ' + 
                         'uncompressed .tsv/.bed]')

@@ -35,6 +35,10 @@ workflow CollectVcfQcMetrics {
     String linux_docker
   }
 
+  #####################
+  ### SAMPLE MANAGEMENT
+  #####################
+
   # Get list of samples present in input VCFs
   call Utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
     input:
@@ -54,6 +58,10 @@ workflow CollectVcfQcMetrics {
       n_samples = n_for_sample_level_analyses,
       docker = bcftools_docker
   }
+
+  #####################
+  ### VCF PREPROCESSING
+  #####################
 
   # Preprocess VCF according to desired scatter behavior
   if ( shard_vcf ) {
@@ -127,6 +135,10 @@ workflow CollectVcfQcMetrics {
     }
   }
 
+  #####################
+  ### METRIC COLLECTION
+  #####################
+
   Array[File] site_vcf_shards = select_all(select_first([PreprocessIntervals.sites_vcf, 
                                                          PreprocessShards.sites_vcf, 
                                                          [PreprocessFullVcf.sites_vcf]]))
@@ -161,6 +173,10 @@ workflow CollectVcfQcMetrics {
     # TODO: implement this
   }
 
+  ##################
+  ### OUTPUT CLEANUP
+  ##################
+
   # Collapse SV sites
   # TODO: implement this
 
@@ -191,6 +207,7 @@ workflow CollectVcfQcMetrics {
 
   output {
     # For now, just outputting the merged distribution files
+    # This will eventually be extended
     File size_distrib = SumSizeDistribs.merged_distrib
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib

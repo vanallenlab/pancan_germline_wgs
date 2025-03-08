@@ -592,7 +592,6 @@ cohort.key.cols <- cohort.type.cols[cohort.type.names.short[cohort.type.map[all.
 names(cohort.key.cols) <- cohort.names.short[all.cohorts]
 cohort.key.cols["Other"] <- cohort.type.cols["Oncology"]
 frac.multi <- sum(grepl(";", qc.df$cancer)) / sum(qc.df$cancer %in% c("control", "unknown"))
-annot.color <- "gray70"
 
 
 # Barplot of samples per cancer, colored by cohort
@@ -614,10 +613,10 @@ sapply(1:2, function(s){
     axis(4, at=par("usr")[3]-1.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste(round(100 * frac.multi, 1),
                       "% of cases have\nmultiple cancers", sep=""),
-         xpd=T, col.axis=annot.color)
+         xpd=T, col.axis=annotation.color)
     axis(4, at=par("usr")[3]-4.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste("Mean = ", prettyNum(round(mean(cancer.k), 0), big.mark=","),
-                      "\nper cancer type", sep=""), xpd=T, col.axis=annot.color)
+                      "\nper cancer type", sep=""), xpd=T, col.axis=annotation.color)
   }
 })
 dev.off()
@@ -642,7 +641,7 @@ sapply(1:2, function(s){
   if(s==2){
     axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
-                      "total genomes", sep=""), xpd=T, col.axis=annot.color)
+                      "total genomes", sep=""), xpd=T, col.axis=annotation.color)
   }
 })
 dev.off()

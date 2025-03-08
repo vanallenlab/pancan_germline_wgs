@@ -106,6 +106,8 @@ code/scripts/manage_chromshards.py \
 # Analyze & visualize initial QC metrics #
 ##########################################
 
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
 # TODO: implement this
 
 

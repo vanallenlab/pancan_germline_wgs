@@ -223,7 +223,7 @@ task SliceVcf {
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     bcftools view \
       --regions "~{interval}" \
-      --include 'FILTER = "PASS" & INFO/AC > 0' \
+      --include '(FILTER = "PASS" & INFO/AC > 0) | INFO/SVTYPE = "CNV" | FILTER = "MULTIALLELIC' \
       ~{vcf} \
     | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
       '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \

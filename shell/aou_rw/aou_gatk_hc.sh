@@ -44,6 +44,12 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
+# Create dependencies .zip for workflow submissions
+cd code/wdl/pancan_germline_wgs && \
+zip g2c.dependencies.zip *.wdl && \
+mv g2c.dependencies.zip ~/ && \
+cd ~
+
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
 
@@ -92,6 +98,8 @@ gsutil -m cp \
 # Collect summary distributions from gnomAD v4.1 for interval sharding #
 ########################################################################
 
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
 # Refresh staging directory
 staging_dir=staging/GnomadSiteMetrics
 if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
@@ -99,7 +107,7 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 # Write template .json of inputs for chromsharded manager
 cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
 {
-  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial",
+  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial_mar3",
   "PreprocessGnomadSiteMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PreprocessGnomadSiteMetrics.min_af_bin": 0.00003618403,
@@ -122,18 +130,16 @@ code/scripts/manage_chromshards.py \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics \
   --name GnomadSiteMetrics \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
   --workflow-id-log-prefix "gnomad.v4.site_metrics" \
   --outer-gate 30 \
+  --submission-gate 30 \
   --max-attempts 2
 
 
 #####################
 # Prepare intervals #
 #####################
-
-# Note: this only needs to be run once across all workspaces
 
 # Refresh staging directory
 staging_dir=staging/PrepIntervals
@@ -144,7 +150,7 @@ gsutil -m cp \
   gs://gcp-public-data--broad-references/hg38/v0/wgs_calling_regions.hg38.interval_list \
   $staging_dir/
 
-# Split intervals into 24 primary chromosomes
+# Split intervals into one per primary chromosome
 ilist=$staging_dir/wgs_calling_regions.hg38.interval_list
 for k in $( seq 1 22 ) X Y; do
   head -n1 $ilist > $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
@@ -154,21 +160,25 @@ for k in $( seq 1 22 ) X Y; do
   >> $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
 done
 
-# Estimate total genomic space to be processed by each of five workspaces
-cat $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.interval_list \
-| fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
-| awk '{ sum+=$3-$2 }END{ printf "%i\n", sum / 5 }'
+# TODO: REWORK THIS ONCE WE REGAIN ACCESS TO AOU RW
 
-# Subdivide intervals per chromosome to allow maximal parallelization
-# Logic is as follows: ~600Mb per workspace, 
-# Logic as follows: ~600Mb per workspace / 2900 task quota = 200kb avg interval size
-for k in $( seq 1 22 ) X Y; do
-  code/scripts/split_intervals.py \
-    -i $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list \
-    -t 200000 \
-    --gatk-style \
-    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals
-done
+# # Estimate total genomic space to be processed by each of five workspaces
+# cat $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.interval_list \
+# | fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
+# | awk '{ sum+=$3-$2 }END{ printf "%i\n", sum / 5 }'
+
+# # Estimate optimized number of shards per chromosome as 
+
+# # Subdivide intervals per chromosome to allow maximal parallelization
+# # Logic is as follows: ~600Mb per workspace, 
+# # Logic as follows: ~600Mb per workspace / 2900 task quota = 200kb avg interval size
+# for k in $( seq 1 22 ) X Y; do
+#   code/scripts/split_intervals.py \
+#     -i $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list \
+#     -t 200000 \
+#     --gatk-style \
+#     -o $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals
+# done
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \

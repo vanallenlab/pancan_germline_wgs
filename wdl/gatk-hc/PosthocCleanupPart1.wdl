@@ -16,10 +16,10 @@ import "Utilities.wdl" as Utils
 
 workflow PosthocCleanupPart1 {
   input {
-    File vcf
-    File vcf_idx
+    Array[File] vcfs
+    Array[File] vcf_idxs
+    String output_prefix
 
-    File unpadded_intervals_file
     File ref_fasta
     
     String linux_docker
@@ -27,26 +27,21 @@ workflow PosthocCleanupPart1 {
     String g2c_pipeline_docker
   }
 
-  # Parse intervals file for scattering
-  call Utils.ParseIntervals {
-    input:
-      intervals_list = unpadded_intervals_file,
-      docker = linux_docker
-  }
+  # Parallelize over input VCFs
+  Array[Pair[File, File]] vcf_infos = zip(vcfs, vcf_idxs)
+  scatter ( i in range(length(vcf_infos)) ) {
 
-  # Parallelize over scatter intervals
-  scatter ( interval_info in ParseIntervals.interval_info ) {
-
-    String interval_coords = interval_info.right
-    String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info.left
+    String out_vcf_fname = output_prefix + "." + i + ".norm.vcf.gz"
+    File in_vcf_shard = vcf_infos[i].left
+    File in_vcf_shard_idx = vcf_infos[i].right
 
     # Additional cleanup step added for G2C to coerce to parsimonious format
     call NormalizeShortVariants as NormalizeVcf {
       input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
+        vcf = in_vcf_shard,
+        vcf_idx = in_vcf_shard_idx,
+        outfile_name = out_vcf_fname,
         ref_fasta = ref_fasta,
-        interval = interval_coords,
         bcftools_docker = bcftools_docker
     }
 
@@ -59,26 +54,17 @@ workflow PosthocCleanupPart1 {
     }
   }
 
-  # Combine sharded VCFs
-  call Utils.ConcatVcfs {
-    input:
-      vcfs = NormalizeVcf.norm_vcf,
-      vcf_idxs = NormalizeVcf.norm_vcf_idx,
-      out_prefix = basename(vcf, "vcf.gz") + ".norm.vcf.gz",
-      bcftools_docker = bcftools_docker
-  }
-
   # Sum variant counts
   call Utils.SumSvCountsPerSample as SumCounts {
     input:
       count_tsvs = CountShortVariantsPerSample.counts_tsv,
-      output_prefix = basename(vcf, ".vcf.gz") + ".norm",
+      output_prefix = output_prefix + ".norm",
       docker = g2c_pipeline_docker
   }
 
   output {
-    File normalized_vcf = ConcatVcfs.merged_vcf
-    File normalized_vcf_idx = ConcatVcfs.merged_vcf_idx
+    Array[File] normalized_vcfs = NormalizeVcf.norm_vcf
+    Array[File] normalized_vcf_idxs = NormalizeVcf.norm_vcf_idx
     File counts_per_sample = SumCounts.summed_tsv
   }
 }
@@ -133,12 +119,12 @@ task NormalizeShortVariants {
   input {
     File vcf
     File vcf_idx
+    String outfile_name
     File ref_fasta
     String interval
     String bcftools_docker
   }
 
-  String outfile = basename(vcf, ".vcf.gz") + ".norm.vcf.gz"
   Int disk_gb = ceil(3 * size([vcf, ref_fasta], "GB")) + 10
 
   parameter_meta {
@@ -150,14 +136,7 @@ task NormalizeShortVariants {
   command <<<
     set -eu -o pipefail
 
-    # Symlink vcf_idx to current working dir
-    ln -s ~{vcf_idx} .
-
-    # Enable remote streaming of VCF
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-
     bcftools norm \
-      --regions "~{interval}" \
       --fasta-ref ~{ref_fasta} \
       --check-ref s \
       --multiallelics - \
@@ -166,14 +145,14 @@ task NormalizeShortVariants {
       ~{vcf} \
     | bcftools view \
       --exclude 'alt[0] == "*"' \
-      -Oz -o ~{outfile}
+      -Oz -o ~{outfile_name}
 
-    tabix -p vcf ~{outfile}
+    tabix -p vcf ~{outfile_name}
   >>>
 
   output {
-    File norm_vcf = outfile
-    File norm_vcf_idx = "~{outfile}.tbi"
+    File norm_vcf = outfile_name
+    File norm_vcf_idx = "~{outfile_name}.tbi"
   }
 
   runtime {
