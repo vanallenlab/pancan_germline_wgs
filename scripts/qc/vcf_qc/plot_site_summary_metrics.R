@@ -66,7 +66,8 @@ read.sv.sizes <- function(tsv.in){
 # Plotting Functions #
 ######################
 # Summary plot of variant counts by class & subclass
-plot.counts.by.vsc <- function(df, bar.sep=0.1, parmar=c(0.1, 7, 2, 2)){
+plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
+                               bar.sep=0.1, parmar=c(0.1, 7.1, 2, 2)){
   # Simplify count data
   k <- log10(apply(df[, -c(1:2)], 1, sum))
   k.order <- order(k)
@@ -104,27 +105,30 @@ plot.counts.by.vsc <- function(df, bar.sep=0.1, parmar=c(0.1, 7, 2, 2)){
   # Add left margin labels
   axis(2, at=(1:length(k))-0.5, las=2, line=-0.9, tick=F,
        labels=var.subclass.names.short[df$subclass], cex.axis=5/6)
-  indel.vc.x <- sv.vc.x <- -5.75
-  indel.bracket.y <- c(min(which(df$class == "indel")) - 1 + bar.sep,
-                       max(which(df$class == "indel")) - bar.sep)
-  staple.bracket(x0=indel.vc.x, x1=indel.vc.x,
-                 y0=indel.bracket.y[1], y1=indel.bracket.y[2])
-  text(x=indel.vc.x+0.5, y=mean(indel.bracket.y)-0.1, labels="Indels\n(1-49 bp)",
-       cex=5/6, pos=2, xpd=T)
+  vc.x <- -3 * diff(par("usr")[1:2]) / 4
+  bracket.lab.buf <- -0.075 * vc.x
+  if(has.short.variants){
+    indel.bracket.y <- c(min(which(df$class == "indel")) - 1 + bar.sep,
+                         max(which(df$class == "indel")) - bar.sep)
+    staple.bracket(x0=vc.x, x1=vc.x, y0=indel.bracket.y[1], y1=indel.bracket.y[2])
+    text(x=vc.x+bracket.lab.buf, y=mean(indel.bracket.y)-0.1, labels="Indels\n(1-49 bp)",
+         cex=5/6, pos=2, xpd=T)
 
-  sv.bracket.y <- c(min(which(df$class == "sv")) - 1 + bar.sep,
-                    max(which(df$class == "sv")) - bar.sep)
-  staple.bracket(x0=sv.vc.x, x1=sv.vc.x,
-                 y0=sv.bracket.y[1], y1=sv.bracket.y[2])
-  text(x=sv.vc.x+0.5, y=mean(sv.bracket.y)-0.1,
-       labels="Structural\nvariants\n(>49 bp)",
-       cex=5/6, pos=2, xpd=T)
+  }
+  if(has.svs){
+    sv.bracket.y <- c(min(which(df$class == "sv")) - 1 + bar.sep,
+                      max(which(df$class == "sv")) - bar.sep)
+    staple.bracket(x0=vc.x, x1=vc.x, y0=sv.bracket.y[1], y1=sv.bracket.y[2])
+    text(x=vc.x+bracket.lab.buf, y=mean(sv.bracket.y)-0.1,
+         labels="Structural\nvariants\n(>49 bp)",
+         cex=5/6, pos=2, xpd=T)
+  }
 }
 
 # Volcano of signed variant sizes
 plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
                               minor.tck=-0.01, major.tck=-0.0275,
-                              parmar=c(2, 2.6, 0.25, 0.1)){
+                              parmar=c(2, 2.75, 0.25, 0.1)){
   # Get partitioned densities
   df <- size.d$df
   breaks <- log10(size.d$breaks)
@@ -268,26 +272,13 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
   xlims <- c(min(sapply(af.dat, function(l){l$x})) - 0.1,
              max(sapply(af.dat, function(l){l$x})))
   ylims <- c(max(c(0, (floor(10 * min(sapply(af.dat, function(l){l$y}))) / 10) - 0.1)),
-             (ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.1)
+             (ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.25)
   if(is.null(colors)){
     colors <- rev(greyscale.palette(length(af.dat)))
   }
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar=parmar)
-
-  # Add distinction between rare & common, if optioned
-  if(!is.null(common.af)){
-    abline(v=log10(common.af), col=annotation.color, lty=5)
-    text(x=log10(common.af)+(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])), cex=5/6, pos=2, labels="Rare")
-    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])), cex=5/6, pos=4,
-         labels="Common")
-    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.13*diff(par("usr")[3:4])), cex=5/6, pos=4,
-         labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))))
-  }
 
   # Add step functions and group names (if optioned)
   sapply(1:length(af.dat), function(i){
@@ -307,6 +298,19 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
   clean.axis(2, at=log10(logscale.major.bp),
              labels=sapply(logscale.major.bp, clean.numeric.labels),
              title=y.title, title.line=0.85)
+
+  # Add distinction between rare & common, if optioned
+  if(!is.null(common.af)){
+    abline(v=log10(common.af), col=annotation.color, lty=5)
+    text(x=log10(common.af)+(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])), cex=5/6, pos=2, labels="Rare")
+    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])), cex=5/6, pos=4,
+         labels="Common")
+    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.13*diff(par("usr")[3:4])), cex=5/6, pos=4,
+         labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))))
+  }
 
   # Add right Y-margin group labels
   if(!is.null(group.names)){
@@ -340,7 +344,9 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
   prep.plot.area(xlims, ylims, parmar, xaxs="r")
 
   # Add bottom bin labels
-  x.labs <- c("SNV", logscale.major.bp.labels[1:(length(size.bins)-1)])
+  x.lab.menu <- c("SNV", logscale.major.bp.labels)
+  names(x.lab.menu) <- paste("ge", c(0, logscale.major.bp), sep="")
+  x.labs <- x.lab.menu[names(size.bins)]
   sapply(1:length(size.bins), function(x){
     text(x=x+0.1, y=-0.035, srt=40, pos=2, labels=x.labs[x], xpd=T, cex=5/6)
   })
@@ -351,7 +357,7 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
              title="Variant Proportion", title.line=0.6, label.line=-0.75)
 
   # Add right Y axis/legend hybrid
-  af.labels.pct <- c("AF>10%", "AF<10%", "AF<1%", "AF<0.1%")
+  af.labels.pct <- rev(c("AF>10%", "AF<10%", "AF<1%", "AF<0.1%"))
   if(length(af.bins) > length(af.labels.pct)){
     af.labels <- c(rep("", length(af.labels.pct)),
                    paste("AF<10^", -((length(af.labels.pct)+1):length(af.bins)), sep=""))
@@ -367,7 +373,7 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
                                label.cex=5/6, min.label.spacing=0.1,
                                return.label.pos=TRUE)
   if(parse.any){
-    text(x=ncol(plot.df)-bar.sep+0.5, y=rev(legend.y.pos)[1:length(af.labels.pct)],
+    text(x=ncol(plot.df)-bar.sep+0.5, y=rev(legend.y.pos)[length(af.labels.pct):1],
          labels=af.labels.pct, cex=5/6, pos=4, xpd=T)
   }
 
@@ -410,6 +416,14 @@ args <- parser$parse_args()
 #              "sv_sites" = "~/scratch/YL.sv.site_metrics.dev.sv.sites.bed.gz",
 #              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/qc.test")
+# # DEV:
+# args <- list("size_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.size_distrib.tsv.gz",
+#              "af_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.af_distrib.tsv.gz",
+#              "joint_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.size_vs_af_distrib.tsv.gz",
+#              "sv_sites" = "~/scratch/PedSV.sv.site_metrics.dev.sv.sites.bed.gz",
+#              "common_af" = 0.01,
+#              "out_prefix" = "~/scratch/pedsv.qc.test")
+
 
 # Read distributions
 size.d <- read.distrib(args$size_distrib)
@@ -417,16 +431,22 @@ af.d <- read.distrib(args$af_distrib)
 joint.d <- read.distrib(args$joint_distrib, key.cols=1:3)
 sv.sizes <- read.sv.sizes(args$sv_sites)
 
+# Check if short variant & SV data are present in compressed distributions
+has.short.variants <- (any(c("snv", "indel") %in% size.d$df$class)
+                       | any(c("snv", "indel") %in% af.d$df$class)
+                       | any(c("snv", "indel") %in% joint.d$df$class))
+has.svs <- ("sv" %in% size.d$df$class | "sv" %in% af.d$df$class | "sv" %in% joint.d$df$class)
+
 # Summary of variant counts
 if(!is.null(size.d)){
   pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
       height=2.25, width=2.85)
-  plot.counts.by.vsc(size.d$df)
+  plot.counts.by.vsc(size.d$df, has.short.variants, has.svs)
   dev.off()
 }else if(!is.null(freq.d)){
   pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
       height=2.25, width=2.85)
-  plot.counts.by.vsc(freq.d$df)
+  plot.counts.by.vsc(freq.d$df, has.short.variants, has.svs)
   dev.off()
 }
 
@@ -449,40 +469,47 @@ if(!is.null(sv.sizes)){
 # AF plots
 if(!is.null(af.d)){
   # Step function of AFs
-  main.af.df <- do.call("rbind", lapply(names(var.class.colors), function(vc){
+  classes.in.af <- intersect(c("snv", "indel", "sv"), af.d$df$class)
+  main.af.df <- do.call("rbind", lapply(classes.in.af, function(vc){
     apply(af.d$df[which(af.d$df$class == vc), -c(1:2)], 2, sum)
   }))
   pdf(paste(args$out_prefix, "af_distribs.pdf", sep="."),
       height=2.25, width=2.5)
-  plot.af.distribs(main.af.df, breaks=log10(af.d$breaks), colors=var.class.colors,
-                   group.names=paste(var.class.abbrev, "s", sep=""),
+  plot.af.distribs(main.af.df, breaks=log10(af.d$breaks),
+                   colors=var.class.colors[classes.in.af],
+                   group.names=paste(var.class.abbrev[classes.in.af], "s", sep=""),
                    common.af=args$common_af)
   dev.off()
 
   # Supplementary step function of AFs for short variants by subclass
-  short.af.df <- do.call("rbind", lapply(c("snv", "del", "ins"), function(vsc){
-    apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
-  }))
-  pdf(paste(args$out_prefix, "af_distribs.short_vars.pdf", sep="."),
-      height=2.25, width=2.5)
-  plot.af.distribs(short.af.df, breaks=log10(af.d$breaks),
-                   colors=c(var.class.colors[["snv"]], indel.colors[c("del", "ins")]),
-                   group.names=var.subclass.abbrevs[c("snv", "del", "ins")],
-                   y.title="Short variant count", lwd=2, common.af=args$common_af)
-  dev.off()
+  if(has.short.variants){
+    short.af.df <- do.call("rbind", lapply(c("snv", "del", "ins"), function(vsc){
+      apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
+    }))
+    pdf(paste(args$out_prefix, "af_distribs.short_vars.pdf", sep="."),
+        height=2.25, width=2.5)
+    plot.af.distribs(short.af.df, breaks=log10(af.d$breaks),
+                     colors=c(var.class.colors[["snv"]], indel.colors[c("del", "ins")]),
+                     group.names=var.subclass.abbrevs[c("snv", "del", "ins")],
+                     y.title="Short variant count", lwd=2, common.af=args$common_af)
+    dev.off()
+  }
 
   # Supplementary step function of AFs for SVs by subclass
-  svs.in.af <- intersect(names(sv.colors), af.d$df$subclass)
-  sv.af.df <- do.call("rbind", lapply(svs.in.af, function(vsc){
-    apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
-  }))
-  pdf(paste(args$out_prefix, "af_distribs.svs.pdf", sep="."),
-      height=2.25, width=2.5)
-  plot.af.distribs(sv.af.df, breaks=log10(af.d$breaks),
-                   colors=sv.colors[svs.in.af],
-                   group.names=var.subclass.abbrevs[svs.in.af],
-                   y.title="SV count", lwd=2, common.af=args$common_af)
-  dev.off()
+  if(has.svs){
+    svs.in.af <- intersect(names(sv.colors), af.d$df$subclass)
+    sv.af.df <- do.call("rbind", lapply(svs.in.af, function(vsc){
+      apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
+    }))
+    pdf(paste(args$out_prefix, "af_distribs.svs.pdf", sep="."),
+        height=2.25, width=2.5)
+    plot.af.distribs(sv.af.df, breaks=log10(af.d$breaks),
+                     colors=sv.colors[svs.in.af],
+                     group.names=var.subclass.abbrevs[svs.in.af],
+                     y.title="SV count", lwd=2, common.af=args$common_af,
+                     parmar=c(2, 2.75, 0.25, 2.75))
+    dev.off()
+  }
 }
 
 # 2D comparison of sizes vs. AFs

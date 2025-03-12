@@ -133,13 +133,13 @@ hwe.plot <- function(df, title="All variants", pt.cex=0.01,
   # Add title & subtitle
   mtext(3, line=0.4, text=title)
   n.all <- nrow(df)
-  n.fail <- sum(df$hwe < bonf.p)
-  n.formatted <- clean.numeric.labels(c(n.all, n.fail), acceptable.decimals=1)
+  n.pass <- sum(df$hwe >= bonf.p)
+  n.formatted <- clean.numeric.labels(c(n.all, n.pass), acceptable.decimals=1)
   n.formatted[1] <- gsub("k|M|B|T", "", n.formatted[1])
-  pct.fail <- n.fail / n.all
-  subtitle <- paste("HWE fail rate: ", n.formatted[1], " / ",
-                    n.formatted[2], " (", round(100*pct.fail, 1),
-                 "%)", sep="")
+  pct.pass <- n.pass / n.all
+  subtitle <- paste(n.formatted[1], " / ",
+                    n.formatted[2], " (", round(100*pct.pass, 1),
+                 "%) pass HWE", sep="")
   mtext(3, cex=5/6, text=subtitle, line=-0.4)
 
   # Add points
