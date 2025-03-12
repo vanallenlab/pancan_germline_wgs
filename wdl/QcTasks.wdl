@@ -33,13 +33,15 @@ task CollectSiteMetrics {
 
     # Ensure all necessary fields are defined in VCF header
     echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" > header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
     echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
     echo "##INFO=<ID=ExcHet,Number=A,Type=Float,Description=\"ExcHet test\">" >> header.supp.vcf
 
     # Collect stats and split into SNV, indel, and SV files
     bcftools annotate -h header.supp.vcf ~{vcf} \
     | bcftools query \
-      -f '%CHROM\t%POS\t%END\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/AC\t%INFO/AF\t%INFO/HWE\t%INFO/ExcHet\n' \
+      -f '%CHROM\t%POS\t%END\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/AN\t%INFO/AC\t%INFO/AF\t%INFO/CN_NONREF_COUNT\t%INFO/CN_NONREF_FREQ\t%INFO/AC_Het\t%INFO/AC_Hom\t%INFO/AC_Hemi\t%INFO/HWE\n' \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_site_metrics.py \
       ~{min_af_cmd} \
       ~{common_cmd} \

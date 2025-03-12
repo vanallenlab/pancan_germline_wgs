@@ -20,10 +20,10 @@ load.constants("all")
 
 # Declare local custom constants
 sv.dens.bw <- c("DEL" = 0.5,
-                "DUP" = 4/5,
+                "DUP" = 3/4,
                 "CNV" = 0.5,
                 "INS" = 10,
-                "INV" = 3/4,
+                "INV" = 4/5,
                 "CPX" = 1/3)
 
 
@@ -51,8 +51,9 @@ read.sv.sizes <- function(tsv.in){
   if(is.null(tsv.in)){return(NULL)}
   df <- read.table(tsv.in, header=T, sep="\t", quote="",
                    check.names=F, comment.char="")[, c("subclass", "size")]
-  sv.classes.in.sites <- setdiff(intersect(names(sv.colors), unique(df$subclass)),
-                                 c("CTX", "BND"))
+  sv.classes.in.sites <- rev(setdiff(intersect(names(sv.colors),
+                                               unique(df$subclass)),
+                                     c("CTX", "BND")))
   sv.sizes <- lapply(sv.classes.in.sites, function(vsc){
     log10(as.numeric(df$size[which(df$subclass == vsc)]))
   })
@@ -240,16 +241,17 @@ plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
 # Cowplot of SV sizes
 sv.size.cowplot <- function(sv.sizes){
   ridgeplot(sv.sizes, xlims=log10(c(10, 5000000)), x.axis.side=NA,
-            fill=sv.colors[names(sv.sizes)], bw.adj=sv.dens.bw[names(sv.sizes)],
-            fancy.light.fill=adjust.brightness(sv.colors[names(sv.sizes)], d=1),
-            fancy.median.color=adjust.brightness(sv.colors[names(sv.sizes)], d=-0.2),
-            border=NA,
-            parmar=c(2.2, 3.5, 0.1, 0.1))
-  axis(1, at=log10(logscale.minor), tck=-0.01, labels=NA)
+            names=var.subclass.abbrevs[names(sv.sizes)],
+            bw.adj=sv.dens.bw[names(sv.sizes)], fill=sv.colors[names(sv.sizes)],
+            fancy.light.fill=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.2, b=0.2),
+            fancy.median.color=adjust.color.hsb(sv.colors[names(sv.sizes)], b=-0.2),
+            border=adjust.color.hsb(sv.colors[names(sv.sizes)], b=-0.2),
+            border.lwd=2, fancy.median.lend="butt", parmar=c(2, 2, 0.1, 0.1))
+  axis(1, at=log10(logscale.minor), tck=-0.01, labels=NA, lwd=0.75)
   clean.axis(1, at=log10(logscale.major.bp),
              labels=logscale.major.bp.labels[seq(1, length(logscale.major.bp), 2)],
              labels.at=log10(logscale.major.bp)[seq(1, length(logscale.major.bp), 2)],
-             label.line=-0.9, title.line=0.2, title=bquote("SV size" ~ (log[10])))
+             label.line=-0.9, title.line=0, title="SV size")
 }
 
 
@@ -283,8 +285,8 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
          y=par("usr")[4]-(0.04*diff(par("usr")[3:4])), cex=5/6, pos=4,
          labels="Common")
     text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.12*diff(par("usr")[3:4])), cex=5/6, pos=4,
-         labels=paste("(AF>", round(100 * common.af, 1), "%)", sep=""))
+         y=par("usr")[4]-(0.13*diff(par("usr")[3:4])), cex=5/6, pos=4,
+         labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))))
   }
 
   # Add step functions and group names (if optioned)
@@ -439,12 +441,10 @@ if(!is.null(size.d)){
 # Cowplot of SV sizes by subclass
 if(!is.null(sv.sizes)){
   pdf(paste(args$out_prefix, "sv_size_cowplot.pdf", sep="."),
-      height=2.25, width=2.5)
+      height=2.25, width=2.25)
   sv.size.cowplot(sv.sizes)
   dev.off()
 }
-
-
 
 # AF plots
 if(!is.null(af.d)){

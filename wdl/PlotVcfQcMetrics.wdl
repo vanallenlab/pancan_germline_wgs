@@ -101,6 +101,9 @@ task PlotSiteMetrics {
     File joint_distrib
     Float common_af_cutoff
     File? sv_site_metrics
+    File? common_snvs_bed
+    File? common_indels_bed
+    File? common_svs_bed
 
     String output_prefix
 
@@ -111,8 +114,13 @@ task PlotSiteMetrics {
     String g2c_analysis_docker
   }
 
-  Array[File] inputs_for_size = select_all([size_distrib, af_distirb, joint_distrib, sv_site_metrics])
-  Int default_disk_gb = ceil(2 * size(inputs_for_size, "GB")) + 20
+  Array[File?] loc_inputs = [size_distrib, af_distrib, joint_distrib, sv_site_metrics,
+                             common_snvs_bed, common_indels_bed, common_svs_bed]
+  Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
+
+  String pw_snv_cmd = if defined(common_snvs_bed) then "--snvs ~{common_snvs_bed}" else ""
+  String pw_indel_cmd = if defined(common_indels_bed) then "--indels ~{common_indels_bed}" else ""
+  String pw_sv_cmd = if defined(common_svs_bed) then "--indels ~{common_svs_bed}" else ""
 
   command <<<
     set -eu -o pipefail
@@ -127,8 +135,17 @@ task PlotSiteMetrics {
       --common-af ~{common_af_cutoff} \
       --out-prefix site_metrics/~{out_prefix}
 
-    # Plot variant-level metrics on a subsampled set of the overall callset
-    # TODO: implement this
+    # Plot site-level metrics for common variants
+    if ~{defined(common_snvs_bed)} || \
+       ~{defined(common_indels_bed}) || \
+       ~{defined(common_svs_bed)}; then
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_pointwise_metrics.R \
+        ~{pw_snv_cmd} \
+        ~{pw_indel_cmd} \
+        ~{pw_sv_cmd} \
+        --combine \
+        --out-prefix site_metrics/~{out_prefix}
+    fi
 
     # Compress outputs
     tar -czvf site_metrics.tar.gz site_metrics/

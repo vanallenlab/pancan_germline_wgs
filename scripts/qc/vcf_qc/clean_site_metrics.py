@@ -139,7 +139,7 @@ def main():
     # Open connections to output BEDs with all site information
     site_fouts = {}
     common_fouts = {}
-    site_header = '#chrom start end vid class subclass size ac af hwe exhet'.split()
+    site_header = '#chrom start end vid class subclass size ac af freq_het freq_hom hwe'.split()
     for vc in var_classes:
         fnbase = args.output_prefix + '.' + vc + '.sites'
         if args.gzip:
@@ -159,13 +159,18 @@ def main():
     # Iterate over each line in metrics and process variants one at a time
     vc_seen = {vc : False for vc in var_classes}
     common_seen = {vc : False for vc in var_classes}
-    for chrom, pos, end, ref, alt, svlen, ac, af, hwe, exhet in indat:
+    for chrom, pos, end, ref, alt, svlen, an, ac, af, cnc, cnf, ac_het, ac_hom, ac_hemi, hwe in indat:
 
         # Clean up length based on ref/alt and svlen
         if svlen != '.':
             varlen = int(svlen)
         else:
             varlen = np.abs(len(alt) - len(ref))
+
+        # Clean up AC/AF for CNVs
+        if cnf != "." and cnc != ".":
+            ac = int(cnc)
+            af = float(cnf)
 
         # Assign each variant to class & subclass
         vc, vsc = classify_variant(ref, alt, varlen)
@@ -191,16 +196,28 @@ def main():
             # Add variant count to binned 2D size X AF by class & subclass
             x_counter[vc][vsc][x_size_ge[np.argmin(varlen >= x_size_ge)-1]][np.argmax(af < x_af_lt)] += 1
 
+        # Infer genotype frequencies for diploid loci
+        freq_het = '.'
+        freq_hom = '.'
+        if an != '.' and ac_het != '.' and ac_hom != '.' and ac_hemi != '.':
+            an = int(an)
+            ac_het = int(ac_het)
+            ac_hom = int(ac_hom)
+            ac_hemi = int(ac_hemi)
+            an_bi = an - ac_hemi
+            n_bi = an_bi / 2
+            if n_bi > 0:
+                freq_het = '{:.2e}'.format(ac_het / n_bi)
+                freq_hom = '{:.2e}'.format((ac_hom / 2) / n_bi)
+
         # Convert long floats to scientific notation
         if af != '.':
             af = '{:.2e}'.format(af)
         if hwe != '.':
             hwe = '{:.2e}'.format(float(hwe))
-        if exhet != '.':            
-            exhet = '{:.2e}'.format(float(exhet))
 
         # Write reformatted variant data to out .bed
-        outvals = [chrom, pos, end, vid, vc, vsc, varlen, ac, af, hwe, exhet]
+        outvals = [chrom, pos, end, vid, vc, vsc, varlen, ac, af, freq_het, freq_hom, hwe]
         lout = '\t'.join([str(x) for x in outvals])
         site_fouts[vc].write(lout + '\n')
         if args.common_af is not None \

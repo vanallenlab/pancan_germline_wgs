@@ -322,7 +322,7 @@ task PreprocessVcf {
       ~{vcf} \
     | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
       '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
-    | bcftools +fill-tags \
+    | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     | bcftools view \
       --samples-file all.samples.list \
       --no-update \
