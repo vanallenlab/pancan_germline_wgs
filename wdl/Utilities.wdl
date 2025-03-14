@@ -363,7 +363,7 @@ task SplitIntervalList {
 
     fgrep "@" ~{interval_list} > header.txt
 
-    split -l 1 -a 6 -d <( fgrep -v "@" ~{intervals_list} ) scatterDir/shard
+    split -l 1 -a 6 -d <( fgrep -v "@" ~{interval_list} ) scatterDir/shard
 
     while read shard; do
       i=$( basename $shard | sed 's/^shard//g' | awk '{ printf "%06d\n", $1+1 }' )
