@@ -185,7 +185,7 @@ def main():
         # Set size to arbitrarily large value for gross interchromosomal 
         # translocations with undefined sizes
         if vsc == 'CTX':
-            size = int(10e7)
+            varlen = int(10e7)
 
         # Add variant count to binned size by class & subclass
         size_counter[vc][vsc][np.argmin(varlen >= size_ge)-1] += 1

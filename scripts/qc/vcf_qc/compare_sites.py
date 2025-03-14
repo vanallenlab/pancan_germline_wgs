@@ -178,7 +178,7 @@ def compress_overlap_distribs(bt, mode='size', max_size=1000000):
     # Behavior depends on value of `mode`
     if mode == 'size':
         
-        size_ge = np.array([0] + [10 ** k for k in range(int(np.floor(np.log10(max_size))))])
+        size_ge = np.array([0] + [10 ** k for k in range(int(np.floor(np.log10(max_size)) + 1))])
         df['size_bin'] = df['size'].apply(lambda x: np.argmin(x >= size_ge))
         import pdb; pdb.set_trace()
 
