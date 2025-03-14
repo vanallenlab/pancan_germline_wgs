@@ -23,6 +23,15 @@ from os import remove
 from re import sub
 
 
+# Declare common constants
+# Note that short variant subclasses are lowercase and structural variant
+# subclasses are uppercase to distinguish them by size
+var_classes = 'snv indel sv'.split()
+var_subclasses = {'snv' : 'ti tv'.split(),
+                  'indel' : 'ins del'.split(),
+                  'sv' : 'DEL DUP CNV INS INV CPX CTX'.split()}
+
+
 def populate_nodes(hits_g, bt, prefix=''):
     """
     Add all variants present in a pbt.Bedtool (bt) as nodes in a nx.Graph (hits_g)
@@ -161,19 +170,30 @@ def compress_overlap_distribs(bt, mode='size', max_size=1000000):
     df = bt.to_dataframe(header=0, disable_auto_names=True)
     df['af_d'] = np.abs(df.af - df.match_af)
 
+    # Get lists of 
+
     # Bin absolute difference in allele frequencies
     af_d_le = [0.01, 0.1, 0.5, 1]
 
     # Behavior depends on value of `mode`
     if mode == 'size':
-        size_ge = [0] + [10 ** k for k in range(int(np.floor(np.log10(max_size))))]
+        
+        size_ge = np.array([0] + [10 ** k for k in range(int(np.floor(np.log10(max_size))))])
+        df['size_bin'] = df['size'].apply(lambda x: np.argmin(x >= size_ge))
+        import pdb; pdb.set_trace()
+
+        for vc in var_classes:
+            for vsc in var_classes[vc]:
+                for size in size_ge:
+                    sub_df = df[(df.vc == vc) & (df.vsc == vsc)]
+
+
+        import pdb; pdb.set_trace()
 
 
     # # Get AF parameters
     # min_af = np.nanmin(df.af)
     # af_breaks = range(np.ceil(np.log10(min_af)))
-
-        import pdb; pdb.set_trace()
 
 
 def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, common_af=None, gzip=False):
