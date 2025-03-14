@@ -160,25 +160,50 @@ for k in $( seq 1 22 ) X Y; do
   >> $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
 done
 
-# TODO: REWORK THIS ONCE WE REGAIN ACCESS TO AOU RW
+# Estimate ideal number of shards per chromosome
+# Math as follows: 2,900 task quota x 5 workspaces = 14,500 total shards
+# Shards per chrom = 14,500 x chromosome size / genome size
+genome_size=$( cat $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.interval_list \
+               | fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
+               | awk '{ sum+=$3-$2 }END{ printf "%i\n", sum }' )
 
-# # Estimate total genomic space to be processed by each of five workspaces
-# cat $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.interval_list \
-# | fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
-# | awk '{ sum+=$3-$2 }END{ printf "%i\n", sum / 5 }'
+# Re-shard GATK-HC intervals per chromosome
+while read contig; do
+  # Get size of contig
+  contig_size=$( cat $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.interval_list \
+                 | fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
+                 | awk '{ sum+=$3-$2 }END{ printf "%i\n", sum }' )
 
-# # Estimate optimized number of shards per chromosome as 
+  # Calculate number of desired shards
+  n_shards=$( echo "14500" \
+              | awk -v denom=$genome_size -v numer=$contig_size \
+                '{ printf "%i\n", $1 * numer / denom }' )
 
-# # Subdivide intervals per chromosome to allow maximal parallelization
-# # Logic is as follows: ~600Mb per workspace, 
-# # Logic as follows: ~600Mb per workspace / 2900 task quota = 200kb avg interval size
-# for k in $( seq 1 22 ) X Y; do
-#   code/scripts/split_intervals.py \
-#     -i $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list \
-#     -t 200000 \
-#     --gatk-style \
-#     -o $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals
-# done
+  # Download gnomAD variant sites from this contig
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics/$contig/*/gnomad.v4.1.$contig.*.sites.bed.gz* \
+    $staging_dir/
+  find $staging_dir -name "*bed.gz" | xargs -I {} tabix -f {}
+
+  # Estimate ideal number of variants per shard
+  n_vars=$( zcat $staging_dir/gnomad.v4.1.$contig.*.sites.bed.gz | wc -l | awk '{ print $1-3 }' )
+  vars_per_shard=$( echo $n_vars | awk -v denom=$n_shards '{ printf "%i\n", $1 / denom }' )
+
+  # Shard GATK-HC intervals according to parameters determined above
+  code/scripts/split_intervals.py \
+    -i $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.interval_list \
+    --var-sites $staging_dir/gnomad.v4.1.$contig.snv.sites.bed.gz \
+    --var-sites $staging_dir/gnomad.v4.1.$contig.indel.sites.bed.gz \
+    --var-sites $staging_dir/gnomad.v4.1.$contig.sv.sites.bed.gz \
+    --vars-per-shard $vars_per_shard \
+    --gatk-style \
+    --verbose \
+    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.intervals
+
+  # Clean up
+  rm $staging_dir/gnomad.v4.1.*.*.sites.bed.gz*
+
+done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \
@@ -207,12 +232,13 @@ fi
 
 # Write .json of contig-specific scatter counts
 echo "{ " > $staging_dir/contig_variable_overrides.json
-for k in $( seq 1 22 ) X Y; do
+while read contig; do
   kc=$( fgrep -v "@" \
-          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.chr$k.sharded.intervals \
+          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.intervals \
         | wc -l | awk '{ printf "%i\n", $1 }' )
-  echo "\"chr$k\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
-done | paste -s -d\  | sed 's/,$//g' \
+  echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
+done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+| paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
 echo " }" >> $staging_dir/contig_variable_overrides.json
 
@@ -221,13 +247,13 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 100,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 50,
   "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
-  "GnarlyJointGenotypingPart1.import_gvcf_batch_size": 100,
+  "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
+  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
   "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
-  "GnarlyJointGenotypingPart1.medium_disk": 125,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
@@ -251,40 +277,7 @@ code/scripts/manage_chromshards.py \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 60 \
   --submission-gate 5 \
-  --max-attempts 4
-
-
-
-
-#### DEV - carefully benchmarking & optimizing resources just on chr19
-
-export CONTIG=chr19
-export CONTIG_SCATTER_COUNT=279
-
-code/scripts/envsubst.py \
-  -i $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
-  -o cromshell/inputs/GnarlyJointGenotypingPart1.inputs.chr19.json
-
-cromshell --no_turtle -t 120 -mc submit \
-  --options-json code/refs/json/aou.cromwell_options.default.json \
-  code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
-  cromshell/inputs/GnarlyJointGenotypingPart1.inputs.chr19.json \
-| jq .id | tr -d '"' \
->> cromshell/job_ids/dfci-g2c.v1.JointGenotyping.chr19.job_ids.list
-
-while [ TRUE ]; do
-  echo -e "\n\n"
-  date
-  cromshell -t 120 counts -x \
-    $( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.chr19.job_ids.list )
-  sleep 10m
-done
-
-# Optimized resources based on chr19 -- need to update input json above once workflow completes
-# import_gvcf_disk_gb = 40
-# "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 50,
-# "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20,
-
+  --max-attempts 2
 
 
 ###############

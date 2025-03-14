@@ -349,6 +349,44 @@ task ShardVcf {
 }
 
 
+task SplitIntervalList {
+  input {
+    File interval_list
+    String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
+    Int n_preemptible = 3
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    mkdir scatterDir
+
+    fgrep "@" ~{interval_list} > header.txt
+
+    split -l 1 -a 6 -d <( fgrep -v "@" ~{intervals_list} ) scatterDir/shard
+
+    while read shard; do
+      i=$( basename $shard | sed 's/^shard//g' | awk '{ printf "%06d\n", $1+1 }' )
+      cat header.txt $shard > scatterDir/$i-scattered.interval_list
+      rm $shard
+    done < <( find scatterDir/ -name "shard*" | sort -n )
+  >>>
+
+  output {
+    Array[File] output_intervals = glob("scatterDir/*-scattered.interval_list")
+  }
+
+  runtime {
+    cpu: 1
+    memory: "1.75 GiB"
+    disks: "local-disk 25 HDD"
+    docker: linux_docker
+    preemptible: n_preemptible
+    maxRetries: 1
+  }
+}
+
+
 task SumSvCountsPerSample {
   input {
     Array[File] count_tsvs   # Expects svtk count-svtypes output format

@@ -84,7 +84,7 @@ def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, verbose=
             if k >= vars_per_shard:
                 shards.append([chrom, s_start, cur_pos])
                 if verbose:
-                    msg = 'Broke interval {}:{:,}-{:,} at {}:{:,}-{:,} ' + \
+                    msg = 'Split interval {}:{:,}-{:,} at {}:{:,}-{:,} ' + \
                           '({:.0f} kb) after {:,} variants\n'
                     stdout.write(msg.format(chrom, istart, iend, chrom, s_start, 
                                             cur_pos, (cur_pos - s_start) / 1000, k))
@@ -153,13 +153,9 @@ def main():
                         'their genomic size, controlled by this parameter.',
                         type=float, default=10e10)
     parser.add_argument('--n-shards', type=int, help='Total number' +
-                        'of desired shards. Only used if --total-n-variants and ' +
+                        'of desired shards. Only used if --vars-per-shard and ' +
                         '--var-sites are also specified, otherwise will default ' +
                         'to --target-size')
-    parser.add_argument('--total-n-variants', type=int, help='Total number' +
-                        'of variants present in --var-sites. Required for ' +
-                        'variant density-based shard balancing if --var-sites ' +
-                        'is optioned.')
     parser.add_argument('--var-sites', action='append', help='One or more BED ' +
                         'files listing known variant sites in an external ' +
                         'reference dataset, like gnomAD. May be provided ' +
@@ -233,7 +229,10 @@ def main():
 
     # Write sharded intervals to output file
     for vals in shards:
-        outfile.write('{}:{}-{}\n'.format(*vals[:3]))
+        outline = '{}:{}-{}'.format(*vals[:3])
+        if not args.gatk_style:
+            outline += '\t' + '\t'.join('+ . intersection ACGTmer'.split())
+        outfile.write(outline + '\n')
 
     # Clear buffer
     outfile.close()

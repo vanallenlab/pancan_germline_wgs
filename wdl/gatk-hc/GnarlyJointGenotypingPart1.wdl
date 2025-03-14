@@ -21,6 +21,7 @@ version 1.0
 
 
 import "https://raw.githubusercontent.com/broadinstitute/warp/develop/tasks/broad/JointGenotypingTasks.wdl" as Tasks
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/gatkhc/wdl/Utilities.wdl" as G2CUtils
 
 
 workflow GnarlyJointGenotypingPart1 {
@@ -29,7 +30,7 @@ workflow GnarlyJointGenotypingPart1 {
 
     String callset_name
     File sample_name_map
-    Int import_gvcf_batch_size = 50
+    Int import_gvcfs_batch_size = 50
 
     File ref_fasta
     File ref_fasta_index
@@ -45,6 +46,7 @@ workflow GnarlyJointGenotypingPart1 {
     Int large_disk = 1000
 
     Int? top_level_scatter_count
+    Boolean intervals_already_split = false
     Float unbounded_scatter_count_scale_factor = 0.15
     Int gnarly_scatter_count = 10
   }
@@ -61,18 +63,28 @@ workflow GnarlyJointGenotypingPart1 {
       sample_name_map = sample_name_map
   }
 
-  call Tasks.SplitIntervalList {
-    input:
-      interval_list = unpadded_intervals_file,
-      scatter_count = scatter_count,
-      ref_fasta = ref_fasta,
-      ref_fasta_index = ref_fasta_index,
-      ref_dict = ref_dict,
-      disk_size_gb = small_disk,
-      sample_names_unique_done = CheckSamplesUnique.samples_unique
+  # We deviate from the WARP protocol by enabling the user to provide custom pre-split intervals
+  # This requires a custom task to strictly split the interval list into single-interval shards
+  if ( intervals_already_split ) {
+    call G2CUtils.SplitIntervalList as G2CSplitIntervals {
+      input:
+        interval_list = unpadded_intervals_file
+    }
   }
-
-  Array[File] unpadded_intervals = SplitIntervalList.output_intervals
+  if ( !intervals_already_split ) {
+    call Tasks.SplitIntervalList as GatkSplitIntervals {
+      input:
+        interval_list = unpadded_intervals_file,
+        scatter_count = scatter_count,
+        ref_fasta = ref_fasta,
+        ref_fasta_index = ref_fasta_index,
+        ref_dict = ref_dict,
+        disk_size_gb = small_disk,
+        sample_names_unique_done = CheckSamplesUnique.samples_unique
+    }
+  }
+  
+  Array[File] unpadded_intervals = select_first([G2CSplitIntervals.output_intervals, GatkSplitIntervals.output_intervals])
 
   scatter (idx in range(length(unpadded_intervals))) {
     call Tasks.ImportGVCFs {
@@ -84,7 +96,7 @@ workflow GnarlyJointGenotypingPart1 {
         ref_dict = ref_dict,
         workspace_dir_name = "genomicsdb",
         disk_size_gb = import_gvcfs_disk_gb,
-        batch_size = import_gvcf_batch_size
+        batch_size = import_gvcfs_batch_size
     }
 
     if ( gnarly_scatter_count > 1 ) {

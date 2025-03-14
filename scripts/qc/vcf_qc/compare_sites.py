@@ -15,9 +15,11 @@ import argparse
 import gzip
 import networkx as nx
 import numpy as np
+import pandas as pd
 import pybedtools as pbt
 from Bio import bgzf
 from collections import Counter
+from os import remove
 from re import sub
 
 
@@ -28,9 +30,9 @@ def populate_nodes(hits_g, bt, prefix=''):
 
     for vt in bt:
         vid = prefix + vt.name
-        hits_g.add_node(vid, chrom=vt.chrom, pos=vt.start, end=vt.end, 
-                        vc=vt.fields[4], vsc=vt.fields[5], size=vt.fields[6],
-                        af=vt.fields[8])
+        hits_g.add_node(vid, chrom=vt.chrom, pos=int(vt.start), end=int(vt.end), 
+                        vc=vt.fields[4], vsc=vt.fields[5], size=int(vt.fields[6]),
+                        af=float(vt.fields[8]))
 
     return hits_g
 
@@ -53,7 +55,7 @@ def find_exact_hits(hits_g):
     for base_id in match_ids:
         v1 = 'a_' + base_id
         v2 = 'b_' + base_id
-        hits_g.add_edge(v1, v2, dist=0)
+        hits_g.add_edge(v1, v2, dist=0.0)
 
     return hits_g
 
@@ -92,9 +94,138 @@ def prune_hits(hits_g):
     n_edges = {nid : len(hits_g.edges(nid)) for nid in node_ids}
 
     while max(n_edges.values()) > 1:
+        # TODO: implement this
         import pdb; pdb.set_trace()
 
     return hits_g
+
+
+def format_output_bed(hits_g, target_prefix, ref_prefix):
+    """
+    Format a pbt.BedTool summarizing overlap results
+    """
+
+    node_ids = list(hits_g.nodes())
+
+    # Simplified output line:
+    # chrom, start, end, id, vc, vsc, size, af, match_id, match_af, match_dist
+    bed_line_fmt = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2e}\t{}\t{:.2e}\t{:.2}'
+
+    # Gather BED 
+    bt_strs = []
+    for nid in node_ids:
+        # Skip nodes in B file
+        if nid.startswith(ref_prefix):
+            continue
+
+        # Revert variant ID back to original format
+        vid = sub('^' + target_prefix, '', nid)
+        ninfo = hits_g.nodes[nid]
+
+        # Gather matching variant information
+        edges = list(hits_g.edges(nid))
+        if len(edges) == 0:
+            match_id = '.'
+            match_af = np.nan
+            match_dist = np.nan
+        elif len(edges) == 1:
+            match_nid = list(set(edges[0]).difference(set([nid])))[0]
+            match_id = sub('^' + ref_prefix, '', match_nid)
+            match_af = hits_g.nodes[match_nid].get('af')
+            match_dist = hits_g[nid][match_nid]['dist']
+        else:
+            msg = 'Node {} from has more than one edge after pruning. ' + \
+                  'This indicates a bug that needs to be fixed. Exiting.'
+            exit(msg.format(nid))
+
+        # Format output line and add to bt collector
+        bed_line_vals = [ninfo[k] for k in 'chrom pos end vc vsc size af'.split()]
+        bed_line_vals.insert(3, vid)
+        bed_line_vals += [match_id, match_af, match_dist]
+        bt_strs.append(bed_line_fmt.format(*bed_line_vals))
+
+    # Return sorted bedtool
+    return pbt.BedTool('\n'.join(bt_strs), from_string=True).sort()
+
+
+def compress_overlap_distribs(bt, mode='size'):
+    """
+    Compress variant overlap information contained in a pbt.BedTool 
+    by variant class, subclass, size bins, and AF bins
+    
+    This will produce compressed distributions formatted nearly identically to 
+    those produced by clean_site_metrics.py for downstream compatability
+    """
+
+    # Convert bedtool to dataframe and annotate difference in AF
+    df = bt.to_dataframe(header=0, disable_auto_names=True)
+    df['af_d'] = np.abs(df.af - df.match_af)
+
+    # Get AF parameters
+    min_af = np.nanmin(df.af)
+    af_breaks = range(np.ceil(np.log10(min_af)))
+
+    import pdb; pdb.set_trace()
+
+
+def write_outputs(hits_g, out_prefix, common_af=None, gzip=False):
+    """
+    Format and write output files
+    """
+
+    # Prep header for sites BED output
+    bed_header_fields = '#chrom pos end vid vc vsc size af match_vid match_af dist'
+    bed_header = '\t'.join(bed_header_fields.split())
+
+    # BED of left outer join (LoJ; all A sites, with matching B info)
+    loj_bt = format_output_bed(hits_g, 'a_', 'b_')
+    loj_bed_out = out_prefix + '.loj.sites.bed'
+    loj_bt = loj_bt.saveas(loj_bed_out, trackline=bed_header)
+    if gzip:
+        loj_bt = loj_bt.tabix(force=True)
+        remove(loj_bed_out)
+
+    # Subset LoJ to common sites and write common subset to file, if optioned
+    if common_af is not None:
+        loj_common_bed_out = out_prefix + '.loj.sites.common.bed'
+        loj_common_bt = loj_bt.filter(lambda f: float(f[7]) >= common_af).saveas()
+        loj_common_bt.saveas(loj_common_bed_out, trackline=bed_header)
+        if gzip:
+            loj_common_bt = loj_common_bt.tabix(force=True)
+            remove(loj_common_bed_out)
+
+    # # Compress LoJ by variant class, subclass, and size
+    # loj_size_d = compress_overlap_distribs(loj_bt, mode='size')
+    # # TODO: write this result to file
+
+    # # Compress LoJ by variant class, subclass, and AF
+    # loj_af_d = compress_overlap_distribs(loj_bt, mode='af')
+    # # TODO: write this result to file
+
+    # BED of right outer join (RoJ; all B sites, with matching A info)
+    roj_bt = format_output_bed(hits_g, 'b_', 'a_')
+    roj_bed_out = out_prefix + '.roj.sites.bed'
+    roj_bt = roj_bt.saveas(roj_bed_out, trackline=bed_header)
+    if gzip:
+        roj_bt = roj_bt.tabix(force=True)
+        remove(roj_bed_out)
+
+    # Subset RoJ to common sites and write common subset to file
+    if common_af is not None:
+        roj_common_bed_out = out_prefix + '.roj.sites.common.bed'
+        roj_common_bt = roj_bt.filter(lambda f: float(f[7]) >= common_af).saveas()
+        roj_common_bt.saveas(roj_common_bed_out, trackline=bed_header)
+        if gzip:
+            roj_common_bt = roj_common_bt.tabix(force=True)
+            remove(roj_common_bed_out)
+
+    # # Compress RoJ by variant class, subclass, and size
+    # roj_size_d = compress_overlap_distribs(roj_bt, mode='size')
+    # # TODO: write this result to file
+
+    # # Compress RoJ by variant class, subclass, and AF
+    # roj_af_d = compress_overlap_distribs(roj_bt, mode='af')
+    # # TODO: write this result to file
 
 
 def main():
@@ -121,6 +252,11 @@ def main():
                         metavar='int', help='Minimum variant size to ' +
                         'consider for --comparison-mode "overlap" or "both" ' +
                         '[default: 10]')
+    parser.add_argument('--common-af', type=float, help='AF cutoff for common ' +
+                        'variants. If provided, will generate separate sites.bed ' +
+                        'output files restricted to common variants. [default: ' +
+                        'do not generate common variant-only .bed outputs]',
+                        metavar='[float]')
     parser.add_argument('-z', '--gzip', action='store_true', help='Compress ' +
                         'output files with gzip/bgzip [default: write ' + 
                         'uncompressed .tsv/.bed]')
@@ -146,7 +282,7 @@ def main():
     hits = prune_hits(hits)
 
     # Write output files
-    # TODO: implement this
+    write_outputs(hits, args.output_prefix, args.common_af, args.gzip)
 
 
 if __name__ == '__main__':
