@@ -162,7 +162,9 @@ done
 
 # Estimate ideal number of shards per chromosome
 # Math as follows: 2,900 task quota x 5 workspaces = 14,500 total shards
-# Shards per chrom = 14,500 x chromosome size / genome size
+# We will increase this value by 50% to ensure we aren't wasting much quota
+# without also overloading the cromwell server
+# Shards per chrom = 14,500 x 1.5 x chromosome size / genome size
 genome_size=$( cat $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.interval_list \
                | fgrep -v "@" | cut -f1-3 | bedtools merge -i - \
                | awk '{ sum+=$3-$2 }END{ printf "%i\n", sum }' )
@@ -177,7 +179,7 @@ while read contig; do
   # Calculate number of desired shards
   n_shards=$( echo "14500" \
               | awk -v denom=$genome_size -v numer=$contig_size \
-                '{ printf "%i\n", $1 * numer / denom }' )
+                '{ printf "%i\n", $1 * 1.5 * numer / denom }' )
 
   # Download gnomAD variant sites from this contig
   gsutil -m cp \
@@ -253,6 +255,7 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
   "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
   "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.intervals_already_split": true,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
