@@ -148,10 +148,10 @@ def format_output_bed(hits_g, target_prefix, ref_prefix):
     return pbt.BedTool('\n'.join(bt_strs), from_string=True).sort()
 
 
-def compress_overlap_distribs(bt, mode='size'):
+def compress_overlap_distribs(bt, mode='size', max_size=1000000):
     """
     Compress variant overlap information contained in a pbt.BedTool 
-    by variant class, subclass, size bins, and AF bins
+    by variant class, subclass, and either size or AF bins
     
     This will produce compressed distributions formatted nearly identically to 
     those produced by clean_site_metrics.py for downstream compatability
@@ -161,6 +161,12 @@ def compress_overlap_distribs(bt, mode='size'):
     df = bt.to_dataframe(header=0, disable_auto_names=True)
     df['af_d'] = np.abs(df.af - df.match_af)
 
+    # 
+
+    # Behavior depends on value of `mode`
+    if mode == 'size':
+        size_ge = [0] + [10 ** int(k) for k in range(floor(np.log10(max_size)))]
+
     # Get AF parameters
     min_af = np.nanmin(df.af)
     af_breaks = range(np.ceil(np.log10(min_af)))
@@ -168,7 +174,7 @@ def compress_overlap_distribs(bt, mode='size'):
     import pdb; pdb.set_trace()
 
 
-def write_outputs(hits_g, out_prefix, common_af=None, gzip=False):
+def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, common_af=None, gzip=False):
     """
     Format and write output files
     """
@@ -177,54 +183,29 @@ def write_outputs(hits_g, out_prefix, common_af=None, gzip=False):
     bed_header_fields = '#chrom pos end vid vc vsc size af match_vid match_af dist'
     bed_header = '\t'.join(bed_header_fields.split())
 
-    # BED of left outer join (LoJ; all A sites, with matching B info)
-    loj_bt = format_output_bed(hits_g, 'a_', 'b_')
-    loj_bed_out = out_prefix + '.loj.sites.bed'
-    loj_bt = loj_bt.saveas(loj_bed_out, trackline=bed_header)
+    # BED of outer join
+    bt = format_output_bed(hits_g, query_prefix, ref_prefix)
+    bed_out = out_prefix + '.sites.bed'
+    bt = bt.saveas(bed_out, trackline=bed_header)
     if gzip:
-        loj_bt = loj_bt.tabix(force=True)
-        remove(loj_bed_out)
+        bt = bt.tabix(force=True)
+        remove(bed_out)
 
-    # Subset LoJ to common sites and write common subset to file, if optioned
+    # Subset outer join to common sites and write common subset to file, if optioned
     if common_af is not None:
-        loj_common_bed_out = out_prefix + '.loj.sites.common.bed'
-        loj_common_bt = loj_bt.filter(lambda f: float(f[7]) >= common_af).saveas()
-        loj_common_bt.saveas(loj_common_bed_out, trackline=bed_header)
+        common_bed_out = out_prefix + '.sites.common.bed'
+        common_bt = bt.filter(lambda f: float(f[7]) >= common_af).saveas()
+        common_bt = common_bt.saveas(common_bed_out, trackline=bed_header)
         if gzip:
-            loj_common_bt = loj_common_bt.tabix(force=True)
-            remove(loj_common_bed_out)
+            common_bt = common_bt.tabix(force=True)
+            remove(common_bed_out)
 
-    # # Compress LoJ by variant class, subclass, and size
-    # loj_size_d = compress_overlap_distribs(loj_bt, mode='size')
-    # # TODO: write this result to file
+    # Compress outer join by variant class, subclass, and size
+    size_d = compress_overlap_distribs(bt, mode='size')
+    # TODO: write this result to file
 
-    # # Compress LoJ by variant class, subclass, and AF
-    # loj_af_d = compress_overlap_distribs(loj_bt, mode='af')
-    # # TODO: write this result to file
-
-    # BED of right outer join (RoJ; all B sites, with matching A info)
-    roj_bt = format_output_bed(hits_g, 'b_', 'a_')
-    roj_bed_out = out_prefix + '.roj.sites.bed'
-    roj_bt = roj_bt.saveas(roj_bed_out, trackline=bed_header)
-    if gzip:
-        roj_bt = roj_bt.tabix(force=True)
-        remove(roj_bed_out)
-
-    # Subset RoJ to common sites and write common subset to file
-    if common_af is not None:
-        roj_common_bed_out = out_prefix + '.roj.sites.common.bed'
-        roj_common_bt = roj_bt.filter(lambda f: float(f[7]) >= common_af).saveas()
-        roj_common_bt.saveas(roj_common_bed_out, trackline=bed_header)
-        if gzip:
-            roj_common_bt = roj_common_bt.tabix(force=True)
-            remove(roj_common_bed_out)
-
-    # # Compress RoJ by variant class, subclass, and size
-    # roj_size_d = compress_overlap_distribs(roj_bt, mode='size')
-    # # TODO: write this result to file
-
-    # # Compress RoJ by variant class, subclass, and AF
-    # roj_af_d = compress_overlap_distribs(roj_bt, mode='af')
+    # # Compress outer join by variant class, subclass, and AF
+    # af_d = compress_overlap_distribs(bt, mode='af')
     # # TODO: write this result to file
 
 
@@ -257,6 +238,10 @@ def main():
                         'output files restricted to common variants. [default: ' +
                         'do not generate common variant-only .bed outputs]',
                         metavar='[float]')
+    parser.add_argument('--no-reverse', action='store_true', help='Do not perform ' +
+                        'the complementary analysis when using --sites-b as the ' +
+                        'query dataset and --sites-a as the reference [default: ' +
+                        'perform analyses in both directions]')
     parser.add_argument('-z', '--gzip', action='store_true', help='Compress ' +
                         'output files with gzip/bgzip [default: write ' + 
                         'uncompressed .tsv/.bed]')
@@ -281,8 +266,13 @@ def main():
     # Process candidate matches to generate 1:1 mapping of hits
     hits = prune_hits(hits)
 
-    # Write output files
-    write_outputs(hits, args.output_prefix, args.common_af, args.gzip)
+    # Write output files for left outer join  (LoJ; all A sites, with matching B info)
+    write_outputs(hits, args.output_prefix + '.loj', 'a_', 'b_', args.common_af, args.gzip)
+
+    # Write output files for right outer join  (RoJ; all B sites, with matching A info)
+    if not args.no_reverse:
+        write_outputs(hits, args.output_prefix + '.roj', 'b_', 'a_', 
+                      args.common_af, args.gzip)
 
 
 if __name__ == '__main__':

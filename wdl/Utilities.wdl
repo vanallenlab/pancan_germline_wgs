@@ -363,17 +363,17 @@ task SplitIntervalList {
 
     fgrep "@" ~{interval_list} > header.txt
 
-    split -l 1 -a 6 -d <( fgrep -v "@" ~{interval_list} ) scatterDir/shard
+    split -l 1 -a 6 -d <( fgrep -v "@" ~{interval_list} ) shard
 
     while read shard; do
       i=$( basename $shard | sed 's/^shard//g' | awk '{ printf "%06d\n", $1+1 }' )
       cat header.txt $shard > scatterDir/$i-scattered.interval_list
       rm $shard
-    done < <( find scatterDir/ -name "shard*" | sort -n )
+    done < <( find `pwd` -name "shard*" | sort -n )
   >>>
 
   output {
-    Array[File] output_intervals = glob("scatterDir/*-scattered.interval_list")
+    Array[File] output_intervals = glob("scatterDir/*")
   }
 
   runtime {
