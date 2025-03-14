@@ -161,17 +161,19 @@ def compress_overlap_distribs(bt, mode='size', max_size=1000000):
     df = bt.to_dataframe(header=0, disable_auto_names=True)
     df['af_d'] = np.abs(df.af - df.match_af)
 
-    # 
+    # Bin absolute difference in allele frequencies
+    af_d_le = [0.01, 0.1, 0.5, 1]
 
     # Behavior depends on value of `mode`
     if mode == 'size':
-        size_ge = [0] + [10 ** int(k) for k in range(floor(np.log10(max_size)))]
+        size_ge = [0] + [10 ** k for k in range(int(np.floor(np.log10(max_size))))]
 
-    # Get AF parameters
-    min_af = np.nanmin(df.af)
-    af_breaks = range(np.ceil(np.log10(min_af)))
 
-    import pdb; pdb.set_trace()
+    # # Get AF parameters
+    # min_af = np.nanmin(df.af)
+    # af_breaks = range(np.ceil(np.log10(min_af)))
+
+        import pdb; pdb.set_trace()
 
 
 def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, common_af=None, gzip=False):
