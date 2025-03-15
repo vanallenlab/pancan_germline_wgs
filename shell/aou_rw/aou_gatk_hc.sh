@@ -153,9 +153,7 @@ gsutil -m cp \
 # Split intervals into one per primary chromosome
 ilist=$staging_dir/wgs_calling_regions.hg38.interval_list
 for k in $( seq 1 22 ) X Y; do
-  head -n1 $ilist > $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
-  fgrep -w "SN:chr$k" $ilist \
-  >> $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
+  fgrep "@" $ilist > $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
   awk -v contig="chr$k" '{ if ($1==contig) print }' $ilist \
   >> $staging_dir/gatkhc.wgs_calling_regions.hg38.chr$k.interval_list
 done
@@ -198,7 +196,6 @@ while read contig; do
     --var-sites $staging_dir/gnomad.v4.1.$contig.indel.sites.bed.gz \
     --var-sites $staging_dir/gnomad.v4.1.$contig.sv.sites.bed.gz \
     --vars-per-shard $vars_per_shard \
-    --gatk-style \
     --verbose \
     -o $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.intervals
 
