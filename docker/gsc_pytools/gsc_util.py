@@ -1001,45 +1001,10 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     df_nc_nc = pd.read_csv(gwas_noncoding_table,sep='\t')
     df_c_nc = pd.read_csv(coding_noncoding_table,sep='\t')
 
-    # Concatenate all DataFrames into one
-    concatenated_df = pd.concat([df_c_c, df_nc_c, df_nc_nc, df_c_nc], ignore_index=True)
-    concatenated_df = concatenated_df.drop_duplicates()
-    concatenated_df['present_in_HMF'] = ~concatenated_df['p_val_HMF'].isna()
-    concatenated_df['present_in_PROFILE'] = ~concatenated_df['p_val_PROFILE'].isna()
-    concatenated_df['present_in_TCGA'] = ~concatenated_df['p_val_TCGA'].isna()
 
-    # Step 1: Filter germline_context = "noncoding"
-    subset = concatenated_df[concatenated_df['germline_context'] == 'noncoding']
-
-    ### Remove duplicate rows, where one allele is REF and the other is ALT ###
-    subset[['chr', 'pos', 'allele']] = subset['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
-
-    # Add a new column that counts the number of TRUE values across the three presence columns
-    subset['presence_count'] = subset[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].eq('TRUE').sum(axis=1)
-
-    # Sort by presence_count in descending order so the most frequent ones appear first
-    subset = subset.sort_values(by='presence_count', ascending=False)
-
-    # Drop duplicates based on ['cancer_type', 'chr', 'pos', 'allele'], keeping the first occurrence (which has the highest count)
-    subset = subset.drop_duplicates(subset=['cancer_type', 'chr', 'pos'], keep='first')
-
-    # def fill_in_metadata(df,hmf_col, profile_col, meta_col):
-    #     # Fill p_val_final with values from p_val_HMF or p_val_PROFILE
-    #     df[meta_col] = df[meta_col].combine_first(df[hmf_col].combine_first(df[profile_col]))
-    #     return df
-
-    # df = fill_in_metadata(concatenated_df,"p_val_HMF","p_val_PROFILE","p_val_final")
-    # df = fill_in_metadata(df,"OR_HMF","OR_PROFILE","OR_final")
-    # df = fill_in_metadata(df,"log_OR_HMF","log_OR_PROFILE","log_OR_final")
-    # df = fill_in_metadata(df,"variance_OR_HMF","variance_OR_PROFILE","variance_OR_final")
-
-
-
-    # Step 2: Group by cancer_type, germline_gene, somatic_gene
-    grouped = subset.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
-
-    # Step 3: Find the row with the smallest p_val_final
+    # Find the row with the smallest p_val_final
     def assign_sentinel_snp(group):
+        group = group.copy()
         if group['p_val_final'].notna().any():
             min_idx = group['p_val_final'].idxmin()
             group['sentinel_snp'] = 0
@@ -1048,13 +1013,43 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
             group['sentinel_snp'] = -1
         return group
 
-    subset = grouped.apply(assign_sentinel_snp)
+    #### Deal with noncoding germline, coding somatic data ####
+    ### Remove duplicates in noncoding germline data ###
+    df_nc_c[['chr', 'pos', 'allele']] = df_nc_c['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
+    df_nc_c['present_in_HMF'] = ~df_nc_c['p_val_HMF'].isna()
+    df_nc_c['present_in_PROFILE'] = ~df_nc_c['p_val_PROFILE'].isna()
+    df_nc_c['present_in_TCGA'] = ~df_nc_c['p_val_TCGA'].isna()
+    df_nc_c['presence_count'] = df_nc_c[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].sum(axis=1) 
 
-    # Step 4: Add this back to the original df, replacing the old subset
-    df = df.drop(columns=['sentinel_snp'], errors='ignore')  # Drop existing column to avoid conflicts
-    df = pd.concat([df[df['germline_context'] != 'noncoding'], subset], ignore_index=True)
+    # Sort by presence_count in descending order so the highest value comes first
+    df_nc_c = df_nc_c.sort_values(by='presence_count', ascending=False)
+    # Drop duplicates, keeping the one with the highest presence_count
+    df_nc_c = df_nc_c.drop_duplicates(subset=['cancer_type', 'chr', 'pos', 'germline_gene', 'somatic_gene'], keep='first')
 
-    df.to_csv(output_path,sep='\t',index=False)
+    # Step 2: Group by cancer_type, germline_gene, somatic_gene
+    grouped = df_nc_c.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
+    df_nc_c = grouped.apply(assign_sentinel_snp)
+    #### Done with noncoding germline, coding somatic data ####
+
+    #### Deal with noncoding germline, noncoding somatic data ####
+
+    # Step 2: Group by cancer_type, germline_gene, somatic_gene
+    grouped = df_nc_nc.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
+    df_nc_nc = grouped.apply(assign_sentinel_snp)
+    #### Done with noncoding germline, noncoding somatic data ####
+
+    # Concatenate all DataFrames into one
+    concatenated_df = pd.concat([df_c_c, df_nc_c, df_nc_nc, df_c_nc], ignore_index=True)
+    concatenated_df = concatenated_df.drop_duplicates()
+    concatenated_df['present_in_HMF'] = ~concatenated_df['p_val_HMF'].isna()
+    concatenated_df['present_in_PROFILE'] = ~concatenated_df['p_val_PROFILE'].isna()
+    concatenated_df['present_in_TCGA'] = ~concatenated_df['p_val_TCGA'].isna()
+    concatenated_df = concatenated_df.drop(columns=['chr', 'pos', 'allele'], errors='ignore')
+
+    # Add a new column that counts the number of TRUE values across the three presence columns
+    concatenated_df['presence_count'] = concatenated_df[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].sum(axis=1)
+
+    concatenated_df.to_csv(output_path,sep='\t',index=False)
     return
 
 def aggregate_allele_frequency(df):
