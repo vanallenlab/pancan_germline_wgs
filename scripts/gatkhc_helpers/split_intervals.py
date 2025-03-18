@@ -229,9 +229,10 @@ def main():
 
     # Write sharded intervals to output file
     for vals in shards:
-        outline = '{}:{}-{}'.format(*vals[:3])
-        if not args.gatk_style:
-            outline += '\t' + '\t'.join('+ . intersection ACGTmer'.split())
+        if args.gatk_style:
+            outline = '{}:{}-{}'.format(*vals[:3])
+        else:
+            outline = '\t'.join([str(k) for k in vals[:3] + ['+', '. intersection ACGTmer']])
         outfile.write(outline + '\n')
 
     # Clear buffer

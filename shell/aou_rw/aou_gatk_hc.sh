@@ -197,7 +197,7 @@ while read contig; do
     --var-sites $staging_dir/gnomad.v4.1.$contig.sv.sites.bed.gz \
     --vars-per-shard $vars_per_shard \
     --verbose \
-    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.intervals
+    -o $staging_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list
 
   # Clean up
   rm $staging_dir/gnomad.v4.1.*.*.sites.bed.gz*
@@ -206,7 +206,7 @@ done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \
-  $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.sharded.intervals \
+  $staging_dir/gatkhc.wgs_calling_regions.hg38.chr*.sharded.interval_list \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/
 
 
@@ -225,7 +225,7 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
 if ! [ -e staging/PrepIntervals ]; then
   mkdir staging/PrepIntervals
   gsutil -m cp \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/*.sharded.intervals \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/*.sharded.interval_list \
     staging/PrepIntervals/
 fi
 
@@ -233,7 +233,7 @@ fi
 echo "{ " > $staging_dir/contig_variable_overrides.json
 while read contig; do
   kc=$( fgrep -v "@" \
-          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.intervals \
+          staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
         | wc -l | awk '{ printf "%i\n", $1 }' )
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
@@ -246,8 +246,7 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.disk_size_gb": 50,
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 20000,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
   "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
@@ -259,7 +258,7 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
   "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
   "GnarlyJointGenotypingPart1.sample_name_map": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
   "GnarlyJointGenotypingPart1.top_level_scatter_count": \$CONTIG_SCATTER_COUNT,
-  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals"
+  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.interval_list"
 }
 EOF
 
@@ -280,6 +279,81 @@ code/scripts/manage_chromshards.py \
   --max-attempts 2
 
 
+################################################
+# Clean up failed shards from joint genotyping #
+################################################
+
+# In practice, it seems almost unavoidable that a handful (<5%) of shards will fail
+# either at ImportGVCFs or GnarlyGenotyper, usually due to inadequate resources.
+# Instead of increasing the resources for all tasks (and therefore increasing cost),
+# we can manually stage the VCFs per chromosome as below:
+
+# Set manual staging parameters
+contig=chr19
+wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+
+# Stage good shards
+gsutil -m cp \
+  $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyper/**dfci-g2c.v1.$contig.*.vcf.gz* \
+$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+
+# Copy bad interval(s) to temporary bucket
+# Note: there is no easy programmatic way to do this. This must be done manually 
+# by consulting the workflow completion status with `cromshell counts` or similar.
+# Shards to be re-run should be moved to: $WORKSPACE_BUCKET/misc/gatkhc_debug/$contig.choke.interval_list
+# Below is a semi-automatic implementation given that you know which shards failed ImportGVCF:
+for shard in 12 16 48; do
+  gsutil -m cat \
+    $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/call-ImportGVCFs/shard-$shard/**ImportGVCFs-$shard.log \
+  | fgrep Localizing | fgrep interval_list | sed 's/\ /\n/g' | fgrep "gs://" \
+  | sort | uniq
+done > $staging_dir/$contig.failed_shards.interval_uris.list
+gsutil cat $( head -n1 $staging_dir/$contig.failed_shards.interval_uris.list ) \
+| fgrep "@" \
+> $staging_dir/$contig.choke.interval_list
+gsutil cat $( cat $staging_dir/$contig.failed_shards.interval_uris.list ) \
+| fgrep -v "@" | sort -Vk1,1 -k2,2n -k3,3n \
+>> $staging_dir/$contig.choke.interval_list
+gsutil cp \
+  $staging_dir/$contig.choke.interval_list \
+  $WORKSPACE_BUCKET/misc/gatkhc_debug/
+
+# Clear execution & output for old shards
+gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list \
+                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+                  '{ print bucket_prefix$1"/**" }' ) \
+> uris_to_delete.list
+cleanup_garbage
+
+# Prep inputs for rerunning failed shards with increased scatter dimensions
+cat << EOF > cromshell/inputs/GnarlyJointGenotypingPart1.inputs.$contig.patch.json
+{
+  "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.$contig.patch",
+  "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
+  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16000,
+  "GnarlyJointGenotypingPart1.gnarly_scatter_count": 3,
+  "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
+  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
+  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
+  "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+  "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+  "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+  "GnarlyJointGenotypingPart1.sample_name_map": "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
+  "GnarlyJointGenotypingPart1.top_level_scatter_count": 5,
+  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$WORKSPACE_BUCKET/misc/gatkhc_debug/$contig.choke.interval_list"
+}
+EOF
+
+# Submit patch workflow to clean up failed shards
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
+  cromshell/inputs/GnarlyJointGenotypingPart1.inputs.$contig.patch.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list
+
+
 ###############
 # VCF cleanup #
 ###############
@@ -298,7 +372,7 @@ cat << EOF > $staging_dir/PosthocCleanupPart1.inputs.template.json
   "PosthocCleanupPart1.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "PosthocCleanupPart1.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PosthocCleanupPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-  "PosthocCleanupPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
+  "PosthocCleanupPart1.unpadded_intervals_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.interval_list",
   "PosthocCleanupPart1.vcf": "TBD",
   "PosthocCleanupPart1.vcf_idx": "TBD"
 }
