@@ -655,7 +655,7 @@ def analyze_data(convergence_table_path, genotype_table_path, germline_context, 
   # Step 2: Initialize covariates
   covariates = None
   if cohort == "HMF":
-    covariates=['male','pca_1','pca_2','pca_3','age','TMB','tumorPurity','primary']
+    covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary']
   elif cohort == "PROFILE":
     covariates=['male','pca_1','pca_2','pca_3','pca_4','age','TMB','tumorPurity','primary','late_stage']
   elif cohort == "TCGA":
@@ -1006,19 +1006,34 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     concatenated_df = concatenated_df.drop_duplicates()
     concatenated_df['present_in_HMF'] = ~concatenated_df['p_val_HMF'].isna()
     concatenated_df['present_in_PROFILE'] = ~concatenated_df['p_val_PROFILE'].isna()
-
-    def fill_in_metadata(df,hmf_col, profile_col, meta_col):
-        # Fill p_val_final with values from p_val_HMF or p_val_PROFILE
-        df[meta_col] = df[meta_col].combine_first(df[hmf_col].combine_first(df[profile_col]))
-        return df
-
-    df = fill_in_metadata(concatenated_df,"p_val_HMF","p_val_PROFILE","p_val_final")
-    df = fill_in_metadata(df,"OR_HMF","OR_PROFILE","OR_final")
-    df = fill_in_metadata(df,"log_OR_HMF","log_OR_PROFILE","log_OR_final")
-    df = fill_in_metadata(df,"variance_OR_HMF","variance_OR_PROFILE","variance_OR_final")
+    concatenated_df['present_in_TCGA'] = ~concatenated_df['p_val_TCGA'].isna()
 
     # Step 1: Filter germline_context = "noncoding"
-    subset = df[df['germline_context'] == 'noncoding']
+    subset = concatenated_df[concatenated_df['germline_context'] == 'noncoding']
+
+    ### Remove duplicate rows, where one allele is REF and the other is ALT ###
+    subset[['chr', 'pos', 'allele']] = subset['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
+
+    # Add a new column that counts the number of TRUE values across the three presence columns
+    subset['presence_count'] = subset[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].eq('TRUE').sum(axis=1)
+
+    # Sort by presence_count in descending order so the most frequent ones appear first
+    subset = subset.sort_values(by='presence_count', ascending=False)
+
+    # Drop duplicates based on ['cancer_type', 'chr', 'pos', 'allele'], keeping the first occurrence (which has the highest count)
+    subset = subset.drop_duplicates(subset=['cancer_type', 'chr', 'pos'], keep='first')
+
+    # def fill_in_metadata(df,hmf_col, profile_col, meta_col):
+    #     # Fill p_val_final with values from p_val_HMF or p_val_PROFILE
+    #     df[meta_col] = df[meta_col].combine_first(df[hmf_col].combine_first(df[profile_col]))
+    #     return df
+
+    # df = fill_in_metadata(concatenated_df,"p_val_HMF","p_val_PROFILE","p_val_final")
+    # df = fill_in_metadata(df,"OR_HMF","OR_PROFILE","OR_final")
+    # df = fill_in_metadata(df,"log_OR_HMF","log_OR_PROFILE","log_OR_final")
+    # df = fill_in_metadata(df,"variance_OR_HMF","variance_OR_PROFILE","variance_OR_final")
+
+
 
     # Step 2: Group by cancer_type, germline_gene, somatic_gene
     grouped = subset.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
