@@ -175,9 +175,9 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
     # Submit the workflow
     if dry_run:
         if not quiet:
-            print('[{}] Would submit new workflow with the following command if ' + \
-                  'not for --dry-run:')
-            print(cmd.format(clean_date()))
+            msg = '[{}] Would submit new workflow with the following command if ' + \
+                  'not for --dry-run:\n{}'
+            print(msg.format(clean_date(), cmd))
         status = 'dry_run_skipped'
     else:
         sub_res = subprocess.run(cmd, capture_output=True, shell=True, 

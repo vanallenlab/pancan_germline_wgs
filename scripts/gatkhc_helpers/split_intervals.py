@@ -152,10 +152,9 @@ def main():
                         'size. By default, intervals will be divided based on ' +
                         'their genomic size, controlled by this parameter.',
                         type=float, default=10e10)
-    parser.add_argument('--n-shards', type=int, help='Total number' +
-                        'of desired shards. Only used if --vars-per-shard and ' +
-                        '--var-sites are also specified, otherwise will default ' +
-                        'to --target-size')
+    parser.add_argument('--n-shards', type=int, help='Total number of desired' +
+                        'shards. Only used if --vars-per-shard and --var-sites ' +
+                        'are also specified, otherwise will default to --target-size')
     parser.add_argument('--var-sites', action='append', help='One or more BED ' +
                         'files listing known variant sites in an external ' +
                         'reference dataset, like gnomAD. May be provided ' +

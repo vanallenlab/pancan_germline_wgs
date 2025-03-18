@@ -70,6 +70,56 @@ workflow PosthocCleanupPart1 {
 }
 
 
+task NormalizeShortVariants {
+  input {
+    File vcf
+    File vcf_idx
+    String outfile_name
+    File ref_fasta
+    String bcftools_docker
+  }
+
+  Int disk_gb = ceil(3 * size([vcf, ref_fasta], "GB")) + 10
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools norm \
+      --fasta-ref ~{ref_fasta} \
+      --check-ref s \
+      --multiallelics - \
+      --site-win 10000 \
+      --threads 4 \
+      ~{vcf} \
+    | bcftools view \
+      --exclude 'alt[0] == "*"' \
+      -Oz -o ~{outfile_name}
+
+    tabix -p vcf ~{outfile_name}
+  >>>
+
+  output {
+    File norm_vcf = outfile_name
+    File norm_vcf_idx = "~{outfile_name}.tbi"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "7.5 GB"
+    cpu: 4
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    maxRetries: 1
+  }
+}
+
+
 task CountShortVariantsPerSample {
   input {
     File vcf
@@ -108,57 +158,6 @@ task CountShortVariantsPerSample {
     docker: bcftools_docker
     memory: "3.5 GB"
     cpu: 2
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-    maxRetries: 1
-  }
-}
-
-
-task NormalizeShortVariants {
-  input {
-    File vcf
-    File vcf_idx
-    String outfile_name
-    File ref_fasta
-    String interval
-    String bcftools_docker
-  }
-
-  Int disk_gb = ceil(3 * size([vcf, ref_fasta], "GB")) + 10
-
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    bcftools norm \
-      --fasta-ref ~{ref_fasta} \
-      --check-ref s \
-      --multiallelics - \
-      --site-win 10000 \
-      --threads 4 \
-      ~{vcf} \
-    | bcftools view \
-      --exclude 'alt[0] == "*"' \
-      -Oz -o ~{outfile_name}
-
-    tabix -p vcf ~{outfile_name}
-  >>>
-
-  output {
-    File norm_vcf = outfile_name
-    File norm_vcf_idx = "~{outfile_name}.tbi"
-  }
-
-  runtime {
-    docker: bcftools_docker
-    memory: "7.5 GB"
-    cpu: 4
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
     maxRetries: 1
