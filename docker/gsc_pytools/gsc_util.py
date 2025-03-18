@@ -1013,7 +1013,7 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
             group['sentinel_snp'] = -1
         return group
 
-    #### Deal with noncoding germline, coding somatic data ####
+    #### Step2: Deal with noncoding germline, coding somatic data ####
     ### Remove duplicates in noncoding germline data ###
     df_nc_c[['chr', 'pos', 'allele']] = df_nc_c['germline_risk_allele'].str.extract(r'([^:]+):([^\-]+)-(.+)')
     df_nc_c['present_in_HMF'] = ~df_nc_c['p_val_HMF'].isna()
@@ -1026,19 +1026,23 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     # Drop duplicates, keeping the one with the highest presence_count
     df_nc_c = df_nc_c.drop_duplicates(subset=['cancer_type', 'chr', 'pos', 'germline_gene', 'somatic_gene'], keep='first')
 
-    # Step 2: Group by cancer_type, germline_gene, somatic_gene
     grouped = df_nc_c.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
     df_nc_c = grouped.apply(assign_sentinel_snp)
     #### Done with noncoding germline, coding somatic data ####
 
     #### Deal with noncoding germline, noncoding somatic data ####
 
-    # Step 2: Group by cancer_type, germline_gene, somatic_gene
+    # Step 3: Group by cancer_type, germline_gene, somatic_gene
+    df_nc_nc['p_val_final'] = df_nc_nc['p_val_HMF']
     grouped = df_nc_nc.groupby(['cancer_type', 'germline_gene', 'somatic_gene'], group_keys=False)
     df_nc_nc = grouped.apply(assign_sentinel_snp)
     #### Done with noncoding germline, noncoding somatic data ####
 
-    # Concatenate all DataFrames into one
+    # Step 4: Group by cancer_type, germline_gene, somatic_gene
+    df_c_nc['p_val_final'] = df_c_nc['p_val_HMF']
+    #### Done with noncoding germline, noncoding somatic data ####
+
+    # Step5: Concatenate all DataFrames into one
     concatenated_df = pd.concat([df_c_c, df_nc_c, df_nc_nc, df_c_nc], ignore_index=True)
     concatenated_df = concatenated_df.drop_duplicates()
     concatenated_df['present_in_HMF'] = ~concatenated_df['p_val_HMF'].isna()
@@ -1046,7 +1050,7 @@ def last_mile(coding_coding_table,gwas_coding_table,gwas_noncoding_table,coding_
     concatenated_df['present_in_TCGA'] = ~concatenated_df['p_val_TCGA'].isna()
     concatenated_df = concatenated_df.drop(columns=['chr', 'pos', 'allele'], errors='ignore')
 
-    # Add a new column that counts the number of TRUE values across the three presence columns
+    # Step6: Add a new column that counts the number of TRUE values across the three presence columns
     concatenated_df['presence_count'] = concatenated_df[['present_in_HMF', 'present_in_PROFILE', 'present_in_TCGA']].sum(axis=1)
 
     concatenated_df.to_csv(output_path,sep='\t',index=False)
