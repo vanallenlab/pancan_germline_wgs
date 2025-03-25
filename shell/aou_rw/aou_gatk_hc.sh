@@ -490,7 +490,7 @@ code/scripts/define_variant_count_outlier_samples.R \
   --sample-labels-tsv $staging_dir/dfci-g2c.intake_pop_labels.aou_split.tsv \
   --n-iqr 4 \
   --plot \
-  --plot-title-prefix "GATKHC" \
+  --plot-title-prefix "GATK" \
   --out-prefix $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers
 
 # Get list of samples that were considered for joint genotyping
@@ -622,5 +622,4 @@ code/scripts/manage_chromshards.py \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
   --max-attempts 2
-
 

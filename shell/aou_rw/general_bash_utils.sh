@@ -151,6 +151,7 @@ EOF
     echo "{}" > $WRKDIR/updates.json
   else
     cp $in_json $WRKDIR/updates.json
+  fi
 
   # Add each chromosome's overrides
   while read contig; do
