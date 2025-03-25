@@ -443,7 +443,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 45 \
-  --max-attempts 7
+  --max-attempts 2
 
 
 ###########################
