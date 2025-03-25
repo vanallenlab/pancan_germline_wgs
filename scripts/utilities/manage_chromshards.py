@@ -57,7 +57,7 @@ def startup_report(inputs):
 
     for key, val in inputs.items():
         if val is not None:
-            print('  - {} : {}'.format(key, val))
+            print('  - {}: {}'.format(key, val))
     print('')
 
 
@@ -157,7 +157,10 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
             cvo = json.load(fin)
             if contig in cvo.keys():
                 for key, value in cvo[contig].items():
-                    environ[key] = str(value)
+                    # Note: need to replace all single quotes with double quotes
+                    # to remain consistent with .json spec. This is especially
+                    # an issue for arrays of strings or URIs.
+                    environ[key] = sub('\'', '"', str(value))
 
     # Substitute variables into .json template
     with open(input_template) as fin:

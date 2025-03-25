@@ -17,7 +17,7 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=gatkhc
+export g2c_branch=main
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone GATK-SV repo & checkout release tag of interest
