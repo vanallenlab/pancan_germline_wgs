@@ -23,3 +23,60 @@ def chromsort(contigs):
     contig_order.update({'X' : 23, 'Y' : 24})
 
     return sorted(contigs, key=lambda k: contig_order[sub('^chr', '', str(k))])
+
+
+def classify_variant(ref, alt, var_len=None):
+    """
+    Maps a variant to its G2C variant class & subclass codes
+    Returns two values: class, subclass
+    """
+
+    pur = 'A G'.split()
+    pyr = 'C T'.split()
+    nucs = pur + pyr
+
+    # Compute variant length if it is not already defined
+    if var_len is None:
+        var_len = abs(len(ref) - len(alt))
+
+    # SNVs have zero size and cannot contain multinucleotide refs or alts
+    if var_len == 0 and len(ref) == 1 and len(alt) == 1:
+        if ref in pur and alt in pur:
+            sc = 'ti'
+        elif ref in pyr and alt in pyr:
+            sc = 'ti'
+        else:
+            sc = 'tv'
+        return 'snv', sc
+
+    # Indels are 1-49bp, excluding certain SV types with indefinite sizes
+    elif var_len < 50 and 'CTX' not in alt:
+        if 'INS' in alt or 'DUP' in alt:
+            return 'indel ins'.split()
+        elif 'DEL' in alt:
+            return 'indel del'.split()
+        elif len(ref) > len(alt):
+            return 'indel del'.split()
+        elif len(ref) < len(alt):
+            return 'indel ins'.split()
+        elif len(ref) == len(alt):
+            return 'indel cpx'.split()
+        else:
+            msg = 'g2cpy classify_variant unable to classify suspected indel ' + \
+                  'with ref {}, alt {}, and length {:,}'
+            exit(msg.format(ref, alt, var_len))
+
+    # SVs are >=50bp, except for rare types with indefinite sizes
+    else:
+        if alt.startswith('<') and alt.endswith('>'):
+            sc = sub('<|>', '', alt).split(':')[0]
+            return 'sv', sc
+        elif len(ref) > len(alt):
+            return 'sv DEL'.split()
+        elif len(ref) < len(alt):
+            return 'sv INS'.split()
+        else:
+            msg = 'g2cpy classify_variant unable to classify suspected SV ' + \
+                  'with ref {}, alt {}, and length {:,}'
+            exit(msg.format(ref, alt, var_len))
+

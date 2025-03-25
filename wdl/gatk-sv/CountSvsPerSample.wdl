@@ -54,7 +54,7 @@ workflow CountSvsPerSample {
     }
 
     if ( length(shard_infos) > 1 ) {
-      call SumCounts as SumPerVcf {
+      call Utils.SumSvCountsPerSample as SumPerVcf {
         input:
           count_tsvs = CountSvs.counts_tsv,
           output_prefix = basename(vcf, ".vcf.gz") + ".counts.tsv",
@@ -66,7 +66,7 @@ workflow CountSvsPerSample {
   }
 
   if ( length(vcfs) > 1 ) {
-    call SumCounts as SumAll {
+    call Utils.SumSvCountsPerSample as SumAll {
       input:
         count_tsvs = scattered_summed_count,
         output_prefix = output_prefix,
@@ -113,38 +113,3 @@ task CountSvs {
   }
 }
 
-
-task SumCounts {
-  input {
-    Array[File] count_tsvs
-    String output_prefix
-
-    String docker
-    Float mem_gb = 3.75
-    Int n_cpu = 2
-  }
-
-  Int disk_gb = ceil(2 * size(count_tsvs, "GB")) + 10
-  String outfile = output_prefix + ".counts.tsv"
-
-  command <<<
-    set -euo pipefail
-
-    /opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
-      --outfile "~{outfile}" \
-      ~{sep=" " count_tsvs}
-  >>>
-
-  output {
-    File summed_tsv = "~{outfile}"
-  }
-
-  runtime {
-    docker: docker
-    memory: mem_gb + " GB"
-    cpu: n_cpu
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-    max_retries: 1
-  }
-}

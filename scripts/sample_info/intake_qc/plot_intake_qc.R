@@ -499,6 +499,8 @@ apply(t(combn(1:3, 2)), 1, function(gd.idxs){
 
 
 # Visualize sex ploidy distributions
+observed.sex.ploidies <- unique(data.frame("X"=round(qc.df$chrX_ploidy),
+                                           "Y"=round(qc.df$chrY_ploidy)))
 for(device in c("pdf", "png")){
   if(device == "pdf"){
     pdf(paste(args$out_prefix, "sex_ploidy.pdf", sep="."), height=2.5, width=4)
@@ -508,12 +510,21 @@ for(device in c("pdf", "png")){
   }
   layout(matrix(1:2, nrow=1), widths=c(7, 5))
   scatterplot(qc.df$chrX_ploidy, qc.df$chrY_ploidy,
-              colors=sex.colors[qc.df$inferred_sex],
+              colors=NA,
               title="Genetic sex",
               x.title="chrX ploidy", y.title="chrY ploidy",
               x.title.line=0.15,
               parmar=c(2.1, 2.6, 1, 0.5),
               x.label.line=-0.7, y.label.line=-0.6)
+  # apply(observed.sex.ploidies, 1, function(xy.ploidy){
+  #   x <- xy.ploidy[1]
+  #   y <- xy.ploidy[2]
+  #   text(x=x, y=y, col="gray90", font=2, xpd=T, cex=5/6,
+  #        labels=if(x==1 & y==0){"XO"}else{
+  #          paste(c(if(x>0){rep("X", x)}, if(y>0){rep("Y", y)}), collapse="")})
+  # })
+  points(x=qc.df$chrX_ploidy, y=qc.df$chrY_ploidy, cex=0.3,
+              col=sex.colors[qc.df$inferred_sex], pch=19)
   sex.margin.bar(qc.df)
   dev.off()
 }
@@ -581,7 +592,6 @@ cohort.key.cols <- cohort.type.cols[cohort.type.names.short[cohort.type.map[all.
 names(cohort.key.cols) <- cohort.names.short[all.cohorts]
 cohort.key.cols["Other"] <- cohort.type.cols["Oncology"]
 frac.multi <- sum(grepl(";", qc.df$cancer)) / sum(qc.df$cancer %in% c("control", "unknown"))
-annot.color <- "gray70"
 
 
 # Barplot of samples per cancer, colored by cohort
@@ -603,10 +613,10 @@ sapply(1:2, function(s){
     axis(4, at=par("usr")[3]-1.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste(round(100 * frac.multi, 1),
                       "% of cases have\nmultiple cancers", sep=""),
-         xpd=T, col.axis=annot.color)
+         xpd=T, col.axis=annotation.color)
     axis(4, at=par("usr")[3]-4.25, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste("Mean = ", prettyNum(round(mean(cancer.k), 0), big.mark=","),
-                      "\nper cancer type", sep=""), xpd=T, col.axis=annot.color)
+                      "\nper cancer type", sep=""), xpd=T, col.axis=annotation.color)
   }
 })
 dev.off()
@@ -631,7 +641,7 @@ sapply(1:2, function(s){
   if(s==2){
     axis(4, at=par("usr")[3]-0.75, tick=F, las=2, hadj=1, line=1, cex.axis=5/6,
          labels=paste("N = ", prettyNum(nrow(qc.df), big.mark=","), "\n",
-                      "total genomes", sep=""), xpd=T, col.axis=annot.color)
+                      "total genomes", sep=""), xpd=T, col.axis=annotation.color)
   }
 })
 dev.off()

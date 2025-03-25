@@ -638,7 +638,7 @@ EOF
 submit_cohort_module() {
    # Check inputs
   if [ $# -ne 1 ]; then
-    echo "Must specify [09,11-16] as first two positional arguments"
+    echo "Must specify [09,11-19] as first two positional arguments"
     return
   else
     export module_idx=$1
@@ -675,6 +675,14 @@ submit_cohort_module() {
       ;;
     17)
       module_name="JoinRawCalls"
+      ;;
+    18)
+      module_name="SVConcordance"
+      max_attempts=3
+      ;;
+    19)
+      module_name="FilterGenotypes"
+      max_attempts=2
       ;;
     *)
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
@@ -1055,8 +1063,62 @@ EOF
     "JoinRawCalls.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
     "JoinRawCalls.reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
     "JoinRawCalls.reference_fasta_fai": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+    "JoinRawCalls.runtime_attr_svcluster": { "disk_gb" : 250, "mem_gb" : 128, cpu_cores : 32, "boot_disk_gb" : 20 },
     "JoinRawCalls.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
     "JoinRawCalls.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 18 #
+    #############
+    18)
+      wdl="code/wdl/gatk-sv/SVConcordance.wdl"
+
+      # Prep input .json
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+{
+    "SVConcordance.contig_list": "gs://dfci-g2c-refs/hg38/contig_lists/\$CONTIG.list",
+    "SVConcordance.eval_vcf": "$staging_prefix/PosthocHardFilterPart2/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.cpx_refined.posthoc_filtered.posthoc_filtered.vcf.gz",
+    "SVConcordance.gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT",
+    "SVConcordance.output_prefix": "dfci-g2c.v1.\$CONTIG",
+    "SVConcordance.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+    "SVConcordance.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "SVConcordance.truth_vcf": "$staging_prefix/17/dfci-g2c.v1.join_raw_calls.vcf.gz"
+}
+EOF
+      ;;
+
+    #############
+    # MODULE 19 #
+    #############
+    19)
+      wdl="code/wdl/gatk-sv/FilterGenotypes.wdl"
+
+      # Prep input .json
+      cat << EOF > $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json
+{
+    "FilterGenotypes.gatk_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
+    "FilterGenotypes.genome_tracks": ["gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+                                      "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+                                      "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+                                      "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+                                      "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz"],
+    "FilterGenotypes.gq_recalibrator_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model",
+    "FilterGenotypes.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+    "FilterGenotypes.no_call_rate_cutoff": 1,
+    "FilterGenotypes.output_prefix": "dfci-g2c.v1.\$CONTIG",
+    "FilterGenotypes.ped_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
+    "FilterGenotypes.ploidy_table": "$staging_prefix/17/dfci-g2c.v1.ploidy.tsv",
+    "FilterGenotypes.primary_contigs_fai": "gs://dfci-g2c-refs/hg38/contig_fais/\$CONTIG.fai",
+    "FilterGenotypes.recalibrate_gq_args": ["--keep-homvar false","--keep-homref true","--keep-multiallelic true","--skip-genotype-filtering true","--min-samples-to-estimate-allele-frequency -1"],
+    "FilterGenotypes.run_qc": false,
+    "FilterGenotypes.runtime_override_plot_qc_per_family": {"mem_gb" : 15, "disk_gb" : 100},
+    "FilterGenotypes.sl_filter_args": "",
+    "FilterGenotypes.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+    "FilterGenotypes.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052",
+    "FilterGenotypes.vcf": "$staging_prefix/18/\$CONTIG/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.vcf.gz"
 }
 EOF
       ;;
@@ -1065,16 +1127,17 @@ EOF
       echo "Module number $module_idx not recognized by submit_cohort_module. Exiting."
       return 2
       ;;
-  
+
   esac
 
   # Submit job and add job ID to list of jobs for this module
   case $module_idx in
-    # Submission for modules 12 and 16 are handled differently due to them being contig-sharded
-    12|16)
+    # Submission for modules 12, 16, and 18-19 are handled differently due to them being contig-sharded
+    12|16|18|19)
       code/scripts/manage_chromshards.py \
         --wdl $wdl \
         --input-json-template $sub_dir/dfci-g2c.v1.$sub_name.inputs.template.json \
+        --dependencies-zip gatksv.dependencies.zip \
         --staging-bucket $staging_prefix/$module_idx \
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \

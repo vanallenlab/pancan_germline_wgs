@@ -25,7 +25,7 @@ def main():
              formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('counts', help='One or more svtk count .tsv files', 
                         nargs='+')
-    parser.add_argument('--outfile', help='output .tsv [default: stdout]',
+    parser.add_argument('-o', '--outfile', help='output .tsv [default: stdout]',
                         default='stdout')
     args = parser.parse_args()
 

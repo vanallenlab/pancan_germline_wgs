@@ -24,7 +24,7 @@ task ConcatTextFiles {
   Int disk_gb = ceil(2 * size(shards, "GB")) + 25
   String sort = if defined(sort_command) then " | " + sort_command else ""
   String compress = if defined(compression_command) then " | " + compression_command else ""
-  String posthoc_cmds = sort + " | cat header.txt - " + compress
+  String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
 
   command <<<
     set -eu -o pipefail
@@ -162,18 +162,20 @@ task GetContigsFromFai {
 task GetContigsFromVcfHeader {
   input {
     File vcf
-    File? vcf_idx
+    File vcf_idx
     String docker
   }
 
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
   command <<<
     set -eu -o pipefail
-
-    if [ ~{defined(vcf_idx)} == "false" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
 
     tabix -H ~{vcf} \
     | fgrep "##contig" \
@@ -202,25 +204,32 @@ task GetContigsFromVcfHeader {
 task GetSamplesFromVcfHeader {
   input {
     File vcf
-    File? vcf_idx
+    File vcf_idx
     String bcftools_docker
   }
 
   String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
   command <<<
     set -eu -o pipefail
 
-    if [ ~{defined(vcf_idx)} == "false" ]; then
-      tabix -p vcf -f ~{vcf}
-    fi
+    ln -s ~{vcf_idx} .
+
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools query -l ~{vcf} > ~{out_filename}
   >>>
 
   output {
     String sample_list = out_filename
+    Int n_samples = length(read_lines(out_filename))
   }
 
   runtime {
@@ -257,6 +266,36 @@ task IndexVcf {
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
+  }
+}
+
+
+# Parse a GATK-style interval_list and output as Array[[index, interval_string]] for scattering
+# It appears WDL read_tsv does not allow coercion to Pair objects, so we output as Array[Array[String]]
+task ParseIntervals {
+  input {
+    File intervals_list
+    String docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
+    | awk -v OFS="\t" '{ print NR, $0 }' > intervals.clean.tsv
+  >>>
+
+  output {
+    Array[Array[String]] interval_info = read_tsv("intervals.clean.tsv")
+  }
+
+  runtime {
+    docker: docker
+    memory: "2 GB"
+    cpu: 1
+    disks: "local-disk 25 HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }
 
@@ -306,5 +345,79 @@ task ShardVcf {
     docker: bcftools_docker
     preemptible: n_preemptible
     maxRetries: 1
+  }
+}
+
+
+task SplitIntervalList {
+  input {
+    File interval_list
+    String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
+    Int n_preemptible = 3
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    mkdir scatterDir
+
+    fgrep "@" ~{interval_list} > header.txt || true
+
+    split -l 1 -a 6 -d <( fgrep -v "@" ~{interval_list} ) scatterDir/shard
+
+    while read shard; do
+      i=$( basename $shard | sed 's/^shard//g' | awk '{ printf "%06d\n", $1+1 }' )
+      cat header.txt $shard > scatterDir/$i-scattered.interval_list
+      rm $shard
+    done < <( find scatterDir/ -name "shard*" | sort -n )
+  >>>
+
+  output {
+    Array[File] output_intervals = glob("scatterDir/*-scattered.interval_list")
+  }
+
+  runtime {
+    cpu: 1
+    memory: "1.75 GiB"
+    disks: "local-disk 25 HDD"
+    docker: linux_docker
+    preemptible: n_preemptible
+    maxRetries: 1
+  }
+}
+
+
+task SumSvCountsPerSample {
+  input {
+    Array[File] count_tsvs   # Expects svtk count-svtypes output format
+    String output_prefix
+
+    String docker
+    Float mem_gb = 3.75
+    Int n_cpu = 2
+  }
+
+  Int disk_gb = ceil(2 * size(count_tsvs, "GB")) + 10
+  String outfile = output_prefix + ".counts.tsv"
+
+  command <<<
+    set -euo pipefail
+
+    /opt/pancan_germline_wgs/scripts/gatksv_helpers/sum_svcounts.py \
+      --outfile "~{outfile}" \
+      ~{sep=" " count_tsvs}
+  >>>
+
+  output {
+    File summed_tsv = "~{outfile}"
+  }
+
+  runtime {
+    docker: docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }
