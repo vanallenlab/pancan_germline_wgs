@@ -76,29 +76,27 @@ task NormalizeShortVariants {
     File vcf_idx
     String outfile_name
     File ref_fasta
+    Float mem_gb = 7.5
     String bcftools_docker
   }
 
   Int disk_gb = ceil(3 * size([vcf, ref_fasta], "GB")) + 10
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
   command <<<
     set -eu -o pipefail
 
-    bcftools norm \
+    bcftools annotate \
+      -x FORMAT/PGT,FORMAT/PID,FORMAT/PS,INFO/DB \
+      -i 'FORMAT/DP>10 & FORMAT/GQ>20 & GT="alt"' \
+      ~{vcf} \
+    | bcftools norm \
       --fasta-ref ~{ref_fasta} \
       --check-ref s \
       --multiallelics - \
-      --site-win 10000 \
       --threads 4 \
-      ~{vcf} \
+      --site-win 100 \
     | bcftools view \
-      --exclude 'alt[0] == "*"' \
+      --include 'INFO/AC>0 & FORMAT/DP>10 & FORMAT/GQ>20 & GT="alt" & alt[0] != "*"' \
       -Oz -o ~{outfile_name}
 
     tabix -p vcf ~{outfile_name}
@@ -111,7 +109,7 @@ task NormalizeShortVariants {
 
   runtime {
     docker: bcftools_docker
-    memory: "7.5 GB"
+    memory: "~{mem_gb} GB"
     cpu: 4
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3

@@ -19,7 +19,7 @@ export GPROJECT="vanallen-pancan-germline-wgs"
 export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
-for dir in staging cromshell cromshell/inputs cromshell/job_ids cromshell/progress; do
+for dir in scratch staging cromshell cromshell/inputs cromshell/job_ids cromshell/progress; do
   if ! [ -e $dir ]; then
     mkdir $dir
   fi
@@ -288,15 +288,18 @@ code/scripts/manage_chromshards.py \
 # Instead of increasing the resources for all tasks (and therefore increasing cost),
 # we can manually stage the VCFs per chromosome as below:
 
+# Reaffirm staging directory
+staging_dir=staging/PosthocCleanup
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
 # Set manual staging parameters
-staging_dir=staging/JointGenotyping
-contig=chr19
+contig=chr21
 wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
 
 # Stage good shards
 gsutil -m cp \
   $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
-$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
 
 # Re-shard bad intervals and copy them to temporary bucket
 # Note: there is no easy programmatic way to do this. This must be done manually 
@@ -390,7 +393,7 @@ echo "{}" > $staging_dir/contig_variable_overrides.json
 while read contig; do
   # VCFs
   gsutil -m ls \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/*vcf.gz \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/**vcf.gz \
   | sort -V > $staging_dir/$contig.vcfs.list
 
   # VCF indexes
@@ -420,6 +423,7 @@ cat << EOF > $staging_dir/PosthocCleanupPart1.inputs.template.json
   "PosthocCleanupPart1.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocCleanupPart1.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
   "PosthocCleanupPart1.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "PosthocCleanupPart1.NormalizeVcf.mem_gb": 31,
   "PosthocCleanupPart1.output_prefix": "dfci-g2c.v1.\$CONTIG",
   "PosthocCleanupPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "PosthocCleanupPart1.vcfs": \$CONTIG_VCFS,
@@ -439,7 +443,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 45 \
-  --max-attempts 3
+  --max-attempts 7
 
 
 ###########################
@@ -450,8 +454,99 @@ code/scripts/manage_chromshards.py \
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# TODO: implement this
+# Sum variant counts for all contigs
+for k in $( seq 1 22 ) X Y; do
+  contig="chr$k"
+  gsutil cat \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/$contig/PosthocCleanupPart1.$contig.outputs.json \
+  | jq .counts_per_sample | tr -d '"'
+done | gsutil -m cp -I $staging_dir/
+code/scripts/sum_svcounts.py \
+  --outfile $staging_dir/dfci-g2c.v1.gatkhc.PosthocCleanupPart1.counts.tsv \
+  $staging_dir/dfci-g2c.v1.chr*.norm.counts.tsv
+
+# Ensure R packages are installed
+. code/refs/install_packages.sh R
+
+# Copy metadata from end of GATK-SV pipeline
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/qc-filtering/dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
+  ./
+
+# Regenerate ancestry labels split by cohort
+pop_idx=$( zcat dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
+           | sed -n '1p' | sed 's/\t/\n/g' \
+           | awk '{ if ($1=="intake_qc_pop") print NR }' )
+zcat dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz | sed '1d' \
+| awk -v idx=$pop_idx -v FS="\t" -v OFS="\t" '{ if ($3!="aou") $3="oth"; print $1, $idx"_"$3 }' \
+| cat <( echo -e "sample_id\tlabel" ) - \
+> $staging_dir/dfci-g2c.intake_pop_labels.aou_split.tsv
+
+# Define outliers
+code/scripts/define_variant_count_outlier_samples.R \
+  --counts-tsv $staging_dir/dfci-g2c.v1.gatkhc.PosthocCleanupPart1.counts.tsv \
+  --sample-labels-tsv $staging_dir/dfci-g2c.intake_pop_labels.aou_split.tsv \
+  --n-iqr 4 \
+  --plot \
+  --plot-title-prefix "GATKHC" \
+  --out-prefix $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers
+
+# Get list of samples that were considered for joint genotyping
+gsutil cat \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv \
+| cut -f1 | sort -V | uniq \
+> $staging_dir/dfci-g2c.v1.gatkhc.samples.list
+
+# Add non-technical samples to exclude due to age data becoming available
+age_cidx=$( zcat dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
+            | head -n1 | sed 's/\t/\n/g' | awk '{ if ($1=="age") print NR }'  )
+zcat dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
+| awk -v FS="\t" -v cidx=$age_cidx '{ if ($cidx < 18) print $1 }' \
+| fgrep -wf $staging_dir/dfci-g2c.v1.gatkhc.samples.list \
+| cat - $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list \
+| sort -V | uniq \
+> $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list2
+mv $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list2 \
+  $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list
+
+# Update sample metadata with posthoc outlier failure labels
+code/scripts/append_qc_fail_metadata.R \
+  --qc-tsv dfci-g2c.sample_meta.posthoc_outliers.ceph_update.tsv.gz \
+  --new-column-name gatkhc_posthoc_qc_pass \
+  --all-samples-list $staging_dir/dfci-g2c.v1.gatkhc.samples.list \
+  --fail-samples-list $staging_dir/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list \
+  --outfile dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv
+gzip -f dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv
+
+# Compress and archive outlier data for future reference
+cd $staging_dir && \
+tar -czvf dfci-g2c.v1.gatkhc.posthoc_outliers.tar.gz dfci-g2c.v1.gatkhc.posthoc_outliers* && \
+gsutil -m cp \
+  dfci-g2c.v1.gatkhc.posthoc_outliers.tar.gz \
+  dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list \
+  ~/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/ && \
+cd ~
+
+# Replot sample QC after excluding outliers above
+qcplotdir=dfci-g2c.phase1.gatkhc_posthoc_qc_pass.plots
+if [ ! -e $qcplotdir ]; then mkdir $qcplotdir; fi
+code/scripts/plot_intake_qc.R \
+  --qc-tsv dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --pass-column global_qc_pass \
+  --pass-column batch_qc_pass \
+  --pass-column clusterbatch_qc_pass \
+  --pass-column filtersites_qc_pass \
+  --pass-column gatksv_posthoc_qc_pass \
+  --pass-column gatkhc_posthoc_qc_pass \
+  --out-prefix $qcplotdir/dfci-g2c.phase1.gatkhc_posthoc_qc_pass
+tar -czvf dfci-g2c.phase1.gatkhc_posthoc_qc_pass.plots.tar.gz $qcplotdir
+gsutil -m cp \
+  dfci-g2c.phase1.gatkhc_posthoc_qc_pass.plots.tar.gz \
+  $MAIN_WORKSPACE_BUCKET/results/gatkhc_qc/
+
 
 
 #############################################################
@@ -463,8 +558,37 @@ staging_dir=staging/PosthocCleanup
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# TODO: implement this
+# Build chromosome-specific override json of VCFs and VCF indexes
+add_contig_vcfs_to_chromshard_overrides_json \
+  $staging_dir/PosthocCleanupPart2.contig_variable_overrides.json \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1 \
+  normalized_vcfs \
+  normalized_vcf_idxs
+
+# Write template input .json for outlier exclusion task
+cat << EOF > $staging_dir/PosthocCleanupPart2.inputs.template.json
+{
+  "PosthocCleanupPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PosthocCleanupPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
+  "PosthocCleanupPart2.vcfs": \$CONTIG_VCFS,
+  "PosthocCleanupPart2.vcf_idxs": \$CONTIG_VCF_IDXS
+}
+EOF
+
+# Submit outlier exclusion & hard filter task using chromsharded manager
+# Reminder that this manager script handles staging & cleanup too
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-hc/PosthocCleanupPart2.wdl \
+  --input-json-template $staging_dir/PosthocCleanupPart2.inputs.template.json \
+  --contig-variable-overrides $staging_dir/PosthocCleanupPart2.contig_variable_overrides.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2/ \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart2.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 30 \
+  --max-attempts 2
 
 
 ###########################################
@@ -475,6 +599,28 @@ staging_dir=staging/PosthocCleanup
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# TODO: implement this
+# Write template input .json for outlier exclusion & hard filter task
+cat << EOF > $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json
+{
+  "PosthocHardFilterPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PosthocHardFilterPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
+  "PosthocHardFilterPart2.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
+  "PosthocHardFilterPart2.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
+}
+EOF
+
+# Submit outlier exclusion & hard filter task using chromsharded manager
+# Reminder that this manager script handles staging & cleanup too
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-sv/PosthocHardFilterPart2.wdl \
+  --input-json-template $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset \
+  --name ExcludeSnvOutliersFromSvCallset \
+  --status-tsv cromshell/progress/dfci-g2c.v1.ExcludeSnvOutliersFromSvCallset.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 30 \
+  --max-attempts 2
+
 
