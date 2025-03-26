@@ -20,7 +20,7 @@ export MAIN_WORKSPACE_BUCKET=gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45
 
 # Prep working directory structure
 for dir in cromshell cromshell/inputs cromshell/inputs/templates \
-           cromshell/job_ids cromshell/progress staging staging/misc; do
+           cromshell/job_ids cromshell/progress staging; do
   if ! [ -e $dir ]; then
     mkdir $dir
   fi
@@ -58,6 +58,63 @@ export WN=$( get_workspace_number )
 gsutil cp -r \
   gs://dfci-g2c-refs/hg38/contig_lists \
   ./
+
+
+###########################################
+# Compile .fam file of reported relatives #
+###########################################
+
+# Initialize staging directory
+staging_dir=staging/fam_curation
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Download sample metadata after GATK-HC
+gsutil cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $staging_dir/
+
+# Localize external .fam files staged in G2C bucket
+gsutil cp -r \
+  gs://dfci-g2c-refs/fam \
+  $staging_dir/
+
+# Curate 1000 Genomes project trios
+code/scripts/external_fam_to_g2c.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --in-fam $staging_dir/fam/hgsvc.ped \
+  --cohort hgsvc \
+  --out-fam $staging_dir/dfci-g2c.hgsvc.fam
+
+# Curate CEPH pedigrees
+code/scripts/external_fam_to_g2c.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --in-fam $staging_dir/fam/ceph.remapped_ids.fam \
+  --cohort ceph \
+  --out-fam $staging_dir/dfci-g2c.ceph.fam
+
+# Curate UFC pedigrees
+code/scripts/external_fam_to_g2c.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --in-fam $staging_dir/fam/dfci_ufc_cases.fam \
+  --cohort ufc \
+  --out-fam $staging_dir/dfci-g2c.ufc.fam
+
+# Curate MESA pedigrees
+code/scripts/external_fam_to_g2c.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --in-fam $staging_dir/fam/mesa.fam \
+  --cohort mesa \
+  --out-fam $staging_dir/dfci-g2c.mesa.fam
+
+# Collapse all cohort-specific .fam files
+cat $staging_dir/dfci-g2c.*.fam \
+| sort -Vk1,1 -k2,2V \
+> $staging_dir/dfci-g2c.reported_families.fam
+
+# Stage combined .fam file in Google bucket for future use
+gsutil cp \
+  $staging_dir/dfci-g2c.reported_families.fam \
+  $MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/
 
 
 ############################################

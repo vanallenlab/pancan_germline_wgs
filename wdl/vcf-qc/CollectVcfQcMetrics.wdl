@@ -15,16 +15,18 @@ import "QcTasks.wdl" as QcTasks
 
 workflow CollectVcfQcMetrics {
   input {
-    File vcf
-    File vcf_idx
+    Array[File] vcfs
+    Array[File] vcf_idxs
 
-    File? trios_ped_file                       # .ped file of known families for Mendelian transmission analyses
+    File? trios_fam_file                       # .fam file of known families for Mendelian transmission analyses
     File? sample_priority_list                 # Rank-ordered list of samples to retain for sample-level analyses
     Int n_for_sample_level_analyses = 1000     # Number of samples to use for sample-level summary analyses
 
     Boolean shard_vcf = true                   # Should the input VCF be sharded for QC collection?
-    File? scatter_intervals_list               # GATK-style intervals file for scattering over vcf (any tabix-compliant interval definitions should work)
-    Int n_records_per_shard = 25000            # Number of records per shard. This will only be used as a backup if scatter_intervals_list is not provided
+    File? scatter_intervals_list               # GATK-style intervals file for scattering over vcf 
+                                               # (any tabix-compliant interval definitions should work)
+    Int n_records_per_shard = 25000            # Number of records per shard. This will only be used as a backup if 
+                                               # scatter_intervals_list is not provided and shard_vcf is true
 
     Float common_af_cutoff = 0.001             # Minimum AF for a variant to be included in common variant subsets
 
@@ -42,13 +44,18 @@ workflow CollectVcfQcMetrics {
   # Get list of samples present in input VCFs
   call Utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
     input:
-      vcf = vcf,
-      vcf_idx = vcf_idx,
+      vcf = vcfs[0],
+      vcf_idx = vcf_idxs[0],
       bcftools_docker = bcftools_docker
   }
 
-  # Clean input .ped file to retain only complete trios
-  # TODO: implement this
+  # Clean input .fam file to retain only complete trios
+  call CleanFam {
+    input:
+      fam_file = trios_fam_file,
+      all_samples_list = GetSamplesInVcf.sample_list,
+      docker = g2c_analysis_docker
+  }
 
   # Define list of samples to use for sample-specific analyses
   call ChooseTargetSamples {
@@ -63,75 +70,82 @@ workflow CollectVcfQcMetrics {
   ### VCF PREPROCESSING
   #####################
 
-  # Preprocess VCF according to desired scatter behavior
-  if ( shard_vcf ) {
+  # Preprocess each VCF according to desired scatter behavior
+  Array[Pair[File, File]] input_vcf_infos = zip(vcfs, vcf_idxs)
+  scatter ( input_vcf_info in input_vcf_infos ) {
 
-    # Default to scattering over prespecified intervals, as this is most compute efficient
-    if ( defined(scatter_intervals_list) ) {        
+    File vcf = input_vcf_info.left
+    File vcf_idx = input_vcf_info.right
 
-      # Clean scatter intervals
-      call Utils.ParseIntervals {
-        input:
-          intervals_list = select_first([scatter_intervals_list]),
-          docker = linux_docker
+    if ( shard_vcf ) {
+
+      # Default to scattering over prespecified intervals, as this is most compute efficient
+      if ( defined(scatter_intervals_list) ) {        
+
+        # Clean scatter intervals
+        call Utils.ParseIntervals {
+          input:
+            intervals_list = select_first([scatter_intervals_list]),
+            docker = linux_docker
+        }
+
+        # Parallelize over scatter intervals to prepare VCF shards
+        scatter ( interval_info in ParseIntervals.interval_info ) {
+
+          String interval_coords = interval_info[1]
+          String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info[0]
+
+          # Extract region, update INFO, and create VCF subsets as needed
+          call PreprocessVcf as PreprocessIntervals {
+            input:
+              vcf = vcf,
+              vcf_idx = vcf_idx,
+              interval = interval_coords,
+              target_samples = ChooseTargetSamples.target_samples,
+              out_prefix = shard_prefix,
+              docker = bcftools_docker
+          }
+        }
       }
 
-      # Parallelize over scatter intervals to prepare VCF shards
-      scatter ( interval_info in ParseIntervals.interval_info ) {
+      # If scatter_intervals_list is not provided, shard the VCF the old fashioned way
+      if ( !defined(scatter_intervals_list) ) {
 
-        String interval_coords = interval_info.right
-        String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info.left
-
-        # Extract region, update INFO, and create VCF subsets as needed
-        call PreprocessVcf as PreprocessIntervals {
+        # Shard VCF on a VM (costly & slow for large VCFs)
+        call Utils.ShardVcf {
           input:
             vcf = vcf,
             vcf_idx = vcf_idx,
-            interval = interval_coords,
-            target_samples = ChooseTargetSamples.target_samples,
-            out_prefix = shard_prefix,
-            docker = bcftools_docker
+            records_per_shard = n_records_per_shard,
+            bcftools_docker = bcftools_docker,
+            n_preemptible = 1
+        }
+
+        # Preprocess each VCF shard
+        Array[Pair[File, File]] vcf_shard_info = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs)
+        scatter ( shard_info in vcf_shard_info ) {
+          call PreprocessVcf as PreprocessShards {
+            input:
+              vcf = shard_info.left,
+              vcf_idx = shard_info.right,
+              target_samples = ChooseTargetSamples.target_samples,
+              out_prefix = basename(shard_info.left, ".vcf.gz"),
+              docker = bcftools_docker
+          }
         }
       }
     }
 
-    # If scatter_intervals_list is not provided, shard the VCF the old fashioned way
-    if ( !defined(scatter_intervals_list) ) {
-
-      # Shard VCF on a VM (costly & slow)
-      call Utils.ShardVcf {
+    # If no sharding is elected, the entire VCF needs to be preprocessed
+    if ( !shard_vcf ) {
+      call PreprocessVcf as PreprocessFullVcf {
         input:
           vcf = vcf,
           vcf_idx = vcf_idx,
-          records_per_shard = n_records_per_shard,
-          bcftools_docker = bcftools_docker,
-          n_preemptible = 1
+          target_samples = ChooseTargetSamples.target_samples,
+          out_prefix = basename(vcf, ".vcf.gz"),
+          docker = bcftools_docker
       }
-
-      # Preprocess each VCF shard
-      Array[Pair[File, File]] vcf_shard_info = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs)
-      scatter ( shard_info in vcf_shard_info ) {
-        call PreprocessVcf as PreprocessShards {
-          input:
-            vcf = shard_info.left,
-            vcf_idx = shard_info.right,
-            target_samples = ChooseTargetSamples.target_samples,
-            out_prefix = basename(shard_info.left, ".vcf.gz"),
-            docker = bcftools_docker
-        }
-      }
-    }
-  }
-
-  # If no sharding is elected, the entire VCF needs to be preprocessed
-  if ( !shard_vcf ) {
-    call PreprocessVcf as PreprocessFullVcf {
-      input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
-        target_samples = ChooseTargetSamples.target_samples,
-        out_prefix = basename(vcf, ".vcf.gz"),
-        docker = bcftools_docker
     }
   }
 
@@ -139,12 +153,12 @@ workflow CollectVcfQcMetrics {
   ### METRIC COLLECTION
   #####################
 
-  Array[File] site_vcf_shards = select_all(select_first([PreprocessIntervals.sites_vcf, 
-                                                         PreprocessShards.sites_vcf, 
-                                                         [PreprocessFullVcf.sites_vcf]]))
-  Array[File] site_vcf_shard_idxs = select_all(select_first([PreprocessIntervals.sites_vcf_idx, 
-                                                             PreprocessShards.sites_vcf_idx, 
-                                                             [PreprocessFullVcf.sites_vcf_idx]]))
+  Array[File] site_vcf_shards = flatten(select_all(select_first([PreprocessIntervals.sites_vcf, 
+                                                                 PreprocessShards.sites_vcf, 
+                                                                 [PreprocessFullVcf.sites_vcf]])))
+  Array[File] site_vcf_shard_idxs = flatten(select_all(select_first([PreprocessIntervals.sites_vcf_idx, 
+                                                                     PreprocessShards.sites_vcf_idx, 
+                                                                     [PreprocessFullVcf.sites_vcf_idx]])))
   Array[Pair[File, File]] site_vcf_info = zip(site_vcf_shards, site_vcf_shard_idxs)
 
   # Collect site-level metrics for all preprocessed shards
@@ -211,6 +225,29 @@ workflow CollectVcfQcMetrics {
     File size_distrib = SumSizeDistribs.merged_distrib
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
+  }
+}
+
+
+# Clean input .fam file to restrict to complete trios present in input VCF
+task CleanFam {
+  input {
+    File fam_file
+    File all_samples_list
+    String docker
+  }
+
+  String fam_out_fname = basename(fam_file, ".fam") + ".cleaned_trios.fam"
+  String proband_out_fname = basename(fam_file, ".fam") + ".proband_ids.list"
+
+
+  runtime {
+    docker: docker
+    memory: "2 GB"
+    cpu: 1
+    disks: "local-disk 25 HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }
 

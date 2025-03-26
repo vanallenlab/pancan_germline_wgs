@@ -570,6 +570,8 @@ add_contig_vcfs_to_chromshard_overrides_json \
 # Write template input .json for outlier exclusion task
 cat << EOF > $staging_dir/PosthocCleanupPart2.inputs.template.json
 {
+  "PosthocCleanupPart2.CleanupPart2.mem_gb": 7.5,
+  "PosthocCleanupPart2.CleanupPart2.n_cpu": 4,
   "PosthocCleanupPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocCleanupPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
   "PosthocCleanupPart2.vcfs": \$CONTIG_VCFS,
