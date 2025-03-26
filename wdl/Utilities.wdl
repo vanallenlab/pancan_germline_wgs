@@ -211,18 +211,8 @@ task GetSamplesFromVcfHeader {
   String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
   command <<<
     set -eu -o pipefail
-
-    ln -s ~{vcf_idx} .
-
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools query -l ~{vcf} > ~{out_filename}
   >>>
@@ -234,12 +224,13 @@ task GetSamplesFromVcfHeader {
 
   runtime {
     docker: bcftools_docker
-    memory: "1.75 GB"
-    cpu: 1
+    memory: "3.75 GB"
+    cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
   }
 }
+
 
 
 task IndexVcf {
@@ -383,6 +374,47 @@ task SplitIntervalList {
     docker: linux_docker
     preemptible: n_preemptible
     maxRetries: 1
+  }
+}
+
+
+task StreamSamplesFromVcfHeader {
+  input {
+    File vcf
+    File vcf_idx
+    String bcftools_docker
+  }
+
+  String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    ln -s ~{vcf_idx} .
+
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    bcftools query -l ~{vcf} > ~{out_filename}
+  >>>
+
+  output {
+    String sample_list = out_filename
+    Int n_samples = length(read_lines(out_filename))
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
   }
 }
 

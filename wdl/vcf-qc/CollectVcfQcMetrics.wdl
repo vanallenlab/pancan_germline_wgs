@@ -42,10 +42,12 @@ workflow CollectVcfQcMetrics {
   #####################
 
   # Get list of samples present in input VCFs
+  # Uses the last input VCF, assuming it will be the smallest in most cases
+  Int last_vcf_index = length(vcfs) - 1
   call Utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
     input:
-      vcf = vcfs[0],
-      vcf_idx = vcf_idxs[0],
+      vcf = vcfs[last_vcf_index],
+      vcf_idx = vcf_idxs[last_vcf_index],
       bcftools_docker = bcftools_docker
   }
 

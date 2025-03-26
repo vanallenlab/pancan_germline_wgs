@@ -36,6 +36,7 @@ for dir in wdl wdl/pancan_germline_wgs wdl/gatk-sv wdl/gatk-hc; do
   mkdir $dir
 done
 cp pancan_germline_wgs/wdl/*.wdl $WRKDIR/wdl/pancan_germline_wgs/
+cp -r pancan_germline_wgs/wdl/vcf-qc $WRKDIR/wdl/pancan_germline_wgs/
 cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 cp utility-wdls/*.wdl $WRKDIR/wdl/gatk-hc/

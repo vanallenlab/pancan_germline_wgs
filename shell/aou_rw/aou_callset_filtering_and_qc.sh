@@ -153,14 +153,14 @@ EOF
 
 # Submit, monitor, stage, and cleanup short variant QC metadata task
 code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
+  --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectShortVariantQcMetrics.inputs.template.json \
   --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
   --name CollectShortVariantQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
-  --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectShortVariantQcMetrics.progress.tsv \
-  --workflow-id-log-prefix "dfci-g2c.v1.gatkhc" \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
   --max-attempts 2
 
@@ -195,14 +195,14 @@ EOF
 
 # Submit, monitor, stage, and cleanup SV QC metadata task
 code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
+  --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectSVQcMetrics.inputs.template.json \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
   --name CollectSvQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
-  --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectSvQcMetrics.progress.tsv \
-  --workflow-id-log-prefix "dfci-g2c.v1.gatksv" \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollectSvQcMetrics.initial_qc.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
   --max-attempts 2
 
