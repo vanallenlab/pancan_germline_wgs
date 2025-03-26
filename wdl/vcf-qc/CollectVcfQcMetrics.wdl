@@ -314,11 +314,11 @@ task ChooseTargetSamples {
     if [ ~{defined(sample_priority_list)} == "true" ]; then
       fgrep \
         -xf ~{all_samples_list} \
-        ~{select_first([sample_priority_list])} \
+        ~{select_all([sample_priority_list])} \
       | head -n ~{n_samples} \
       >> "~{outfile}" || true
       fgrep \
-        -xvf ~{select_first([sample_priority_list])} \
+        -xvf ~{select_all([sample_priority_list])} \
         ~{all_samples_list} \
       > remainder.samples.list
     else
