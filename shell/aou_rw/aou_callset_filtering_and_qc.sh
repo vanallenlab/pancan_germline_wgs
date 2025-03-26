@@ -135,27 +135,26 @@ add_contig_vcfs_to_chromshard_overrides_json \
   filtered_vcfs \
   filtered_vcf_idxs
 
-# Write template input .json for outlier exclusion task
+# Write template input .json for short variant QC metric collection
 cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "String",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc",
   "CollectVcfQcMetrics.shard_vcf": false,
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
-  "CollectVcfQcMetrics.vcfs": "Array[File]",
-  "CollectVcfQcMetrics.vcf_idxs": "Array[File]"
+  "CollectVcfQcMetrics.vcfs": \$CONTIG_VCFS,
+  "CollectVcfQcMetrics.vcf_idxs": \$CONTIG_VCF_IDXS
 }
 EOF
-
 
 # Submit, monitor, stage, and cleanup short variant QC metadata task
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
-  --input-json-template TBD \
+  --input-json-template $staging_dir/CollectShortVariantQcMetrics.inputs.template.json \
   --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
   --name CollectShortVariantQcMetrics \
@@ -170,14 +169,34 @@ code/scripts/manage_chromshards.py \
 # Collect initial SV QC metrics #
 #################################
 
-# Write template .json of inputs for chromsharded manager
-# TODO: implement this
+# Note: this workflow is scattered across all five workspaces for max parallelization
+# It must be submitted as below in each workspace
+
+# Reaffirm staging directory
+staging_dir=staging/initial_qc
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Write template input .json for short variant QC metric collection
+cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
+{
+  "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "CollectVcfQcMetrics.common_af_cutoff": 0.001,
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
+  "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
+  "CollectVcfQcMetrics.n_records_per_shard": 10000,
+  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
+  "CollectVcfQcMetrics.shard_vcf": true,
+  "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
+  "CollectVcfQcMetrics.vcfs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz"],
+  "CollectVcfQcMetrics.vcf_idxs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi"]
+}
+EOF
 
 # Submit, monitor, stage, and cleanup SV QC metadata task
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
-  --input-json-template TBD \
-  --contig-variable-overrides TBD \
+  --input-json-template $staging_dir/CollectSVQcMetrics.inputs.template.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
   --name CollectSvQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
