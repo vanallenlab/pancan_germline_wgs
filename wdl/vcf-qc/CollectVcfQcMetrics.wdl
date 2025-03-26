@@ -106,7 +106,8 @@ workflow CollectVcfQcMetrics {
               vcf = vcf,
               vcf_idx = vcf_idx, 
               interval = interval_coords,
-              outfile_name = shard_prefix + ".vcf.gz"
+              outfile_name = shard_prefix + ".vcf.gz",
+              bcftools_docker = bcftools_docker
           }
         }
       }
@@ -147,6 +148,7 @@ workflow CollectVcfQcMetrics {
           vcf = vcf,
           vcf_idx = vcf_idx,
           target_samples = ChooseTargetSamples.target_samples,
+          trio_samples = CleanFam.trio_samples_list,
           out_prefix = basename(vcf, ".vcf.gz"),
           docker = bcftools_docker
       }
@@ -240,6 +242,7 @@ task CleanFam {
   String fam_out_fname = basename(fam_file, ".fam") + ".cleaned_trios.fam"
   String proband_out_fname = basename(fam_file, ".fam") + ".proband_ids.list"
   String unrelated_out_fname = basename(all_samples_list) + ".no_probands.list"
+  String trio_samples_out_fname = basename(fam_file, ".fam") + ".trio_samples.list"
   
   command <<<
     set -eu -o pipefail
@@ -253,23 +256,28 @@ task CleanFam {
     # Write list of all probands (can exclude these samples for better AF estimates)
     cut -f1 duos_and_trios.fam > "~{proband_out_fname}"
 
+    # Remove probands from list of all samples (same rationale as above)
+    fgrep \
+      -xvf "~{proband_out_fname}" \
+      ~{all_samples_list} \
+    > "~{unrelated_out_fname}"
+
     # Further restrict .fam to complete trios
     awk -v FS="\t" -v OFS="\t" \
       '{ if ($3!=0 && $4!=0) print }' \
       duos_and_trios.fam \
     > "~{fam_out_fname}"
 
-    # Remove probands from all samples
-    fgrep \
-      -xvf "~{proband_out_fname}" \
-      ~{all_samples_list} \
-    > "~{unrelated_out_fname}"
+    # Write list of all samples in complete trios
+    awk -v ORS="\n" '{ print $2, $3, $4 }' "~{fam_out_fname}" \
+    | sort -V > "~{trio_samples_out_fname}"
   >>>
 
   output {
     File trios_fam = "~{fam_out_fname}"
     File probands_list = "~{proband_out_fname}"
     File all_samples_no_probands_list = "~{unrelated_out_fname}"
+    File trio_samples_list = "~{trio_samples_out_fname}"
   }
 
   runtime {

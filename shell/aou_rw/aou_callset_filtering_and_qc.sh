@@ -121,15 +121,43 @@ gsutil cp \
 # Collect initial short variant QC metrics #
 ############################################
 
-# Write template .json of inputs for chromsharded manager
-# TODO: implement this
+# Note: this workflow is scattered across all five workspaces for max parallelization
+# It must be submitted as below in each workspace
+
+# Reaffirm staging directory
+staging_dir=staging/initial_qc
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Build chromosome-specific override json of VCFs and VCF indexes
+add_contig_vcfs_to_chromshard_overrides_json \
+  $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2 \
+  filtered_vcfs \
+  filtered_vcf_idxs
+
+# Write template input .json for outlier exclusion task
+cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
+{
+  "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "CollectVcfQcMetrics.common_af_cutoff": 0.001,
+  "CollectVcfQcMetrics.g2c_analysis_docker": "String",
+  "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
+  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc",
+  "CollectVcfQcMetrics.shard_vcf": false,
+  "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
+  "CollectVcfQcMetrics.vcfs": "Array[File]",
+  "CollectVcfQcMetrics.vcf_idxs": "Array[File]"
+}
+EOF
+
 
 # Submit, monitor, stage, and cleanup short variant QC metadata task
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
   --input-json-template TBD \
-  --contig-variable-overrides TBD \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ \
+  --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
   --name CollectShortVariantQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectShortVariantQcMetrics.progress.tsv \
@@ -150,7 +178,7 @@ code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
   --input-json-template TBD \
   --contig-variable-overrides TBD \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
   --name CollectSvQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.CollectSvQcMetrics.progress.tsv \

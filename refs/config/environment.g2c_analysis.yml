@@ -1,8 +1,8 @@
-name: g2c
+name: base
 channels:
-  - r
   - bioconda
   - conda-forge
+  - r
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
@@ -111,6 +111,7 @@ dependencies:
   - mamba=2.0.5=h8871ed4_1
   - menuinst=2.2.0=py312h7900ff3_0
   - ncurses=6.5=h2d0b736_3
+  - networkx=3.4.2=pyh267e887_2
   - nlohmann_json=3.11.3=he02047a_1
   - numpy=2.2.3=py312h72c5963_0
   - openssl=3.4.1=h7b32b05_0
@@ -119,7 +120,7 @@ dependencies:
   - pango=1.56.1=h861ebed_0
   - pcre2=10.44=hba22ea6_2
   - perl=5.32.1=7_hd590300_perl5
-  - pip=25.0=pyh8b19718_0
+  - pip=25.0.1=pyh8b19718_0
   - pixman=0.44.2=h29eaf8c_0
   - platformdirs=4.3.6=pyhd8ed1ab_1
   - pluggy=1.5.0=pyhd8ed1ab_1
@@ -318,4 +319,5 @@ dependencies:
   - yaml-cpp=0.8.0=h59595ed_0
   - zstandard=0.23.0=py312hef9b889_1
   - zstd=1.5.6=ha6fb4c9_0
-prefix: /opt/conda/envs/g2c
+
+prefix: "/opt/conda/envs/g2c"
