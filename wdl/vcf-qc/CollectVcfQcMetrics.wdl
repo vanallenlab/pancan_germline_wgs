@@ -50,25 +50,39 @@ workflow CollectVcfQcMetrics {
   }
 
   # Clean input .fam file to retain only complete trios
-  call CleanFam {
-    input:
-      fam_file = trios_fam_file,
-      all_samples_list = GetSamplesInVcf.sample_list,
-      docker = g2c_analysis_docker
+  if( defined(trios_fam_file) ) {
+    call CleanFam {
+      input:
+        fam_file = select_first([trios_fam_file]),
+        all_samples_list = GetSamplesInVcf.sample_list,
+        docker = g2c_analysis_docker
+    }
   }
+  File all_qc_samples_list = select_first([CleanFam.all_samples_no_probands_list,
+                                           GetSamplesInVcf.sample_list])
 
   # Define list of samples to use for sample-specific analyses
   call ChooseTargetSamples {
     input:
-      all_samples_list = GetSamplesInVcf.sample_list,
+      all_samples_list = all_qc_samples_list,
       sample_priority_list = sample_priority_list,
       n_samples = n_for_sample_level_analyses,
+      out_prefix = output_prefix,
       docker = bcftools_docker
   }
 
   #####################
   ### VCF PREPROCESSING
   #####################
+
+  # Read scatter intervals, if optioned
+  if ( defined(scatter_intervals_list) ) {
+    call Utils.ParseIntervals {
+      input:
+        intervals_list = select_first([scatter_intervals_list]),
+        docker = linux_docker
+    }
+  }
 
   # Preprocess each VCF according to desired scatter behavior
   Array[Pair[File, File]] input_vcf_infos = zip(vcfs, vcf_idxs)
@@ -81,29 +95,18 @@ workflow CollectVcfQcMetrics {
 
       # Default to scattering over prespecified intervals, as this is most compute efficient
       if ( defined(scatter_intervals_list) ) {        
-
-        # Clean scatter intervals
-        call Utils.ParseIntervals {
-          input:
-            intervals_list = select_first([scatter_intervals_list]),
-            docker = linux_docker
-        }
-
-        # Parallelize over scatter intervals to prepare VCF shards
-        scatter ( interval_info in ParseIntervals.interval_info ) {
+        scatter ( interval_info in select_first([ParseIntervals.interval_info]) ) {
 
           String interval_coords = interval_info[1]
           String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info[0]
 
-          # Extract region, update INFO, and create VCF subsets as needed
-          call PreprocessVcf as PreprocessIntervals {
+          # Extract desired interval from VCF
+          call Utils.StreamSliceVcf as SliceInterval {
             input:
               vcf = vcf,
-              vcf_idx = vcf_idx,
+              vcf_idx = vcf_idx, 
               interval = interval_coords,
-              target_samples = ChooseTargetSamples.target_samples,
-              out_prefix = shard_prefix,
-              docker = bcftools_docker
+              outfile_name = shard_prefix + ".vcf.gz"
           }
         }
       }
@@ -120,25 +123,26 @@ workflow CollectVcfQcMetrics {
             bcftools_docker = bcftools_docker,
             n_preemptible = 1
         }
-
-        # Preprocess each VCF shard
-        Array[Pair[File, File]] vcf_shard_info = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs)
-        scatter ( shard_info in vcf_shard_info ) {
-          call PreprocessVcf as PreprocessShards {
-            input:
-              vcf = shard_info.left,
-              vcf_idx = shard_info.right,
-              target_samples = ChooseTargetSamples.target_samples,
-              out_prefix = basename(shard_info.left, ".vcf.gz"),
-              docker = bcftools_docker
-          }
-        }
       }
     }
 
-    # If no sharding is elected, the entire VCF needs to be preprocessed
-    if ( !shard_vcf ) {
-      call PreprocessVcf as PreprocessFullVcf {
+    # Unify the three approaches for sharding a VCF prior to preprocessing
+    Array[File] vcf_shards = select_first([SliceInterval.vcf_slice,
+                                           ShardVcf.vcf_shards,
+                                           [vcf]])
+    Array[File] vcf_shard_idxs = select_first([SliceInterval.vcf_slice_idx,
+                                               ShardVcf.vcf_shard_idxs,
+                                               [vcf_idx]])
+
+
+    # Scatter over VCF shards and preprocess each shard
+    Array[Pair[File, File]] pp_vcf_infos = zip(vcf_shards, vcf_shard_idxs)
+    scatter ( pp_vcf_info in pp_vcf_infos ) {
+
+      File pp_vcf = pp_vcf_info.left
+      File pp_vcf_idx = pp_vcf_info.right
+
+      call PreprocessVcf {
         input:
           vcf = vcf,
           vcf_idx = vcf_idx,
@@ -153,12 +157,8 @@ workflow CollectVcfQcMetrics {
   ### METRIC COLLECTION
   #####################
 
-  Array[File] site_vcf_shards = flatten(select_all(select_first([PreprocessIntervals.sites_vcf, 
-                                                                 PreprocessShards.sites_vcf, 
-                                                                 [PreprocessFullVcf.sites_vcf]])))
-  Array[File] site_vcf_shard_idxs = flatten(select_all(select_first([PreprocessIntervals.sites_vcf_idx, 
-                                                                     PreprocessShards.sites_vcf_idx, 
-                                                                     [PreprocessFullVcf.sites_vcf_idx]])))
+  Array[File] site_vcf_shards = flatten(PreprocessVcf.sites_vcf)
+  Array[File] site_vcf_shard_idxs = flatten(PreprocessVcf.sites_vcf_idx)
   Array[Pair[File, File]] site_vcf_info = zip(site_vcf_shards, site_vcf_shard_idxs)
 
   # Collect site-level metrics for all preprocessed shards
@@ -239,13 +239,44 @@ task CleanFam {
 
   String fam_out_fname = basename(fam_file, ".fam") + ".cleaned_trios.fam"
   String proband_out_fname = basename(fam_file, ".fam") + ".proband_ids.list"
+  String unrelated_out_fname = basename(all_samples_list) + ".no_probands.list"
+  
+  command <<<
+    set -eu -o pipefail
 
+    # Clean .fam file to duos or trios present in all_samples_list
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/subset_fam.R \
+      --in-fam ~{fam_file} \
+      --all-samples ~{all_samples_list} \
+      --out-fam duos_and_trios.fam
+
+    # Write list of all probands (can exclude these samples for better AF estimates)
+    cut -f1 duos_and_trios.fam > "~{proband_out_fname}"
+
+    # Further restrict .fam to complete trios
+    awk -v FS="\t" -v OFS="\t" \
+      '{ if ($3!=0 && $4!=0) print }' \
+      duos_and_trios.fam \
+    > "~{fam_out_fname}"
+
+    # Remove probands from all samples
+    fgrep \
+      -xvf "~{proband_out_fname}" \
+      ~{all_samples_list} \
+    > "~{unrelated_out_fname}"
+  >>>
+
+  output {
+    File trios_fam = "~{fam_out_fname}"
+    File probands_list = "~{proband_out_fname}"
+    File all_samples_no_probands_list = "~{unrelated_out_fname}"
+  }
 
   runtime {
     docker: docker
-    memory: "2 GB"
-    cpu: 1
-    disks: "local-disk 25 HDD"
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 20 HDD"
     preemptible: 3
     max_retries: 1
   }
@@ -267,18 +298,32 @@ task ChooseTargetSamples {
   command <<<
     set -eu -o pipefail
 
+    touch "~{outfile}"
+
+    # First, add samples from a priority list, if optioned
     if [ ~{defined(sample_priority_list)} == "true" ]; then
       fgrep \
         -xf ~{all_samples_list} \
         ~{select_first([sample_priority_list])} \
       | head -n ~{n_samples} \
-      > "~{outfile}" || true
+      >> "~{outfile}" || true
+      fgrep \
+        -xvf ~{select_first([sample_priority_list])} \
+        ~{all_samples_list} \
+      > remainder.samples.list
     else
+      cp ~{all_samples_list} remainder.samples.list
+    fi
+
+    # Second, supplement from random selection of remaining samples
+    subtotal=$( cat ~{outfile} | wc -l )
+    n_to_add=$(( ~{n_samples} - $subtotal ))
+    if [ $n_to_add -gt 0 ]; then
       shuf \
         --random-source=<( yes 2025 ) \
-        ~{all_samples_list} \
-      | head -n ~{n_samples} \
-      > "~{outfile}" || true
+        remainder.samples.list \
+      | head -n $n_to_add \
+      >> "~{outfile}" || true
     fi
   >>>
 
@@ -289,23 +334,20 @@ task ChooseTargetSamples {
 
   runtime {
     docker: docker
-    memory: "2 GB"
-    cpu: 1
-    disks: "local-disk 25 HDD"
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 20 HDD"
     preemptible: 3
     max_retries: 1
   }
 }
 
 
-# Update all VCF INFO required for QC metric collection, make all necessary 
-# genotype subsets, and slice to a prespecified interval (if desired)
-# TODO: make slicing optional
+# Update all VCF INFO required for QC metric collection, make all necessary genotype subsets
 task PreprocessVcf {
   input {
     File vcf
     File vcf_idx
-    String interval
     File target_samples
     File? trio_samples
     File? benchmarking_samples
@@ -327,39 +369,14 @@ task PreprocessVcf {
   Int default_disk_gb = ceil(3 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
   command <<<
     set -eu -o pipefail
-
-    # Parse intervals to set bounds on POS (important for avoiding double-counting SVs)
-    n_int_parts=$( echo "~{interval}" | sed 's/:\|-/\n/g' | wc -l )
-    if [ $n_int_parts -lt 3 ]; then
-      min_pos=-1
-      max_pos=1000000000
-    else
-      min_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f2 )
-      max_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f3 )
-    fi
 
     # Define superset of samples whose GTs we need for subsequent analysis
     cat ~{sep=" " all_sample_lists} | sort -V | uniq > all.samples.list
 
-    # Symlink vcf_idx to current working dir
-    ln -s ~{vcf_idx} .
-
-    # Stream VCF to interval of interest and update INFO
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    bcftools view \
-      --regions "~{interval}" \
-      ~{vcf} \
-    | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
-      '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
-    | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
+    # Preprocess VCF
+    bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     | bcftools view \
       --samples-file all.samples.list \
       --no-update \

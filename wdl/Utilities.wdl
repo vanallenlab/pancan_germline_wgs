@@ -387,6 +387,78 @@ task SplitIntervalList {
 }
 
 
+# Extract a slice from a VCF with remote indexing rather than localizing the entire file
+task StreamSliceVcf {
+  input {
+    File vcf
+    File vcf_idx
+    String interval
+
+    String? outfile_name
+    
+    Int? disk_gb
+    Float mem_gb = 4
+    Int n_cpu = 2
+
+    String bcftools_docker    
+  }
+
+  String outfile = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".sliced.vcf.gz"])
+
+  Int default_disk_gb = ceil(size(vcf, "GB")) + 10
+  Int hdd_gb = select_first([disk_gb, default_disk_gb])
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    # Parse intervals to set bounds on POS (important for avoiding double-counting SVs)
+    n_int_parts=$( echo "~{interval}" | sed 's/:\|-/\n/g' | wc -l )
+    if [ $n_int_parts -lt 3 ]; then
+      min_pos=-1
+      max_pos=1000000000
+    else
+      min_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f2 )
+      max_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f3 )
+    fi
+
+    # Symlink vcf_idx to current working dir
+    ln -s ~{vcf_idx} .
+
+    # Stream VCF to interval of interest
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    bcftools view \
+      --regions "~{interval}" \
+      ~{vcf} \
+    | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
+      '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
+    | bcftools view -Oz -o "~{outfile}"
+
+    # Index slice with tabix
+    tabix -p vcf -f ~{outfile}
+  >>>
+
+  output {
+    File vcf_slice = "~{outfile}"
+    File vcf_slice_idx = "~{outfile}.tbi"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + hdd_gb + " HDD"
+    preemptible: 3
+    max_retries: 1
+  }
+}
+
+
 task SumSvCountsPerSample {
   input {
     Array[File] count_tsvs   # Expects svtk count-svtypes output format
