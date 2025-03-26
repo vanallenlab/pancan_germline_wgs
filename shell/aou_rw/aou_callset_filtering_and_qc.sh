@@ -197,6 +197,7 @@ EOF
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectSVQcMetrics.inputs.template.json \
+  --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
   --name CollectSvQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
