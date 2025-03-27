@@ -386,7 +386,7 @@ def main():
             else:
                 msg = '[{}] Un-staging outputs for {}'
                 print(msg.format(clean_date(), contig))
-                g2cpy.rm_uris('/'.join([sub('/$', '', args.staging_bucket), contig, '**']))
+                g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), contig, '**'])])
                 run_status[contig] = 'unstaged'
                 all_status.update(run_status)
 
@@ -453,9 +453,11 @@ def main():
                     status = 'not_started'
                     break
 
-                # Update status according to most recent workflow
+                # Update status according to most recent workflow unless
+                # this is the first cycle and --hard-reset was specified
                 wid = wids[-1]
-                status = g2cpy.check_workflow_status(wid, timeout=120)
+                if not args.hard_reset and k == 0:
+                    status = g2cpy.check_workflow_status(wid, timeout=120)
 
                 # If most recent workflow was successful, stage outputs and clear all 
                 # files from Cromwell execution & output buckets

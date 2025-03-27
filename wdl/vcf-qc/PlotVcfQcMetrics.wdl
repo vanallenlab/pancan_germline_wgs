@@ -11,6 +11,7 @@ version 1.0
 
 
 import "QcTasks.wdl" as QcTasks
+import "Utilities.wdl" as Utils
 
 
 workflow PlotVcfQcMetrics {
@@ -18,15 +19,17 @@ workflow PlotVcfQcMetrics {
     Array[File] size_distribution_tsvs
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
-    File? all_svs_bed
-    File? common_snvs_bed
-    File? common_indels_bed
-    File? common_svs_bed
+
+    Array[File]? all_sv_beds
+    Array[File]? common_snv_beds
+    Array[File]? common_indel_beds
+    Array[File]? common_sv_beds
 
     Float common_af_cutoff = 0.001
 
     String output_prefix
 
+    String bcftools_docker
     String g2c_analysis_docker
   }
 
@@ -43,7 +46,7 @@ workflow PlotVcfQcMetrics {
           g2c_analysis_docker = g2c_analysis_docker
     }
   }
-  File size_distrib = select_first(SumSizeDistribs.merged_distrib, size_distribution_tsvs[0]])
+  File size_distrib = select_first([SumSizeDistribs.merged_distrib, size_distribution_tsvs[0]])
 
   # If necessary, collapse AF distribution into a single file
   if ( length(af_distribution_tsvs) > 1 ) {
@@ -54,7 +57,7 @@ workflow PlotVcfQcMetrics {
           g2c_analysis_docker = g2c_analysis_docker
     }
   }
-  File af_distrib = select_first(SumAfDistribs.merged_distrib, af_distribution_tsvs[0]])
+  File af_distrib = select_first([SumAfDistribs.merged_distrib, af_distribution_tsvs[0]])
 
   # If necessary, collapse size-vs-AF distribution into a single file
   if ( length(size_vs_af_distribution_tsvs) > 1 ) {
@@ -65,7 +68,39 @@ workflow PlotVcfQcMetrics {
           g2c_analysis_docker = g2c_analysis_docker
     }
   }
-  File joint_distrib = select_first(SumJointDistribs.merged_distrib, size_vs_af_distribution_tsvs[0]])
+  File joint_distrib = select_first([SumJointDistribs.merged_distrib, size_vs_af_distribution_tsvs[0]])
+
+  # If necessary, collapse all SV BEDs
+  if ( length(select_first(select_all([all_sv_beds]))) > 1 ) {
+    call Utils.ConcatTextFiles as CollapseAllSvs {
+      input:
+        shards = select_first([all_sv_beds]),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".all_svs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+  File? all_svs_bed = select_first(select_all([CollapseAllSvs.merged_file, 
+                                               select_first([all_sv_beds])[0]]))
+
+  # If necessary, collapse common SNV BEDs
+  if ( length(select_first(select_all([common_snv_beds]))) > 1 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSnvs {
+      input:
+        shards = select_first([common_snv_beds]),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_snvs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+  File? common_snvs_bed = select_first(select_all([CollapseAllSvs.merged_file, 
+                                               select_first([common_snv_beds])[0]]))
 
   #################
   ### VISUALIZATION
@@ -79,6 +114,7 @@ workflow PlotVcfQcMetrics {
       joint_distrib = joint_distrib,
       common_af_cutoff = common_af_cutoff,
       all_svs_bed = all_svs_bed,
+      common_snvs_bed = common_snvs_bed,
       output_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
@@ -136,18 +172,18 @@ task PlotSiteMetrics {
       --af-distrib ~{af_distrib} \
       --joint-distrib ~{joint_distrib} \
       --common-af ~{common_af_cutoff} \
-      --out-prefix site_metrics/~{out_prefix}
+      --out-prefix site_metrics/~{output_prefix}
 
     # Plot site-level metrics for common variants
     if ~{defined(common_snvs_bed)} || \
-       ~{defined(common_indels_bed}) || \
+       ~{defined(common_indels_bed)} || \
        ~{defined(common_svs_bed)}; then
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_pointwise_metrics.R \
         ~{pw_snv_cmd} \
         ~{pw_indel_cmd} \
         ~{pw_sv_cmd} \
         --combine \
-        --out-prefix site_metrics/~{out_prefix}
+        --out-prefix site_metrics/~{output_prefix}
     fi
 
     # Compress outputs

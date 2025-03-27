@@ -9,8 +9,8 @@
 version 1.0
 
 
-import "Utilities.wdl" as Utils
 import "QcTasks.wdl" as QcTasks
+import "Utilities.wdl" as Utils
 
 
 workflow CollectVcfQcMetrics {
@@ -147,8 +147,8 @@ workflow CollectVcfQcMetrics {
 
       call PreprocessVcf {
         input:
-          vcf = vcf,
-          vcf_idx = vcf_idx,
+          vcf = pp_vcf,
+          vcf_idx = pp_vcf_idx,
           target_samples = ChooseTargetSamples.target_samples,
           trio_samples = CleanFam.trio_samples_list,
           out_prefix = basename(vcf, ".vcf.gz"),
