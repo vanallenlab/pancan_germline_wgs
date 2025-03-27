@@ -271,7 +271,7 @@ task CleanFam {
     > "~{fam_out_fname}"
 
     # Write list of all samples in complete trios
-    awk -v ORS="\n" '{ print $2, $3, $4 }' "~{fam_out_fname}" \
+    awk -v OFS="\n" '{ print $2, $3, $4 }' "~{fam_out_fname}" \
     | sort -V > "~{trio_samples_out_fname}"
   >>>
 
