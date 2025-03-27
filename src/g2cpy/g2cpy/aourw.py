@@ -16,6 +16,25 @@ from re import sub
 from sys import stdout, stderr
 
 
+def abort_workflow(workflow_id, max_retries=20, timeout=30):
+    """
+    Abort a Cromwell workflow
+    """
+
+    crom_query_res = ''
+    attempts = 0
+    cmd = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc abort ' + workflow_id
+    while attempts < max_retries:
+        try:
+            res = subprocess.run(cmd, shell=True, check=True, text=True)
+        except:
+            attempts += 1
+    
+    if attempts == max_retries:
+        msg = 'Failed to abort workflow {} after {} retries\n'
+        stderr.write(msg.format(workflow_id, attempts))
+
+
 def check_workflow_status(workflow_id, max_retries=20, timeout=30):
     """
     Ping Cromwell server to check status of a single workflow
@@ -95,6 +114,29 @@ def collect_workflow_trash(workflow_ids, bucket, wdl_name, dumpster_path):
     # Find list of all files present in execution or output buckets
     # and mark those files for deletion by writing their URIs to the dumpster
     collect_gcp_garbage(all_uris, dumpster_path)
+
+
+def delete_uris(uris, rm_args='', verbose=False):
+    """
+    Deletes a list of GCP objects (or any string interpretable by gsutil rm)
+    """
+
+    if verbose:
+        msg = 'Removing {}\n'
+        stdout.write(msg.format(', '.join(uris)))
+    subprocess.run(' '.join(['gsutil -m rm', rm_args] + uris), 
+                   shell=True, text=True)
+
+
+def count_vms():
+    """
+    Count number of active GCP VMs (useful as a proxy for Cromwell server load)
+    """
+
+    gcheck = subprocess.run('gcloud compute instances list | wc -l', 
+                            shell=True, capture_output=True, text=True,
+                            encoding='utf-8')
+    return int(gcheck.stdout)
 
 
 def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):

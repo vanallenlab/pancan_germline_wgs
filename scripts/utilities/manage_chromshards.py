@@ -15,13 +15,14 @@ Routine to submit, track, manage, and stage a method parallelized per chromosome
 import argparse
 import g2cpy
 import json
+import numpy as np
 import pandas as pd
 import subprocess
 import textwrap
 from datetime import datetime
 from os import environ, getenv, path, putenv, remove
 from re import sub
-from sys import stdout, stderr
+from sys import stdout, stderr, exit
 from time import sleep
 
 
@@ -221,8 +222,8 @@ def main():
                         'each chromosome will have outputs staged in separate ' +
                         'directory.')
     parser.add_argument('-D', '--dependencies-zip', help='WDL dependencies .zip')
-    parser.add_argument('-V', '--contig-variable-overrides', help='Optional .json' +
-                        'of \{ $contig : \{ variable : value, ...\}\} pairs ' +
+    parser.add_argument('-V', '--contig-variable-overrides', help='Optional .json ' +
+                        'of { $contig : { variable : value, ...} } pairs ' +
                         'that will be treated as environment variables for ' +
                         'substitution in --input-json-template, and will ' +
                         'supercede any global or local shell  environment ' +
@@ -239,19 +240,47 @@ def main():
                         help='Base directory for exectuion. Used to satisfy ' +
                         'assumptions about the locations of Cromshell log files ' + 
                         'and other metadata.')
+    parser.add_argument('-b', '--behavior', default='patient', 
+                        choices='patient strict indifferent'.split(),
+                        help='Behavior for handling resubmission of failed ' +
+                        'workflows. Both \'patient\' and \'strict\' will never ' +
+                        'allow more than one active workflow per chromosome. ' +
+                        '\'patient\' will allow any non-failed workflow to proceed ' +
+                        'to completion before submitting a new one. \'strict\' ' +
+                        'will instead abort a DOOMED workflow prior to submitting ' +
+                        'a new one. \'indifferent\' will submit a new workflow ' +
+                        'if the status of the active workflow is unclear, or as ' +
+                        'soon as it becomes clear the active workflow will not ' +
+                        'be successful, but takes no action to stop the active ' +
+                        'workflow.')
     parser.add_argument('-d', '--dumpster', default='uris_to_delete.list',
                         help='Path to file collecting all GCP URIs to be deleted. ' +
                         'Note that this script will only ever append to this file, ' +
                         'not overwrite it.')
     parser.add_argument('--no-cleanup', action='store_true', help='Disable ' +
                         'automatic cleanup of Cromwell execution buckets.')
+    parser.add_argument('--hard-reset', action='store_true', help='\'Unstage\' ' +
+                        'all files from each contig\'s staging bucket prior to ' +
+                        'beginning monitor routine. This will force a rerun of ' +
+                        'the workflow for all contigs and will also ignore all ' +
+                        'prior workflow submissions when evaluating ' +
+                        '--max-attempts')
     parser.add_argument('-m', '--max-attempts', type=int, default=3, 
                         help='Maximum number of submission attempts for any one contig')
-    parser.add_argument('-g', '--outer-gate', type=float, default=20, help='Number of ' +
-                        'minutes to wait between monitor cycles')
+    parser.add_argument('-g', '--outer-gate', type=float, default=20, required=True,
+                        help='Number of minutes to wait between monitor cycles')
+    parser.add_argument('--vm-gate', type=int, default=2500, help='Maximum ' +
+                        'number of active GCP VMs before skipping submission; ' +
+                        'useful for throttling Cromwell server load')
     parser.add_argument('--submission-gate', type=float, default=None, help='Number of ' +
                         'minutes to pause after a new workflow submission ' +
                         '[default: no wait]')
+    parser.add_argument('--max-cycles', type=int, help='Maximum number of ' +
+                        'workflow management cycles before exiting [default: ' +
+                        'run until completion]')
+    parser.add_argument('--max-runtime', type=int, help='Maximum number of ' +
+                        'minutes to allow workflow management process to run ' +
+                        'before exiting [default: run until completion]')
     parser.add_argument('--workflow-id-log-prefix', help='Optional prefix for ' +
                         'logger files for submitted workflow IDs')
     parser.add_argument('--dry-run', default=False, action='store_true',help='Do ' +
@@ -300,6 +329,18 @@ def main():
             contigs = [x.rstrip() for x in clist.readlines()]
     contigs = g2cpy.chromsort(contigs)
 
+    # Take the stricter requirement between --max-cycles and --max-runtime 
+    # if either are specified
+    max_cycles = []
+    if args.max_cycles is not None:
+        max_cycles.append(int(args.max_cycles))
+    if args.max_runtime is not None:
+        max_cycles.append(int(np.floor(args.max_runtime / args.outer_gate)))
+    if len(max_cycles) > 0:
+        max_cycles = np.nanmax([1, np.nanmin(max_cycles)])
+    else:
+        max_cycles = np.Inf
+
     # Report startup conditions
     if not args.quiet:
         startup_report({'Method name' : method_name,
@@ -310,12 +351,16 @@ def main():
                         'Workspace bucket' : bucket,
                         'Staging bucket' : args.staging_bucket,
                         'Local root' : args.base_directory,
+                        'Behavior' : args.behavior,
                         'Dumpster' : args.dumpster,
                         'Automatic cleanup' : not args.no_cleanup,
+                        'Hard reset' : args.hard_reset,
                         'Contigs' : ', '.join(contigs),
                         'Max attempts' : args.max_attempts,
                         'Outer gate' : args.outer_gate,
                         'Submission gate' : args.submission_gate,
+                        'Active VM gate' : args.vm_gate,
+                        'Max cycles' : max_cycles,
                         'Dry run' : args.dry_run,
                         'Quiet' : args.quiet})
 
@@ -324,16 +369,36 @@ def main():
     and path.exists(args.status_tsv):
         all_status = pd.read_csv(args.status_tsv, sep='\t', header=None).\
                         set_index(0)[1].to_dict()
+        run_status = {k : v for k, v in all_status.items() if k in contigs}
     # Otherwise, create a dictionary for tracking status
     else:
         all_status = {k : 'unknown' for k in contigs}
+        run_status = all_status.copy()
+
+    # If --hard-reset is specified, unstage all contigs prior to entering monitor loop
+    if args.hard_reset and 'staged' in run_status.values():
+        unstage_contigs = [k for k, v in run_status.items() if v == 'staged']
+        for contig in unstage_contigs:
+            if args.dry_run:
+                if not args.quiet:
+                    msg = '[{}] Would un-stage outputs for {} if not for --dry-run'
+                    print(msg.format(clean_date(), contig))
+            else:
+                msg = '[{}] Un-staging outputs for {}'
+                print(msg.format(clean_date(), contig))
+                g2cpy.rm_uris('/'.join([sub('/$', '', args.staging_bucket), contig, '**']))
+                run_status[contig] = 'unstaged'
+                all_status.update(run_status)
 
     # Report beginning status
     if not args.quiet:
-        report_status(all_status, title='Status at launch:')
+        report_status(run_status, title='Status at launch:')
 
-    # Loop infinitely while any status is not 'staged'
-    while True:
+    # Loop infinitely while any status is not 'staged' and max_cycles has not been reached
+    k = 0
+    hard_reset_retries = {k : 0 for k in contigs}
+    while k < max_cycles:
+        k += 1
         if not args.quiet:
             msg = '[{}] Not all contigs yet staged. Entering another cycle of ' + \
                   'submission management routine.\n'
@@ -343,7 +408,7 @@ def main():
         for contig in contigs:
 
             # Get most recent status for this contig
-            status = all_status.get(contig, 'unknown')
+            status = run_status.get(contig, 'unknown')
 
             # Format expected input + output paths
             input_json = input_json_fmt.format(contig)
@@ -415,20 +480,45 @@ def main():
                 # Exit loop after processing most recent workflow ID
                 break
 
+            # For runs with --hard-reset, only count prior submissions
+            # within the scope of this script
+            if args.hard_reset:
+                n_prior_subs = hard_reset_retries.get(contig, 0)
+
             # Submit new workflow if not already running or staged
             if status not in 'staged submitted running status_check_failed'.split():
                 if n_prior_subs < args.max_attempts:
-                    status = submit_workflow(contig, args.wdl, args.input_json_template, 
-                                             input_json, prev_wids, 
-                                             args.dependencies_zip, 
-                                             args.contig_variable_overrides, 
-                                             args.dry_run, args.quiet, args.verbose)
-                    if args.submission_gate is not None:
+
+                    # Check to ensure that the cromwell server isn't already overloaded
+                    n_active_vms = g2cpy.count_vms()
+                    if n_active_vms > args.vm_gate:
+                        status = 'vm_gate_skipped'
                         if not args.quiet:
-                            msg = '[{}] Pausing {:,} minutes before proceeding ' + \
-                                  'according to `--submission-gate {}`...\n'
-                            print(msg.format(clean_date(), args.outer_gate, args.outer_gate))
-                        sleep(60 * args.submission_gate)
+                            msg = '[{}] Skipped submission of {} due to the ' + \
+                                  'number of active VMs ({:,}) being greater ' + \
+                                  'than the value of --vm-gate ({:,})'
+                            print(msg.format(clean_date(), contig, n_active_vms,
+                                             args.vm_gate))
+
+                    # Otherwise, submit workflow as normal
+                    else:
+                        strict_sub_status = 'failed unstaged not_started'.split()
+                        if args.behavior in 'indifferent strict'.split() \
+                        or (args.behavior == 'patient' and status in strict_sub_status):
+                            if args.behavior == 'strict':
+                                g2cpy.abort_workflow(wid)
+                            status = submit_workflow(contig, args.wdl, args.input_json_template, 
+                                                     input_json, prev_wids, 
+                                                     args.dependencies_zip, 
+                                                     args.contig_variable_overrides, 
+                                                     args.dry_run, args.quiet, args.verbose)
+                            hard_reset_retries[contig] += 1
+                            if args.submission_gate is not None:
+                                if not args.quiet:
+                                    msg = '[{}] Pausing {:,} minutes before proceeding ' + \
+                                          'according to `--submission-gate {}`...\n'
+                                    print(msg.format(clean_date(), args.outer_gate, args.outer_gate))
+                                sleep(60 * args.submission_gate)
 
                 else:
                     if not args.quiet:
@@ -439,7 +529,8 @@ def main():
                     status = 'exhausted'
 
             # Update & report status
-            all_status[contig] = status
+            run_status[contig] = status
+            all_status.update(run_status)
             if not args.quiet:
                 msg = '[{}] Status of contig {}: {}'
                 print(msg.format(clean_date(), contig, status))
@@ -449,11 +540,11 @@ def main():
                         fout.write('\t'.join([k, v]) + '\n')
 
         # Check at end of loop if all contigs are staged
-        if len(set(all_status.values()).difference({'staged'})) == 0:
+        if len(set(run_status.values()).difference({'staged'})) == 0:
             break
 
         # Check if all contigs are exhausted; if so, no progress will be made
-        if len(set(all_status.values()).difference({'staged', 'exhausted'})) == 0:
+        if len(set(run_status.values()).difference({'staged', 'exhausted'})) == 0:
             msg = '[{}] All contigs are staged or exhausted. No more progress ' + \
                   'is possible with current settings. Exiting management routine.'
             print(msg.format(clean_date()))
@@ -462,11 +553,17 @@ def main():
         # Wait before checking again
         else:
             if not args.quiet:
-                report_status(all_status)
+                report_status(run_status)
                 msg = '[{}] Finished checking status for all {:,} contigs. ' + \
                       'Waiting {:,} minutes before checking again...\n'
                 print(msg.format(clean_date(), len(contigs), args.outer_gate))
             sleep(60 * args.outer_gate)
+
+    # Report if time limit reached
+    if k == max_cycles:
+        msg = '[{}] Maximum number of cycles reached ({:,}). Exiting management routine.'
+        print(msg.format(clean_date(), max_cycles))
+        exit(1)
 
     # Report completion once all contigs are staged
     msg = '[{}] All contig outputs have been staged! Exiting management routine.'

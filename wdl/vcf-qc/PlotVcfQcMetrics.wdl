@@ -18,7 +18,10 @@ workflow PlotVcfQcMetrics {
     Array[File] size_distribution_tsvs
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
-    File? sv_site_metrics
+    File? all_svs_bed
+    File? common_snvs_bed
+    File? common_indels_bed
+    File? common_svs_bed
 
     Float common_af_cutoff = 0.001
 
@@ -75,7 +78,7 @@ workflow PlotVcfQcMetrics {
       af_distrib = af_distrib,
       joint_distrib = joint_distrib,
       common_af_cutoff = common_af_cutoff,
-      sv_site_metrics = sv_site_metrics,
+      all_svs_bed = all_svs_bed,
       output_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
@@ -100,7 +103,7 @@ task PlotSiteMetrics {
     File af_distrib
     File joint_distrib
     Float common_af_cutoff
-    File? sv_site_metrics
+    File? all_svs_bed
     File? common_snvs_bed
     File? common_indels_bed
     File? common_svs_bed
@@ -114,7 +117,7 @@ task PlotSiteMetrics {
     String g2c_analysis_docker
   }
 
-  Array[File?] loc_inputs = [size_distrib, af_distrib, joint_distrib, sv_site_metrics,
+  Array[File?] loc_inputs = [size_distrib, af_distrib, joint_distrib, all_svs_bed,
                              common_snvs_bed, common_indels_bed, common_svs_bed]
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
 

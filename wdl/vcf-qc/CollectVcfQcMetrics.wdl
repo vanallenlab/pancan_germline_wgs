@@ -195,8 +195,65 @@ workflow CollectVcfQcMetrics {
   ### OUTPUT CLEANUP
   ##################
 
-  # Collapse SV sites
-  # TODO: implement this
+  # Collapse all SV sites
+  Array[File] all_sv_beds = select_all(CollectSiteMetrics.sv_sites)
+  if ( length(all_sv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseAllSvs {
+      input:
+        shards = all_sv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".all_svs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+
+  # Collapse common SNV sites
+  Array[File] common_snv_beds = select_all(CollectSiteMetrics.common_snv_sites)
+  if ( length(common_snv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSnvs {
+      input:
+        shards = common_snv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_snvs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+
+  # Collapse common indel sites
+  Array[File] common_indel_beds = select_all(CollectSiteMetrics.common_indel_sites)
+  if ( length(common_indel_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonIndels {
+      input:
+        shards = common_indel_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_indels.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+
+  # Collapse common SV sites
+  Array[File] common_sv_beds = select_all(CollectSiteMetrics.common_sv_sites)
+  if ( length(common_sv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSvs {
+      input:
+        shards = common_sv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_svs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
 
   # Collapse size distributions
   call QcTasks.SumCompressedDistribs as SumSizeDistribs {
@@ -224,8 +281,11 @@ workflow CollectVcfQcMetrics {
   }
 
   output {
-    # For now, just outputting the merged distribution files
-    # This will eventually be extended
+    File? all_svs_bed = CollapseAllSvs.merged_file
+    File? common_snvs_bed = CollapseCommonSnvs.merged_file
+    File? common_indels_bed = CollapseCommonSnvs.merged_file
+    File? common_svs_bed = CollapseCommonSvs.merged_file
+
     File size_distrib = SumSizeDistribs.merged_distrib
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
