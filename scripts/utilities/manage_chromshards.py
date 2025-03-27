@@ -395,10 +395,10 @@ def main():
         report_status(run_status, title='Status at launch:')
 
     # Loop infinitely while any status is not 'staged' and max_cycles has not been reached
-    k = 0
+    cycle_number = 0
     hard_reset_retries = {k : 0 for k in contigs}
-    while k < max_cycles:
-        k += 1
+    while cycle_number < max_cycles:
+        cycle_number += 1
         if not args.quiet:
             msg = '[{}] Not all contigs yet staged. Entering another cycle of ' + \
                   'submission management routine.\n'
@@ -419,6 +419,12 @@ def main():
             # Check possible statuses in a specific order to minimize necessary 
             # gsutil/cromshell queries
             while True:
+
+                # If this is the first cycle and --hard-reset was specified,
+                # always treat every submission as not_started
+                if cycle_number == 1 and args.hard_reset:
+                    status = 'not_started'
+                    break
 
                 # First, check if contig output has been already staged
                 # If so, nothing more needs to be done
@@ -454,10 +460,8 @@ def main():
                     break
 
                 # Update status according to most recent workflow unless
-                # this is the first cycle and --hard-reset was specified
                 wid = wids[-1]
-                if not args.hard_reset and k == 0:
-                    status = g2cpy.check_workflow_status(wid, timeout=120)
+                status = g2cpy.check_workflow_status(wid, timeout=120)
 
                 # If most recent workflow was successful, stage outputs and clear all 
                 # files from Cromwell execution & output buckets
@@ -562,7 +566,7 @@ def main():
             sleep(60 * args.outer_gate)
 
     # Report if time limit reached
-    if k == max_cycles:
+    if cycle_number == max_cycles:
         msg = '[{}] Maximum number of cycles reached ({:,}). Exiting management routine.'
         print(msg.format(clean_date(), max_cycles))
         exit(1)

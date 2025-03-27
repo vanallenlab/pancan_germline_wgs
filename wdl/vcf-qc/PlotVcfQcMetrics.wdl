@@ -99,8 +99,40 @@ workflow PlotVcfQcMetrics {
         docker = bcftools_docker
       }
   }
-  File? common_snvs_bed = select_first(select_all([CollapseAllSvs.merged_file, 
-                                               select_first([common_snv_beds])[0]]))
+  File? common_snvs_bed = select_first(select_all([CollapseCommonSnvs.merged_file, 
+                                                   select_first([common_snv_beds])[0]]))
+
+  # If necessary, collapse common indel BEDs
+  if ( length(select_first(select_all([common_indel_beds]))) > 1 ) {
+    call Utils.ConcatTextFiles as CollapseCommonIndels {
+      input:
+        shards = select_first([common_indel_beds]),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_indels.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+  File? common_indels_bed = select_first(select_all([CollapseCommonIndels.merged_file, 
+                                                     select_first([common_indel_beds])[0]]))
+
+  # If necessary, collapse common SV BEDs
+  if ( length(select_first(select_all([common_sv_beds]))) > 1 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSvs {
+      input:
+        shards = select_first([common_sv_beds]),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".common_svs.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+  File? common_svs_bed = select_first(select_all([CollapseCommonSvs.merged_file, 
+                                                  select_first([common_sv_beds])[0]]))
 
   #################
   ### VISUALIZATION
@@ -115,6 +147,8 @@ workflow PlotVcfQcMetrics {
       common_af_cutoff = common_af_cutoff,
       all_svs_bed = all_svs_bed,
       common_snvs_bed = common_snvs_bed,
+      common_indels_bed = common_indels_bed,
+      common_svs_bed = common_svs_bed,
       output_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
@@ -129,7 +163,10 @@ workflow PlotVcfQcMetrics {
   # Package all plots into a second, separate tarball
   # TODO: implement this
 
-  output {}
+  output {
+    # For now, just outputting site metrics tarball
+    File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
+  }
 }
 
 

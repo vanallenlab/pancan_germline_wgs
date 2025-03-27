@@ -143,7 +143,9 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
-  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc",
+  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc.\$CONTIG",
+  "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 7.5,
+  "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
   "CollectVcfQcMetrics.shard_vcf": false,
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
   "CollectVcfQcMetrics.vcfs": \$CONTIG_VCFS,
@@ -156,12 +158,14 @@ code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectShortVariantQcMetrics.inputs.template.json \
   --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
+  --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
   --name CollectShortVariantQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
+  --submission-gate 10 \
   --max-attempts 2
 
 
@@ -185,7 +189,7 @@ cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.n_records_per_shard": 10000,
-  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
+  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc.\$CONTIG",
   "CollectVcfQcMetrics.shard_vcf": true,
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
   "CollectVcfQcMetrics.vcfs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz"],
@@ -213,6 +217,26 @@ code/scripts/manage_chromshards.py \
 
 # Note: this only needs to be run once for the entire cohort across all workspaces
 
-# TODO: implement this
+# Reaffirm staging directory
+staging_dir=staging/initial_qc
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Write template input .json for short variant QC metric collection
+cat << EOF > $staging_dir/PlotVcfQcMetrics.inputs.template.json
+{
+  "PlotVcfQcMetrics.af_distribution_tsvs": "Array[File]",
+  "PlotVcfQcMetrics.all_sv_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PlotVcfQcMetrics.common_af_cutoff": 0.001,
+  "PlotVcfQcMetrics.common_indel_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.common_snv_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.common_sv_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
+  "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
+  "PlotVcfQcMetrics.size_distribution_tsvs": "Array[File]",
+  "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": "Array[File]"
+}
+EOF
+
 
 
