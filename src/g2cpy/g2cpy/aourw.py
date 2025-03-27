@@ -19,6 +19,7 @@ from sys import stdout, stderr
 def abort_workflow(workflow_id, max_retries=20, timeout=30):
     """
     Abort a Cromwell workflow
+    Returns a boolean indicating whether the abort was successful
     """
 
     crom_query_res = ''
@@ -26,13 +27,16 @@ def abort_workflow(workflow_id, max_retries=20, timeout=30):
     cmd = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc abort ' + workflow_id
     while attempts < max_retries:
         try:
-            res = subprocess.run(cmd, shell=True, check=True, text=True)
+            res = subprocess.run(cmd, shell=True, check=True, text=True,
+                                 capture_output=True)
+            return True
         except:
             attempts += 1
     
     if attempts == max_retries:
         msg = 'Failed to abort workflow {} after {} retries\n'
         stderr.write(msg.format(workflow_id, attempts))
+        return False
 
 
 def check_workflow_status(workflow_id, max_retries=20, timeout=30):

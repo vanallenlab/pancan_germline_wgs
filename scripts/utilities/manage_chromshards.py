@@ -28,6 +28,7 @@ from time import sleep
 
 # Define constants
 hg38_primary_contigs = ['chr{}'.format(x+1) for x in range(22)] + ['chrX', 'chrY']
+strict_sub_status = 'failed aborted aborting unstaged not_started'.split()
 
 
 def clean_date():
@@ -145,7 +146,7 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
                     dependencies_zip=None, contig_var_overrides=None, 
                     dry_run=False, quiet=False, verbose=False):
     """
-    Submit a workflow for a single contig to Cromwell and store the workflow ID in a log
+    Submit a workflow for a single contig to Cromwell and log the workflow ID
     """
 
     # Assign contig to all protected environment variables
@@ -179,8 +180,8 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
     # Submit the workflow
     if dry_run:
         if not quiet:
-            msg = '[{}] Would submit new workflow with the following command if ' + \
-                  'not for --dry-run:\n{}'
+            msg = '[{}] Would submit new workflow with the following ' + \
+                  'command if not for --dry-run:\n{}'
             print(msg.format(clean_date(), cmd))
         status = 'dry_run_skipped'
     else:
@@ -303,7 +304,8 @@ def main():
     if args.bucket is None:
         bucket = getenv('WORKSPACE_BUCKET')
     if bucket is None:
-        exit('Must provide a valid value for --bucket. See --help for more information.')
+        exit('Must provide a valid value for --bucket. ' + \
+             'See --help for more information.')
 
     # Infer expected paths and other contig-specific constants
     input_json_fmt = sub('[/]+$', '', args.base_directory) + \
@@ -386,7 +388,8 @@ def main():
             else:
                 msg = '[{}] Un-staging outputs for {}'
                 print(msg.format(clean_date(), contig))
-                g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), contig, '**'])])
+                g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), 
+                                             contig, '**'])])
                 run_status[contig] = 'unstaged'
                 all_status.update(run_status)
 
@@ -508,22 +511,26 @@ def main():
 
                     # Otherwise, submit workflow as normal
                     else:
-                        strict_sub_status = 'failed unstaged not_started'.split()
                         if args.behavior in 'indifferent strict'.split() \
-                        or (args.behavior == 'patient' and status in strict_sub_status):
+                        or (args.behavior == 'patient' \
+                            and status in strict_sub_status):
                             if args.behavior == 'strict':
-                                g2cpy.abort_workflow(wid)
-                            status = submit_workflow(contig, args.wdl, args.input_json_template, 
+                                aborted = g2cpy.abort_workflow(wid)
+                            status = submit_workflow(contig, args.wdl, 
+                                                     args.input_json_template, 
                                                      input_json, prev_wids, 
                                                      args.dependencies_zip, 
                                                      args.contig_variable_overrides, 
-                                                     args.dry_run, args.quiet, args.verbose)
+                                                     args.dry_run, args.quiet, 
+                                                     args.verbose)
                             hard_reset_retries[contig] += 1
                             if args.submission_gate is not None:
                                 if not args.quiet:
-                                    msg = '[{}] Pausing {:,} minutes before proceeding ' + \
-                                          'according to `--submission-gate {}`...\n'
-                                    print(msg.format(clean_date(), args.outer_gate, args.outer_gate))
+                                    msg = '[{}] Pausing {:,} minutes before ' + \
+                                          'proceeding with next chromosome...\n'
+                                    print(msg.format(clean_date(), 
+                                                     args.submission_gate, 
+                                                     args.submission_gate))
                                 sleep(60 * args.submission_gate)
 
                 else:
@@ -567,7 +574,8 @@ def main():
 
     # Report if time limit reached
     if cycle_number == max_cycles:
-        msg = '[{}] Maximum number of cycles reached ({:,}). Exiting management routine.'
+        msg = '[{}] Maximum number of cycles reached ({:,}). ' + \
+              'Exiting management routine.'
         print(msg.format(clean_date(), max_cycles))
         exit(1)
 

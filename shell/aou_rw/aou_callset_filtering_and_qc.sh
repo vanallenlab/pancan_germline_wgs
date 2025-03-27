@@ -140,7 +140,7 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:f046423",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc.\$CONTIG",

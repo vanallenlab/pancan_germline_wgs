@@ -283,7 +283,7 @@ workflow CollectVcfQcMetrics {
   output {
     File? all_svs_bed = CollapseAllSvs.merged_file
     File? common_snvs_bed = CollapseCommonSnvs.merged_file
-    File? common_indels_bed = CollapseCommonSnvs.merged_file
+    File? common_indels_bed = CollapseCommonIndels.merged_file
     File? common_svs_bed = CollapseCommonSvs.merged_file
 
     File size_distrib = SumSizeDistribs.merged_distrib
