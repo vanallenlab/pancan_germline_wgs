@@ -179,8 +179,8 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
   var.class.colors <- c("snv" = "#D9C9AE",
                         "indel" = "#A69C88",
                         "sv" = "#736D61")
-  snv.colors <- c("ti" = "#A1BDE6",
-                  "tv" = "#E6A1B0")
+  snv.colors <- c("ti" = "#BCE3A8",
+                  "tv" = "#8ABD71")
   indel.colors <- c("ins" = "#65A1C7",
                     "del" = "#CC6C62")
   sv.colors <- c("DEL" = "#AD574C",
@@ -356,9 +356,9 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
     "var.class.names" = c("snv" = "Single nucleotide variant",
                           "indel" = "Small insertion/deletion",
                           "sv" = "Structural variant"),
-    "var.class.abbrev" = c("snv" = "SNV",
-                           "indel" = "Indel",
-                           "sv" = "SV"),
+    "var.class.abbrevs" = c("snv" = "SNV",
+                            "indel" = "Indel",
+                            "sv" = "SV"),
     "var.subclass.names" = c("ti" = "Transition",
                              "tv" = "Transversion",
                              "del" = "Deletion",

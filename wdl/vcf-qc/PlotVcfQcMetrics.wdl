@@ -195,9 +195,19 @@ task PlotSiteMetrics {
                              common_snvs_bed, common_indels_bed, common_svs_bed]
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
 
-  String pw_snv_cmd = if defined(common_snvs_bed) then "--snvs ~{common_snvs_bed}" else ""
-  String pw_indel_cmd = if defined(common_indels_bed) then "--indels ~{common_indels_bed}" else ""
-  String pw_sv_cmd = if defined(common_svs_bed) then "--indels ~{common_svs_bed}" else ""
+  Boolean has_common_snvs = defined(common_snvs_bed)
+  String common_snv_bname = if has_common_snvs then basename(select_first([common_snvs_bed])) else ""
+  String pw_snv_cmd = if has_common_snvs then "--snvs common_snv_bname" else ""
+  
+  Boolean has_common_indels = defined(common_indels_bed)
+  String common_indel_bname = if has_common_indels then basename(select_first([common_indels_bed])) else ""
+  String pw_indel_cmd = if has_common_indels then "--indels common_indel_bname" else ""
+
+  Boolean has_common_svs = defined(common_svs_bed)
+  String common_sv_bname = if has_common_svs then basename(select_first([common_svs_bed])) else ""
+  String pw_sv_cmd = if has_common_svs then "--svs common_sv_bname" else ""
+
+  Boolean has_common_variants = has_common_snvs || has_common_indels || has_common_svs
 
   command <<<
     set -eu -o pipefail
@@ -212,10 +222,19 @@ task PlotSiteMetrics {
       --common-af ~{common_af_cutoff} \
       --out-prefix site_metrics/~{output_prefix}
 
+    # Symlink common variant BEDs to working directory
+    if [ ~{has_common_snvs} ]; then
+      ln -s ~{default="" common_snvs_bed} ~{common_snv_bname}
+    fi
+    if [ ~{has_common_indels} ]; then
+      ln -s ~{default="" common_indels_bed} ~{common_indel_bname}
+    fi
+    if [ ~{has_common_svs} ]; then
+      ln -s ~{default="" common_svs_bed} ~{common_sv_bname}
+    fi
+
     # Plot site-level metrics for common variants
-    if ~{defined(common_snvs_bed)} || \
-       ~{defined(common_indels_bed)} || \
-       ~{defined(common_svs_bed)}; then
+    if ~{has_common_variants}; then
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_pointwise_metrics.R \
         ~{pw_snv_cmd} \
         ~{pw_indel_cmd} \
