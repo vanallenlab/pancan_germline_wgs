@@ -64,6 +64,7 @@ workflow PlotVcfQcMetrics {
       call QcTasks.SumCompressedDistribs as SumJointDistribs {
         input:
           distrib_tsvs = size_vs_af_distribution_tsvs,
+          n_key_columns = 3,
           out_prefix = output_prefix + ".size_vs_af_distribution",
           g2c_analysis_docker = g2c_analysis_docker
     }

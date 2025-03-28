@@ -153,14 +153,14 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
 }
 EOF
 
-# Submit, monitor, stage, and cleanup short variant QC metadata task
+# Submit, monitor, stage, and cleanup short variant QC metadata workflow
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectShortVariantQcMetrics.inputs.template.json \
   --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
-  --name CollectShortVariantQcMetrics \
+  --name CollectInitialShortVariantQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
@@ -197,13 +197,13 @@ cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
 }
 EOF
 
-# Submit, monitor, stage, and cleanup SV QC metadata task
+# Submit, monitor, stage, and cleanup SV QC metadata workflow
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectSVQcMetrics.inputs.template.json \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
-  --name CollectSvQcMetrics \
+  --name CollectInitialSvQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectSvQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
@@ -221,22 +221,75 @@ code/scripts/manage_chromshards.py \
 staging_dir=staging/initial_qc
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# Write template input .json for short variant QC metric collection
-cat << EOF > $staging_dir/PlotVcfQcMetrics.inputs.template.json
+# Build input arrays
+for key in size_distrib af_distrib size_vs_af_distrib \
+              all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
+  if [ -e $staging_dir/$key.uris.list ]; then
+    rm $staging_dir/$key.uris.list
+  fi
+done
+for k in $( seq 1 22 ) X Y; do
+  
+  # Localize output tracker jsons
+  gsutil cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/chr$k/CollectShortVariantQcMetrics.chr$k.outputs.json \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/chr$k/CollectSvQcMetrics.chr$k.outputs.json \
+    $staging_dir/
+
+  # Get URIs for QC metrics
+  for jprefix in CollectShortVariantQcMetrics CollectSvQcMetrics; do
+    json=$staging_dir/$jprefix.chr$k.outputs.json
+    for key in size_distrib af_distrib size_vs_af_distrib \
+               all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
+      jq .$key $json | fgrep -xv "null" | tr -d '"' >> $staging_dir/$key.uris.list
+    done
+  done
+
+  # Clear local copies of output tracker jsons
+  rm \
+    $staging_dir/CollectShortVariantQcMetrics.chr$k.outputs.json \
+    $staging_dir/CollectSvQcMetrics.chr$k.outputs.json
+done
+
+# Write input .json for short variant QC metric collection
+cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
 {
-  "PlotVcfQcMetrics.af_distribution_tsvs": "Array[File]",
-  "PlotVcfQcMetrics.all_sv_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.af_distribution_tsvs": $( collapse_txt $staging_dir/af_distrib.uris.list ),
+  "PlotVcfQcMetrics.all_sv_beds": $( collapse_txt $staging_dir/all_svs_bed.uris.list ),
   "PlotVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PlotVcfQcMetrics.common_af_cutoff": 0.001,
-  "PlotVcfQcMetrics.common_indel_beds": "Array[File]? (optional)",
-  "PlotVcfQcMetrics.common_snv_beds": "Array[File]? (optional)",
-  "PlotVcfQcMetrics.common_sv_beds": "Array[File]? (optional)",
+  "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
+  "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
+  "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
   "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
-  "PlotVcfQcMetrics.size_distribution_tsvs": "Array[File]",
-  "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": "Array[File]"
+  "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
+  "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )
 }
 EOF
 
+# Submit QC visualization workflow
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip g2c.dependencies.zip \
+  code/wdl/pancan_germline_wgs/vcf-qc/PlotVcfQcMetrics.wdl \
+  cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list
 
+# Monitor QC visualization workflow
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list )
+
+# # Once patches are complete, manually stage output 
+# patch_wid=$( tail -n1 cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list )
+# gsutil -m cp \
+#   $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$patch_wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+
+# # Clear Cromwell execution & output buckets for patch jobs
+# gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
+#                 | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+#                   '{ print bucket_prefix$1"/**" }' ) \
+# > uris_to_delete.list
+# cleanup_garbage
 
