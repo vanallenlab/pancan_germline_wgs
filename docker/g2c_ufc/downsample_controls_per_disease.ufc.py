@@ -24,7 +24,19 @@ from scipy.stats import chisquare, fisher_exact
 
 #### Noah's Version ####
 
+def extract_non_familial_set(samples, kinship_file):
+    """
+    Given a set of sample IDs and a kinship file (with columns #ID1 and ID2),
+    return the subset of sample IDs that do NOT appear in either column.
+    """
+    kinship = pd.read_csv(kinship_file, delim_whitespace=True)
 
+    # Collect all IDs that appear in the kinship pairs
+    related_ids = set(kinship['#ID1']).union(set(kinship['ID2']))
+
+    # Return the samples that are not related to anyone
+    return samples - related_ids
+    
 def extract_family_units(kinship_file):
     """
     Given a kinship file with columns #ID1 and ID2,
