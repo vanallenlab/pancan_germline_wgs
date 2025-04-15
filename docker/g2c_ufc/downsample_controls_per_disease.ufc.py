@@ -155,15 +155,12 @@ def main():
     # Load list of samples to keep
     with open(args.sample_list) as f:
         samples = set(patient.strip() for patient in f)
-        
+
     # Load list of samples to exclude
     if args.exclude_samples:
         with open(args.exclude_samples) as f:
             exclude_samples = set(patient.strip() for patient in f)
         samples = samples - exclude_samples
-
-
-    samples = samples - exclude_samples
 
     # Filter to just cases in our study as well as cases in the specific subtype
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
