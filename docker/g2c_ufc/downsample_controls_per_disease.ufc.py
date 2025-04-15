@@ -188,7 +188,8 @@ def main():
 
     # Filter our data to our maximal unrelated set of individuals
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
-    
+    meta = meta.merge(pca, left_on='original_id', right_on='#IID', how='left')
+
     # Write to outfile
     meta.to_csv(args.outfile, sep='\t', index=False, na_rep='NA')
 
