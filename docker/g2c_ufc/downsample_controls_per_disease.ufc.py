@@ -172,8 +172,8 @@ def main():
     pca = pd.read_csv(args.pca,sep='\t',index_col=False)
     
     # Load list of samples to keep
-    with open(args.sample_list) as f:
-        samples = set(patient.strip() for patient in f)
+    with open(args.sample_list) as f2:
+        samples = set(patient.strip() for patient in f2)
 
     # Load list of samples to exclude
     if args.exclude_samples:
