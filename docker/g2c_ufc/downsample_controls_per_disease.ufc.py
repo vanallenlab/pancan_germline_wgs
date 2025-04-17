@@ -194,7 +194,7 @@ def main():
     sample_size2 = len(meta)
     
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{round(((sample_size1 - sample_size2)/sample_size1),2) * 100}\tRemove samples with unknown cancer status.\n")
+        f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{round(((sample_size1 - sample_size2)/sample_size1),3) * 100}\tRemove samples with unknown cancer status.\n")
 
 
     if args.cancer_subtype != "pancancer":
@@ -204,7 +204,7 @@ def main():
     sample_size3 = len(meta)
 
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{round(((sample_size2 - sample_size3)/sample_size2),2) * 100}\tRemove samples that are not controls nor {args.cancer_subtype.replace('|',',')} diagnosis.\n") 
+        f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{round(((sample_size2 - sample_size3)/sample_size2),3) * 100}\tRemove samples that are not controls nor {args.cancer_subtype.replace('|',',')} diagnosis.\n") 
 
     # Do initial filtering of dataset
     if args.sex_karyotypes:
@@ -217,7 +217,7 @@ def main():
     sample_size4 = len(meta)
 
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),2) * 100}\tRemove samples that are not {args.sex_karyotypes}.\n")
+        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes}.\n")
 
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
@@ -234,7 +234,7 @@ def main():
 
     sample_size5 = len(meta)
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),2) * 100}\tExcluded due to relatedness with other individuals.\n")
+        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tExcluded due to relatedness with other individuals.\n")
 
     
     ## Print Summary Statistics
