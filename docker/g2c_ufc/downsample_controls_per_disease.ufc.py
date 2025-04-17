@@ -197,7 +197,7 @@ def main():
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size3 = len(meta)
-    f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{((sample_size2 - sample_size3)/sample_size2)}\tRemove samples that are not controls nor {args.cancer_subtype.replace("|",',')} diagnosis.\n") 
+    f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{((sample_size2 - sample_size3)/sample_size2)}\tRemove samples that are not controls nor {args.cancer_subtype.replace('|',',')} diagnosis.\n") 
 
     # Do initial filtering of dataset
     if args.sex_karyotypes:
