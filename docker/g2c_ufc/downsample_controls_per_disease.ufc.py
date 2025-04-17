@@ -261,8 +261,8 @@ def main():
         f.write("\n\n")
 
         # Mean age and BMI stratified by cancer type
-        f.write("Mean age and BMI by cancer type:\n")
-        means = meta.groupby('cancer')[['age', 'bmi']].mean().round(2)
+        f.write("Mean age by cancer type:\n")
+        means = meta.groupby('cancer')[['age']].mean().round(2)
         f.write(means.to_string())
         f.write("\n\n")
 
