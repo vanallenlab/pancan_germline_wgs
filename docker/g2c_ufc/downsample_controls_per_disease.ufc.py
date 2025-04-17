@@ -157,8 +157,15 @@ def main():
     parser.add_argument('--apparent_aneuploidies',required = False, help='allowed ploidies')
     parser.add_argument('--sex-karyotypes',required = False, help='allowed sex ploidies')
     parser.add_argument('--outfile', required=True, help='output.tsv')
-    parser.add_argument('--exclude-samples',required=False, help='hard filter samples to exclude')
+    parser.add_argument('--exclude-samples',required=False, help='Samples to Exclude')
+    parser.add_argument('--log-file', required=False, help='Path to log file')
     args = parser.parse_args()
+
+    # Make the log file
+    if not args.log_file:
+        args.log_file = f"{args.cancer_subtype}.cohort.log"
+    f = open(args.log_file, "w")
+    f.write("Size\tNum_Filtered\tPercent_Filtered\tExclusion_Criteria\n")
 
     # Load sample metadata
     meta = pd.read_csv(args.metadata, sep='\t',index_col=False)
@@ -176,18 +183,33 @@ def main():
 
     # Filter to just cases in our study as well as cases in the specific subtype
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
+    sample_size1 = len(meta)
+    f.write(f"{sample_size1}\t0\t0\tInitial Samples\n")
+
+    # Filter to only samples with known cancer status
     meta = meta[meta['cancer'] != "unknown"]
+    sample_size2 = len(meta)
+    f.write(f"{sample_size2}\t{sample_size1 - sample_size2}\t{(sample_size1 - sample_size2)/sample_size1}\tRemove samples with unknown cancer status.\n")
+
 
     if args.cancer_subtype != "pancancer":
       meta = meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
-    
+
+    # Remove samples with irrelevant cancer diagnosis for this study
+    sample_size3 = len(meta)
+    f.write(f"{sample_size3}\t{sample_size2 - sample_size3}\t{(sample_size2 - sample_size3)/sample_size2}\tRemove samples that are not controls nor {args.cancer_subtype.replace("|",',')} diagnosis.\n") 
+
     # Do initial filtering of dataset
     if args.sex_karyotypes:
         study_sex_karyotypes = set(args.sex_karyotypes.split(','))
         meta = initial_filter(meta,sex_karyotypes=study_sex_karyotypes)
     else:
         meta = initial_filter(meta)
-    
+
+    # Remove samples with irrelevant cancer diagnosis for this study
+    sample_size4 = len(meta)
+    f.write(f"{sample_size4}\t{sample_size3 - sample_size4}\t{(sample_size3 - sample_size4)/sample_size3}\tRemove samples that are not {args.sex_karyotypes}.\n")
+
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
     non_familial_set = extract_non_familial_set(samples=set(meta['original_id']),kinship_file=args.kinship)
@@ -200,6 +222,49 @@ def main():
 
     # Filter our data to our maximal unrelated set of individuals
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
+
+    sample_size5 = len(meta)
+    f.write(f"{sample_size5}\t{sample_size4 - sample_size5}\t{(sample_size4 - sample_size5)/sample_size4}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
+
+    ## Print Summary Statistics
+    with open(args.log_file, 'a') as f:
+        f.write("===== Summary Report =====\n\n")
+
+        # Total number of individuals
+        total_count = len(meta)
+        f.write(f"Total individuals: {total_count}\n\n")
+
+        # Count per cohort
+        f.write("Counts by cohort:\n")
+        f.write(meta['cohort'].value_counts().to_string())
+        f.write("\n\n")
+
+        # Count per cancer
+        f.write("Counts by cancer:\n")
+        f.write(meta['cancer'].value_counts().to_string())
+        f.write("\n\n")
+
+        # Count per sex_karyotype
+        f.write("Counts by sex_karyotype:\n")
+        f.write(meta['sex_karyotype'].value_counts().to_string())
+        f.write("\n\n")
+
+        # Mean age and BMI stratified by cancer type
+        f.write("Mean age and BMI by cancer type:\n")
+        means = meta.groupby('cancer')[['age', 'bmi']].mean().round(2)
+        f.write(means.to_string())
+        f.write("\n\n")
+
+        # intake_qc_pop count per cancer
+        f.write("Counts of intake_qc_pop per cancer:\n")
+        intake_counts = meta.groupby('cancer')['intake_qc_pop'].value_counts().unstack(fill_value=0)
+        f.write(intake_counts.to_string())
+        f.write("\n\n")
+    
+        f.write("==========================\n\n")
+
+    f.close()
+
     meta = meta.merge(pca, left_on='original_id', right_on='#IID', how='left')
 
     # Write to outfile
