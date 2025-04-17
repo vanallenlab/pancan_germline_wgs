@@ -234,7 +234,7 @@ def main():
 
     sample_size5 = len(meta)
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),2) * 100}\tExcluded {len(familial_set)} due to relatedness with other individuals.\n")
+        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),2) * 100}\tExcluded due to relatedness with other individuals.\n")
 
     
     ## Print Summary Statistics
