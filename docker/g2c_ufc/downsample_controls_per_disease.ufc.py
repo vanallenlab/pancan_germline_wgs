@@ -164,8 +164,9 @@ def main():
     # Make the log file
     if not args.log_file:
         args.log_file = f"{args.cancer_subtype}.cohort.log"
-    f = open(args.log_file, "w")
-    f.write("Size\tNum_Filtered\tPercent_Filtered\tExclusion_Criteria\n")
+
+    with open(args.log_file, "w") as f:
+        f.write("Size\tNum_Filtered\tPercent_Filtered\tExclusion_Criteria\n")
 
     # Load sample metadata
     meta = pd.read_csv(args.metadata, sep='\t',index_col=False)
@@ -184,7 +185,9 @@ def main():
     # Filter to just cases in our study as well as cases in the specific subtype
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
     sample_size1 = len(meta)
-    f.write(f"{sample_size1}\t0\t0\tInitial Samples\n")
+
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size1}\t0\t0\tInitial Samples\n")
 
     # Filter to only samples with known cancer status
     meta = meta[meta['cancer'] != "unknown"]
@@ -193,11 +196,13 @@ def main():
 
 
     if args.cancer_subtype != "pancancer":
-      meta = meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
+      meta =meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size3 = len(meta)
-    f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{((sample_size2 - sample_size3)/sample_size2)}\tRemove samples that are not controls nor {args.cancer_subtype.replace('|',',')} diagnosis.\n") 
+
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{((sample_size2 - sample_size3)/sample_size2)}\tRemove samples that are not controls nor {args.cancer_subtype.replace('|',',')} diagnosis.\n") 
 
     # Do initial filtering of dataset
     if args.sex_karyotypes:
@@ -208,7 +213,9 @@ def main():
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size4 = len(meta)
-    f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{((sample_size3 - sample_size4)/sample_size3)}\tRemove samples that are not {args.sex_karyotypes}.\n")
+
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{((sample_size3 - sample_size4)/sample_size3)}\tRemove samples that are not {args.sex_karyotypes}.\n")
 
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
@@ -224,8 +231,9 @@ def main():
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
 
     sample_size5 = len(meta)
-    f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{((sample_size4 - sample_size5)/sample_size4)}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
-    f.close()
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{((sample_size4 - sample_size5)/sample_size4)}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
+
     
     ## Print Summary Statistics
     with open(args.log_file, 'a') as f:
@@ -264,7 +272,6 @@ def main():
 
         f.write("==========================\n\n")
 
-    f.close()
 
     meta = meta.merge(pca, left_on='original_id', right_on='#IID', how='left')
 
