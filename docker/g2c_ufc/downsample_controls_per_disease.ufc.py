@@ -192,7 +192,9 @@ def main():
     # Filter to only samples with known cancer status
     meta = meta[meta['cancer'] != "unknown"]
     sample_size2 = len(meta)
-    f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{((sample_size1 - sample_size2)/sample_size1)}\tRemove samples with unknown cancer status.\n")
+    
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{((sample_size1 - sample_size2)/sample_size1)}\tRemove samples with unknown cancer status.\n")
 
 
     if args.cancer_subtype != "pancancer":
