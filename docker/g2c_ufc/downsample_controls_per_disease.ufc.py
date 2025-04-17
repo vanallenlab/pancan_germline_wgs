@@ -189,7 +189,7 @@ def main():
     # Filter to only samples with known cancer status
     meta = meta[meta['cancer'] != "unknown"]
     sample_size2 = len(meta)
-    f.write(f"{sample_size2}\t{sample_size1 - sample_size2}\t{(sample_size1 - sample_size2)/sample_size1}\tRemove samples with unknown cancer status.\n")
+    f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{((sample_size1 - sample_size2)/sample_size1)}\tRemove samples with unknown cancer status.\n")
 
 
     if args.cancer_subtype != "pancancer":
@@ -197,7 +197,7 @@ def main():
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size3 = len(meta)
-    f.write(f"{sample_size3}\t{sample_size2 - sample_size3}\t{(sample_size2 - sample_size3)/sample_size2}\tRemove samples that are not controls nor {args.cancer_subtype.replace("|",',')} diagnosis.\n") 
+    f.write(f"{sample_size3}\t{(sample_size2 - sample_size3)}\t{((sample_size2 - sample_size3)/sample_size2)}\tRemove samples that are not controls nor {args.cancer_subtype.replace("|",',')} diagnosis.\n") 
 
     # Do initial filtering of dataset
     if args.sex_karyotypes:
@@ -208,7 +208,7 @@ def main():
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size4 = len(meta)
-    f.write(f"{sample_size4}\t{sample_size3 - sample_size4}\t{(sample_size3 - sample_size4)/sample_size3}\tRemove samples that are not {args.sex_karyotypes}.\n")
+    f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{((sample_size3 - sample_size4)/sample_size3)}\tRemove samples that are not {args.sex_karyotypes}.\n")
 
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
@@ -224,7 +224,7 @@ def main():
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
 
     sample_size5 = len(meta)
-    f.write(f"{sample_size5}\t{sample_size4 - sample_size5}\t{(sample_size4 - sample_size5)/sample_size4}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
+    f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{((sample_size4 - sample_size5)/sample_size4)}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
 
     ## Print Summary Statistics
     with open(args.log_file, 'a') as f:
@@ -260,7 +260,7 @@ def main():
         intake_counts = meta.groupby('cancer')['intake_qc_pop'].value_counts().unstack(fill_value=0)
         f.write(intake_counts.to_string())
         f.write("\n\n")
-    
+
         f.write("==========================\n\n")
 
     f.close()
