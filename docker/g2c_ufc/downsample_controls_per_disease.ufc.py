@@ -177,8 +177,8 @@ def main():
 
     # Load list of samples to exclude
     if args.exclude_samples:
-        with open(args.exclude_samples) as f:
-            exclude_samples = set(patient.strip() for patient in f)
+        with open(args.exclude_samples) as f3:
+            exclude_samples = set(patient.strip() for patient in f3)
         samples = samples - exclude_samples
 
     # Filter to just cases in our study as well as cases in the specific subtype
@@ -225,7 +225,8 @@ def main():
 
     sample_size5 = len(meta)
     f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{((sample_size4 - sample_size5)/sample_size4)}\tExcluded {len(familial_set)} due to relatedness with other individuals.")
-
+    f.close()
+    
     ## Print Summary Statistics
     with open(args.log_file, 'a') as f:
         f.write("===== Summary Report =====\n\n")
