@@ -197,15 +197,15 @@ task PlotSiteMetrics {
 
   Boolean has_common_snvs = defined(common_snvs_bed)
   String common_snv_bname = if has_common_snvs then basename(select_first([common_snvs_bed])) else ""
-  String pw_snv_cmd = if has_common_snvs then "--snvs common_snv_bname" else ""
+  String pw_snv_cmd = if has_common_snvs then "--snvs ~{common_snv_bname}" else ""
   
   Boolean has_common_indels = defined(common_indels_bed)
   String common_indel_bname = if has_common_indels then basename(select_first([common_indels_bed])) else ""
-  String pw_indel_cmd = if has_common_indels then "--indels common_indel_bname" else ""
+  String pw_indel_cmd = if has_common_indels then "--indels ~{common_indel_bname}" else ""
 
   Boolean has_common_svs = defined(common_svs_bed)
   String common_sv_bname = if has_common_svs then basename(select_first([common_svs_bed])) else ""
-  String pw_sv_cmd = if has_common_svs then "--svs common_sv_bname" else ""
+  String pw_sv_cmd = if has_common_svs then "--svs ~{common_sv_bname}" else ""
 
   Boolean has_common_variants = has_common_snvs || has_common_indels || has_common_svs
 
