@@ -10,8 +10,8 @@
 version 1.0
 
 
-import "Utilities.wdl" as Utils
-import "QcTasks.wdl" as QcTasks
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/Utilities.wdl" as Utils
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/QcTasks.wdl" as QcTasks
 
 
 workflow PreprocessGnomadSiteMetrics {
