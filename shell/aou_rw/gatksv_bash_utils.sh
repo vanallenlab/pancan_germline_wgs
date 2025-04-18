@@ -1142,7 +1142,7 @@ EOF
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
         --workflow-id-log-prefix "dfci-g2c.v1" \
-        --gate 45 \
+        --outer-gate 45 \
         --max-attempts $max_attempts
       ;;
 

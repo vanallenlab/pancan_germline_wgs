@@ -195,6 +195,10 @@ task PlotSiteMetrics {
                              common_snvs_bed, common_indels_bed, common_svs_bed]
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
 
+  Boolean has_all_svs = defined(all_svs_bed)
+  String all_sv_bname = if has_all_svs then basename(select_first([all_svs_bed])) else ""
+  String summary_sv_cmd = if has_all_svs then "--sv-sites ~{all_sv_bname}" else ""
+
   Boolean has_common_snvs = defined(common_snvs_bed)
   String common_snv_bname = if has_common_snvs then basename(select_first([common_snvs_bed])) else ""
   String pw_snv_cmd = if has_common_snvs then "--snvs ~{common_snv_bname}" else ""
@@ -214,11 +218,17 @@ task PlotSiteMetrics {
 
     mkdir site_metrics
 
+    # Symlink full SV BED to working directory
+    if [ ~{has_all_svs} ]; then
+      ln -s ~{default="" all_svs_bed} ~{all_sv_bname}
+    fi
+
     # Plot site summary metrics
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_summary_metrics.R \
       --size-distrib ~{size_distrib} \
       --af-distrib ~{af_distrib} \
       --joint-distrib ~{joint_distrib} \
+      ~{summary_sv_cmd} \
       --common-af ~{common_af_cutoff} \
       --out-prefix site_metrics/~{output_prefix}
 

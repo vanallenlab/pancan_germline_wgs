@@ -228,7 +228,7 @@ task SliceVcf {
     | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
       '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
     | bcftools annotate \
-      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AC,INFO/AF,INFO/HWE,INFO/ExcHet" \
+      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/AC_Hemi,INFO/AC_Het,INFO/AC_Hom,INFO/HWE" \
       -Oz -o "~{out_prefix}.cleaned.vcf.gz"
     tabix -p vcf "~{out_prefix}.cleaned.vcf.gz"
 

@@ -54,7 +54,7 @@ calc.hwe.xy <- function(f.het, f.hom){
 # Plotting Functions #
 ######################
 # HWE ternary plot
-hwe.plot <- function(df, title="All variants", pt.cex=0.01,
+hwe.plot <- function(df, title="All variants", pt.cex=0.05,
                      pt.alpha=1, parmar=c(1.75, 2, 1.25, 1)){
   # Get plot data
   df <- df[which(!is.na(df$hwe.x) & !is.na(df$hwe.y) & !is.na(df$hwe)), ]
@@ -143,15 +143,17 @@ hwe.plot <- function(df, title="All variants", pt.cex=0.01,
   mtext(3, cex=5/6, text=subtitle, line=-0.4)
 
   # Add points
-  points(df$hwe.x, df$hwe.y, pch=19, cex=pt.cex, col=pt.cols, xpd=T)
+  points(df$hwe.x, df$hwe.y, pch=1, cex=pt.cex, col=pt.cols, xpd=T)
 }
 
 # Plot wrapper function for all site-level pointwise plots
-pointwise.plots <- function(df, out.prefix, fname.suffix="all", title="All variants"){
-  # HWE plot, as both .pdf and .png
-  pdf(paste(out.prefix, fname.suffix, "hwe.pdf", sep="."),
-      height=2.25, width=2.25)
-  hwe.plot(df, title=title)
+pointwise.plots <- function(df, out.prefix, fname.suffix="all",
+                            title="All variants", hwe.pt.cex=0.05,
+                            hwe.pt.alpha=1){
+  # HWE plot as .png
+  png(paste(out.prefix, fname.suffix, "hwe.png", sep="."),
+      height=2.25*300, width=2.25*300, res=300)
+  hwe.plot(df, title=title, pt.cex=hwe.pt.cex, pt.alpha=hwe.pt.alpha)
   dev.off()
 }
 

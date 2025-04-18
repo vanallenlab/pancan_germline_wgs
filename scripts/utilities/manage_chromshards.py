@@ -268,7 +268,7 @@ def main():
                         '--max-attempts')
     parser.add_argument('-m', '--max-attempts', type=int, default=3, 
                         help='Maximum number of submission attempts for any one contig')
-    parser.add_argument('-g', '--outer-gate', type=float, default=20, required=True,
+    parser.add_argument('-g', '--outer-gate', type=float, default=20, 
                         help='Number of minutes to wait between monitor cycles')
     parser.add_argument('--vm-gate', type=int, default=2500, help='Maximum ' +
                         'number of active GCP VMs before skipping submission; ' +
@@ -377,21 +377,32 @@ def main():
         all_status = {k : 'unknown' for k in contigs}
         run_status = all_status.copy()
 
+
     # If --hard-reset is specified, unstage all contigs prior to entering monitor loop
-    if args.hard_reset and 'staged' in run_status.values():
-        unstage_contigs = [k for k, v in run_status.items() if v == 'staged']
-        for contig in unstage_contigs:
-            if args.dry_run:
-                if not args.quiet:
-                    msg = '[{}] Would un-stage outputs for {} if not for --dry-run'
+    if args.hard_reset:
+
+        # Check for staged outputs and update status if necessary
+        # This is necessary if outputs are staged but no --status-tsv is provided
+        for contig in contigs:
+            if g2cpy.check_gcp_uris([output_json_fmt.format(contig)]):
+                all_status[contig] = 'staged'
+                run_status[contig] = 'staged'
+
+        # Unstage staged outputs, if any exist
+        if 'staged' in run_status.values():
+            unstage_contigs = [k for k, v in run_status.items() if v == 'staged']
+            for contig in unstage_contigs:
+                if args.dry_run:
+                    if not args.quiet:
+                        msg = '[{}] Would un-stage outputs for {} if not for --dry-run'
+                        print(msg.format(clean_date(), contig))
+                else:
+                    msg = '[{}] Un-staging outputs for {}'
                     print(msg.format(clean_date(), contig))
-            else:
-                msg = '[{}] Un-staging outputs for {}'
-                print(msg.format(clean_date(), contig))
-                g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), 
-                                             contig, '**'])])
-                run_status[contig] = 'unstaged'
-                all_status.update(run_status)
+                    g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), 
+                                                 contig, '**'])])
+                    run_status[contig] = 'unstaged'
+                    all_status.update(run_status)
 
     # Report beginning status
     if not args.quiet:
