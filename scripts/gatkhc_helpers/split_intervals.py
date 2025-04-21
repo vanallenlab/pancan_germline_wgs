@@ -18,6 +18,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import pybedtools as pbt
+from g2cpy import chrom2int
 from sys import stdin, stdout
 from pysam import TabixFile
 
@@ -152,7 +153,7 @@ def main():
                         'size. By default, intervals will be divided based on ' +
                         'their genomic size, controlled by this parameter.',
                         type=float, default=10e10)
-    parser.add_argument('--n-shards', type=int, help='Total number of desired' +
+    parser.add_argument('--n-shards', type=int, help='Total number of desired ' +
                         'shards. Only used if --vars-per-shard and --var-sites ' +
                         'are also specified, otherwise will default to --target-size')
     parser.add_argument('--var-sites', action='append', help='One or more BED ' +
@@ -226,8 +227,8 @@ def main():
     else:
         shards = split_by_size(int_list, args.target_size)
 
-    # Write sharded intervals to output file
-    for vals in shards:
+    # Sort sharded intervals and write to output file
+    for vals in sorted(shards, key=lambda x: (chrom2int(x[0]), int(x[1]), int(x[2]))):
         if args.gatk_style:
             outline = '{}:{}-{}'.format(*vals[:3])
         else:

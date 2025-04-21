@@ -219,16 +219,30 @@ task SliceVcf {
     # Symlink vcf_idx to current working dir
     ln -s ~{vcf_idx} .
 
+    # Ensure all necessary fields are defined in VCF header
+    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" > header.supp.vcf
+    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Het,Number=A,Type=Integer,Description=\"Heterozygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Hom,Number=A,Type=Integer,Description=\"Homozygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Hemi,Number=A,Type=Integer,Description=\"Hemizygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
+    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" >> header.supp.vcf
+
     # Stream VCF to interval of interest and remove all INFO except for 
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     bcftools view \
       --regions "~{interval}" \
-      --include '(FILTER = "PASS" & INFO/AC > 0) | INFO/SVTYPE = "CNV" | FILTER = "MULTIALLELIC' \
       ~{vcf} \
+    | bcftools annotate \
+      -h header.supp.vcf \
+    | bcftools view \
+      --include '(FILTER = "PASS" & INFO/AC > 0) | INFO/SVTYPE = "CNV" | FILTER = "MULTIALLELIC"' \
     | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
       '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
     | bcftools annotate \
-      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/AC_Hemi,INFO/AC_Het,INFO/AC_Hom,INFO/HWE" \
+      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE" \
       -Oz -o "~{out_prefix}.cleaned.vcf.gz"
     tabix -p vcf "~{out_prefix}.cleaned.vcf.gz"
 

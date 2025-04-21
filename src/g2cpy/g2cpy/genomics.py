@@ -14,15 +14,23 @@ Genomics-related helper functions
 from re import sub
 
 
+def chrom2int(contig):
+    """
+    Converts a human primary contig string to an integer for simpler sorting
+    """
+
+    contig_order = {'chr' + str(k + 1) : k + 1 for k in range(22)}
+    contig_order.update({'chrX' : 23, 'chrY' : 24, 'chrM' : 25})
+
+    return contig_order[contig]
+
+
 def chromsort(contigs):
     """
     Sorts an iterable of human contigs by their positional order
     """
 
-    contig_order = {str(k + 1) : k + 1 for k in range(22)}
-    contig_order.update({'X' : 23, 'Y' : 24})
-
-    return sorted(contigs, key=lambda k: contig_order[sub('^chr', '', str(k))])
+    return sorted(contigs, key=lambda k: chrom2int(str(k)))
 
 
 def classify_variant(ref, alt, var_len=None):

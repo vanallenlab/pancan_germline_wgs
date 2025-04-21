@@ -94,49 +94,6 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/
 
 
-########################################################################
-# Collect summary distributions from gnomAD v4.1 for interval sharding #
-########################################################################
-
-# Note: this only needs to be run once for the entire cohort across all workspaces
-
-# Refresh staging directory
-staging_dir=staging/GnomadSiteMetrics
-if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
-
-# Write template .json of inputs for chromsharded manager
-cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
-{
-  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial_mar3",
-  "PreprocessGnomadSiteMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
-  "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-  "PreprocessGnomadSiteMetrics.min_af_bin": 0.00003618403,
-  "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1.\$CONTIG",
-  "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
-  "PreprocessGnomadSiteMetrics.snv_scatter_intervals": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
-  "PreprocessGnomadSiteMetrics.snv_vcf": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz",
-  "PreprocessGnomadSiteMetrics.snv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz.tbi",
-  "PreprocessGnomadSiteMetrics.sv_n_samples": 63046,
-  "PreprocessGnomadSiteMetrics.sv_scatter_intervals": "gs://dfci-g2c-refs/hg38/contig_lists/\$CONTIG.list",
-  "PreprocessGnomadSiteMetrics.sv_vcf": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz",
-  "PreprocessGnomadSiteMetrics.sv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz.tbi"
-}
-EOF
-
-# Submit, monitor, stage, and cleanup short variant QC metadata task
-code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/PreprocessGnomadSiteMetrics.wdl \
-  --input-json-template $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json \
-  --dependencies-zip g2c.dependencies.zip \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics \
-  --name GnomadSiteMetrics \
-  --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
-  --workflow-id-log-prefix "gnomad.v4.site_metrics" \
-  --outer-gate 30 \
-  --submission-gate 30 \
-  --max-attempts 2
-
-
 #####################
 # Prepare intervals #
 #####################
@@ -181,7 +138,7 @@ while read contig; do
 
   # Download gnomAD variant sites from this contig
   gsutil -m cp \
-    $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics/$contig/*/gnomad.v4.1.$contig.*.sites.bed.gz* \
+    gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/$contig/gnomad.v4.1.$contig.*.sites.bed.gz* \
     $staging_dir/
   find $staging_dir -name "*bed.gz" | xargs -I {} tabix -f {}
 
