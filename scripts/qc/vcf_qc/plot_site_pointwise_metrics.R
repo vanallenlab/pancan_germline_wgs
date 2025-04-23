@@ -197,7 +197,7 @@ if(!is.null(args$snvs)){
   snv.df <- read.bed(args$snvs, args$common_af)
 
   # Plot SNV metrics
-  pointwise.plots(snv.df, args$out_prefix, fname.suffix="sv",
+  pointwise.plots(snv.df, args$out_prefix, fname.suffix="snv",
                   title="Common SNVs")
 }else{
   snv.df <- NULL
@@ -209,7 +209,7 @@ if(!is.null(args$indels)){
   indel.df <- read.bed(args$indels, args$common_af)
 
   # Plot indel metrics
-  pointwise.plots(indel.df, args$out_prefix, fname.suffix="sv",
+  pointwise.plots(indel.df, args$out_prefix, fname.suffix="indel",
                   title="Common indels")
 
 }else{

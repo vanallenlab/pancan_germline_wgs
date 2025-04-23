@@ -15,15 +15,17 @@ dataset, like gnomAD
 
 # Import libraries
 import argparse
+import gzip
 import numpy as np
 import pandas as pd
 import pybedtools as pbt
-from g2cpy import chrom2int
+from g2cpy import chrom2int, determine_filetype
 from sys import stdin, stdout
 from pysam import TabixFile
 
 
-def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, verbose=False):
+def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, 
+                     max_size=np.inf, zero_based=False, verbose=False):
     """
     Splits intervals in int_list into shards where each shard carries no more than
     vars_per_shard total variants present in var_beds
@@ -62,10 +64,12 @@ def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, verbose=
             return tbx_pointers
 
         # Count variants until either vars_per_shard have been allocated
-        # or until iend is reached, in which case, always emit shard and start new
+        # or until iend (or max_size) is reached, in which case always emit the
+        # shard and start a new one
         s_start = istart
         cur_pos = np.min(list(tbx_pointers.values()) + [iend])
         k = 0
+        s_size = 0
         while cur_pos <= iend:
 
             # If current position is sufficiently close to end of interval s/t
@@ -75,24 +79,29 @@ def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, verbose=
                 cur_pos = iend
                 break
 
-            # Find next variant, increment that pointer, and add to tally
+            # Find next variant, increment that pointer, add to tally, and update shard size
             tbx_pointers = _spend_variant(tbx_pointers)
             k += 1
             cur_pos = np.min(list(tbx_pointers.values()) + [iend])
+            s_size = cur_pos - s_start
+            if not zero_based:
+                s_size += 1
 
-            # Once the number of variants has been tallied, emit current shard
-            # and update new shard start/end
-            if k >= vars_per_shard:
+            # Once the number of variants has been tallied or max_size has been 
+            # reached, emit current shard and update new shard start/end
+            if k >= vars_per_shard or s_size >= max_size:
                 shards.append([chrom, s_start, cur_pos])
                 if verbose:
                     msg = 'Split interval {}:{:,}-{:,} at {}:{:,}-{:,} ' + \
                           '({:.0f} kb) after {:,} variants\n'
                     stdout.write(msg.format(chrom, istart, iend, chrom, s_start, 
                                             cur_pos, (cur_pos - s_start) / 1000, k))
-                cur_pos += 1
+                if not zero_based:
+                    cur_pos += 1
                 s_start = cur_pos
                 cur_pos += 1
                 k = 0
+                s_size = 0
 
         # As the above loop should always break with imperfect sharding, we
         # always need to emit the final shard to avoid right-truncation
@@ -107,13 +116,54 @@ def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, verbose=
     return sorted(shards, key = lambda x: int(x[1]))
 
 
-def split_by_size(int_list, target_size):
+def split_by_size(int_list, target_size, max_size=np.inf, zero_based=False):
     """
     Recursively splits the largest interval in half until mean interval is ≤ --target-size
+    Also ensures no intervals are larger than max_size; such intervals will be 
+    split recursively until all shards are < max_size
     """
+
+    # Assign buffers for size and start based on coordinate system
+    if zero_based:
+        coord_buf = 0
+    else:
+        coord_buf = 1
 
     int_df = pd.DataFrame(int_list, columns='isize fields'.split())
 
+    # Take a first pass through int_df and divide all intervals > max_size into 
+    # their component parts
+    split_idx = np.where(int_df.isize > max_size)[0]
+    children = []
+    for big_idx in split_idx:
+
+        # Get info for parent interval
+        parent = int_df.fields[big_idx]
+        chrom = parent[0]
+        parent[1] = int(parent[1])
+        parent[2] = int(parent[2])
+
+        # Split parent into the smallest number of uniform children 
+        # s/t no child is > max_size
+        n_splits = int(np.ceil((parent[2] - parent[1] + coord_buf) / max_size))
+        split_points = np.round(np.linspace(parent[1], parent[2], n_splits + 1), 0)
+        for si in range(n_splits):
+            cstart = int(split_points[si])
+            if si > 0:
+                cstart += coord_buf
+            cend = int(split_points[si+1])
+            csize = cend - cstart + coord_buf
+            children.append((csize, [chrom, cstart, cend, *parent[3:]]))
+
+    # Drop supersized intervals and append their split children
+    if len(split_idx) > 0:
+        int_df = pd.concat([int_df.drop(split_idx),
+                    pd.DataFrame(children, columns=int_df.columns)]).\
+            reset_index(drop=True)
+
+    # After splitting all supersized intervals, continue recursively splitting 
+    # the largest remaining interval in half until the average shard size is 
+    # <= the target size
     avg_size = int_df.isize.mean()
     while avg_size > target_size:
 
@@ -169,8 +219,14 @@ def main():
     parser.add_argument('--min-interval-size', type=int, default=5000,
                         help='Size of smallest interval shard to be emitted, in ' +
                         'base pairs.')
+    parser.add_argument('--max-interval-size', type=int, default=np.inf,
+                        help='Size of largest interval shard to be emitted, ' +
+                        'in base pairs. [default: no maximum]')
     parser.add_argument('--gatk-style', action='store_true', default=False,
                         help='Write output as simple GATK-style intervals ' +
+                        '[default: write Picard-style intervals with header]')
+    parser.add_argument('--bed-style', action='store_true', default=False,
+                        help='Write output as BED intervals with 0-based coordinates ' +
                         '[default: write Picard-style intervals with header]')
     parser.add_argument('-o', '--output-intervals', required=True,
                         help='Path to output .interval_list', default='stdin')
@@ -193,7 +249,10 @@ def main():
     if args.input_intervals in '- stdin /dev/stdin'.split():
         infile = stdin
     else:
-        infile = open(args.input_intervals)
+        if 'compressed' in determine_filetype(args.input_intervals):
+            infile = gzip.open(args.input_intervals, 'rt')
+        else:
+            infile = open(args.input_intervals)
 
     # Open connection to output file
     if args.output_intervals in '- stdout /dev/stdout'.split():
@@ -223,14 +282,18 @@ def main():
     # After reading input intervals, perform splitting based on value of split_mode
     if split_mode == 'density':
         shards = split_by_density(int_list, args.var_sites, args.vars_per_shard, 
-                                  args.min_interval_size, args.verbose)
+                                  args.min_interval_size, args.max_interval_size,
+                                  args.bed_style, args.verbose)
     else:
-        shards = split_by_size(int_list, args.target_size)
+        shards = split_by_size(int_list, args.target_size, args.max_interval_size,
+                               args.bed_style)
 
     # Sort sharded intervals and write to output file
     for vals in sorted(shards, key=lambda x: (chrom2int(x[0]), int(x[1]), int(x[2]))):
         if args.gatk_style:
             outline = '{}:{}-{}'.format(*vals[:3])
+        elif args.bed_style:
+            outline = '{}\t{}\t{}'.format(*vals[:3])
         else:
             outline = '\t'.join([str(k) for k in vals[:3] + ['+', '. intersection ACGTmer']])
         outfile.write(outline + '\n')

@@ -140,7 +140,7 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:f046423",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc.\$CONTIG",
@@ -164,6 +164,7 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
+  --no-cleanup \
   --outer-gate 30 \
   --submission-gate 10 \
   --max-attempts 2
@@ -185,7 +186,7 @@ cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:26ce17a",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.n_records_per_shard": 10000,
@@ -207,6 +208,7 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectSvQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
+  --no-cleanup \
   --outer-gate 30 \
   --max-attempts 2
 
@@ -232,12 +234,12 @@ for k in $( seq 1 22 ) X Y; do
   
   # Localize output tracker jsons
   gsutil cp \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/chr$k/CollectShortVariantQcMetrics.chr$k.outputs.json \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/chr$k/CollectSvQcMetrics.chr$k.outputs.json \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/chr$k/CollectInitialShortVariantQcMetrics.chr$k.outputs.json \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/chr$k/CollectInitialSvQcMetrics.chr$k.outputs.json \
     $staging_dir/
 
   # Get URIs for QC metrics
-  for jprefix in CollectShortVariantQcMetrics CollectSvQcMetrics; do
+  for jprefix in CollectInitialShortVariantQcMetrics CollectInitialSvQcMetrics; do
     json=$staging_dir/$jprefix.chr$k.outputs.json
     for key in size_distrib af_distrib size_vs_af_distrib \
                all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
@@ -247,8 +249,8 @@ for k in $( seq 1 22 ) X Y; do
 
   # Clear local copies of output tracker jsons
   rm \
-    $staging_dir/CollectShortVariantQcMetrics.chr$k.outputs.json \
-    $staging_dir/CollectSvQcMetrics.chr$k.outputs.json
+    $staging_dir/CollectInitialShortVariantQcMetrics.chr$k.outputs.json \
+    $staging_dir/CollectInitialSvQcMetrics.chr$k.outputs.json
 done
 
 # Write input .json for short variant QC metric collection
@@ -261,7 +263,7 @@ cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:f9df559",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
   "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )

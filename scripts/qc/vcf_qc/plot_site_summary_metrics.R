@@ -91,23 +91,23 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   rect(xleft=rep(0, length(k)), xright=k,
        ybottom=(1:length(k)) - 1 + bar.sep, ytop=(1:length(k)) - bar.sep,
        col=bar.cols, xpd=T)
-  text(x=k-0.5, y=(1:length(k))-0.55, pos=4, cex=5/6, labels=bar.labs, xpd=T)
+  text(x=k-0.5, y=(1:length(k))-0.55, pos=4, cex=4.5/6, labels=bar.labs, xpd=T)
 
   # Add top Y axis
   minor.ticks <- log10(logscale.minor)
   minor.ticks <- minor.ticks[which(minor.ticks < max(ylims))]
-  axis(3, at=minor.ticks, labels=NA, tck=-0.01, lwd=0.75)
+  axis(3, at=minor.ticks, labels=NA, tck=-0.0125, lwd=0.5)
   major.at <- log10(logscale.major.bp)
   major.labels <- sapply(logscale.major.bp, clean.numeric.labels)
   major.labels[which(!major.labels %in% c("1", "1k", "1M", "1B"))] <- NA
   clean.axis(3, at=major.at, labels=major.labels, title="Total variants",
-             label.line=-0.8, title.line=-0.1, tck=-0.03,
+             label.line=-0.9, title.line=-0.1, tck=-0.03,
              infinite.positive=TRUE)
 
   # Add left margin labels
   axis(2, at=(1:length(k))-0.5, las=2, line=-0.9, tick=F,
        labels=var.subclass.names.short[df$subclass], cex.axis=5/6)
-  vc.x <- -0.9 * diff(par("usr")[1:2])
+  vc.x <- -0.875 * diff(par("usr")[1:2])
   bracket.lab.buf <- -0.075 * vc.x
   if(has.short.variants){
     snv.bracket.y <- c(min(which(df$class == "snv")) - 1 + bar.sep,
@@ -288,6 +288,21 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar=parmar)
 
+  # Add distinction between rare & common, if optioned
+  if(!is.null(common.af)){
+    abline(v=log10(common.af), col=annotation.color, lty=5)
+    text(x=log10(common.af)+(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])),
+         cex=5/6, pos=2, labels="Rare", xpd=T)
+    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])),
+         cex=5/6, pos=4, labels="Common", xpd=T)
+    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(0.13*diff(par("usr")[3:4])),
+         labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))),
+         cex=5/6, pos=4, xpd=T)
+  }
+
   # Add step functions and group names (if optioned)
   sapply(1:length(af.dat), function(i){
     points(af.dat[[i]]$x, af.dat[[i]]$y, col=colors[i], type="l", lwd=lwd)
@@ -306,21 +321,6 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
   clean.axis(2, at=log10(logscale.major.bp),
              labels=sapply(logscale.major.bp, clean.numeric.labels),
              title=y.title, title.line=0.85)
-
-  # Add distinction between rare & common, if optioned
-  if(!is.null(common.af)){
-    abline(v=log10(common.af), col=annotation.color, lty=5)
-    text(x=log10(common.af)+(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])),
-         cex=5/6, pos=2, labels="Rare", xpd=T)
-    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.04*diff(par("usr")[3:4])),
-         cex=5/6, pos=4, labels="Common", xpd=T)
-    text(x=log10(common.af)-(0.035*diff(par("usr")[1:2])),
-         y=par("usr")[4]-(0.13*diff(par("usr")[3:4])),
-         labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))),
-         cex=5/6, pos=4, xpd=T)
-  }
 
   # Add right Y-margin group labels
   if(!is.null(group.names)){

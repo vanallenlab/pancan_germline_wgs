@@ -232,6 +232,33 @@ task GetSamplesFromVcfHeader {
 }
 
 
+task IndexBed {
+  input {
+    File bed
+    String docker
+  }
+
+  Int disk_gb = ceil(1.25 * size(bed, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    tabix -p bed -f ~{bed}
+  >>>
+
+  output {
+    File bed_idx = "~{bed}.tbi"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
 
 task IndexVcf {
   input {
@@ -340,6 +367,7 @@ task ShardVcf {
 }
 
 
+# Atomizes a GATK-style interval list into single-interval files
 task SplitIntervalList {
   input {
     File interval_list

@@ -554,7 +554,8 @@ code/scripts/manage_chromshards.py \
 # Exclude outliers also from GATK-SV VCFs #
 ###########################################
 
-# Note that this section only needs to be run from one workspace for the entire cohort
+# Note: this workflow is scattered across all five workspaces for max parallelization
+# It must be submitted as below in each workspace
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
@@ -577,6 +578,7 @@ code/scripts/manage_chromshards.py \
   --input-json-template $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset \
   --name ExcludeSnvOutliersFromSvCallset \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.ExcludeSnvOutliersFromSvCallset.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \

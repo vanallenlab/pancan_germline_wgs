@@ -14,6 +14,14 @@ Genomics-related helper functions
 from re import sub
 
 
+def bgzip(filename):
+    """
+    Bgzip a file
+    """
+
+    subprocess.run(['bgzip', '-f', filename])
+
+
 def chrom2int(contig):
     """
     Converts a human primary contig string to an integer for simpler sorting
@@ -88,3 +96,36 @@ def classify_variant(ref, alt, var_len=None):
                   'with ref {}, alt {}, and length {:,}'
             exit(msg.format(ref, alt, var_len))
 
+
+def determine_filetype(path, return_extension=False):
+    """
+    Determine file extension for common genomic data formats
+    """
+
+    # Enumerate candidate suffix matches
+    suf_dict = {'cram' : ['cram'],
+                'bam' : ['bam'],
+                'vcf' : ['vcf'],
+                'compressed-vcf' : 'vcf.gz vcf.bgz vcf.gzip vcf.bgzip'.split(),
+                'bed' : ['bed'],
+                'compressed-bed' : 'bed.gz bed.bgz bed.gzip bed.bgzip'.split(),
+                'bigwig' : '.bw .bigwig .bigWig .BigWig'.split(),
+                'fasta' : '.fa .fasta'.split(),
+                'compressed-fasta' : '.fa.gz .fa.gzip .fasta.gz .fasta.gzip'.split(),
+                'hic' : ['hic'],
+                'gtf' : ['gtf'],
+                'compressed-gtf' : ['gtf.gz']}
+
+    for ftype, suffs in suf_dict.items():
+        suf_hits = [s for s in suffs if path.endswith(s)]
+        if len(suf_hits) > 0:
+            if return_extension:
+                return ftype, suf_hits[0]
+            else:
+                return ftype
+
+    # If no matches are found, return None
+    if return_extension:
+        return None, None
+    else:
+        return None
