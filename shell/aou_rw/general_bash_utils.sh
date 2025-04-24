@@ -122,7 +122,7 @@ add_contig_vcfs_to_chromshard_overrides_json() {
   if [ $# -lt 4 ]; then
     cat << EOF
 Error. Must provide at least four positional arguments:
-  1. path to overrides.json to be updated (will be created if it doesn't exist)
+  1. path to overrides.json to be updated (or will be created if it doesn't exist)
   2. base URI to search for .json mapping VCF arrays. Structure of this URI
      is expected to follow the output from manage_chromshards.py; do not use 
      this function if you have a custom URI directory structure.

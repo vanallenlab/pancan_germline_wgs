@@ -12,8 +12,22 @@ Updates one .json with values from a second .json, and formats to be more readab
 
 
 import argparse
+import collections.abc
 import json
 from sys import stdin, stdout
+
+
+def update(d, u):
+    """
+    Union-style dictionary update for nested dictionaries
+    Taken from https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
+    """
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = update(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
 
 
 def main():
@@ -38,7 +52,7 @@ def main():
     # Read contents of update json and update input json accordingly
     with open(args.update_json) as jup:
         updates = json.load(jup)
-        data.update(updates)
+        data = update(data, updates)
 
     # Format updated json and print to --output-json
     if args.output_json in '- stdout /dev/stdout'.split():

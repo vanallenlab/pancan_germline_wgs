@@ -128,6 +128,26 @@ gsutil cp \
 staging_dir=staging/initial_qc
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
+# Check to ensure there is a local copy of calling intervals
+if ! [ -e $staging_dir/calling_intervals ]; then
+  mkdir $staging_dir/calling_intervals
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/*.sharded.interval_list \
+    $staging_dir/calling_intervals/
+fi
+
+# Write .json of contig-specific scatter counts
+echo "{ " > $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
+while read contig; do
+  kc=$( fgrep -v "@" \
+          $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
+        | wc -l | awk '{ printf "%i\n", $1 }' )
+  echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
+done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+| paste -s -d\  | sed 's/,$//g' \
+>> $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
+echo " }" >> $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
+
 # Build chromosome-specific override json of VCFs and VCF indexes
 add_contig_vcfs_to_chromshard_overrides_json \
   $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
@@ -139,8 +159,14 @@ add_contig_vcfs_to_chromshard_overrides_json \
 cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "CollectVcfQcMetrics.benchmarking_shards": \$CONTIG_SCATTER_COUNT,
+  "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.easy.\$CONTIG.bed.gz",
+                                                  "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.hard.\$CONTIG.bed.gz"],
+  "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
+  "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
+  "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc.\$CONTIG",
@@ -152,6 +178,15 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.vcf_idxs": \$CONTIG_VCF_IDXS
 }
 EOF
+
+  "Array[File]? (optional)",
+  "CollectVcfQcMetrics.indel_site_benchmark_bed_idxs": "Array[File]? (optional)",
+  "CollectVcfQcMetrics.site_benchmark_dataset_names": "Array[String]? (optional)",
+  "CollectVcfQcMetrics.snv_site_benchmark_beds": "Array[File]? (optional)",
+  "CollectVcfQcMetrics.snv_site_benchmark_bed_idxs": "Array[File]? (optional)",
+  "CollectVcfQcMetrics.sv_site_benchmark_beds": "Array[File]? (optional)",
+  "CollectVcfQcMetrics.sv_site_benchmark_bed_idxs": "Array[File]? (optional)",
+
 
 # Submit, monitor, stage, and cleanup short variant QC metadata workflow
 code/scripts/manage_chromshards.py \
@@ -186,7 +221,7 @@ cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.n_records_per_shard": 10000,

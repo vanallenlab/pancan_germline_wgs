@@ -32,11 +32,8 @@ workflow CollectVcfQcMetrics {
     Float common_af_cutoff = 0.001              # Minimum AF for a variant to be included in common variant subsets
 
     Array[File]? snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File]? snv_site_benchmark_bed_idxs
     Array[File]? indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File]? indel_site_benchmark_bed_idxs
     Array[File]? sv_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File]? sv_site_benchmark_bed_idxs
     Array[String]? site_benchmark_dataset_names
 
     Array[File]? benchmark_interval_beds        # BED files of intervals to consider for benchmarking evaluation
@@ -308,11 +305,8 @@ workflow CollectVcfQcMetrics {
           source_sv_bed = CollapseAllSvs.merged_file,
           source_prefix = output_prefix,
           target_snv_bed = select_first([snv_site_benchmark_beds])[site_bench_idx],
-          target_snv_bed_idx = select_first([snv_site_benchmark_bed_idxs])[site_bench_idx],
           target_indel_bed = select_first([indel_site_benchmark_beds])[site_bench_idx],
-          target_indel_bed_idx = select_first([indel_site_benchmark_bed_idxs])[site_bench_idx],
           target_sv_bed = select_first([sv_site_benchmark_beds])[site_bench_idx],
-          target_sv_bed_idx = select_first([sv_site_benchmark_bed_idxs])[site_bench_idx],
           target_prefix = select_first([site_benchmark_dataset_names])[site_bench_idx],
           eval_interval_beds = select_first([benchmark_interval_beds]),
           eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
