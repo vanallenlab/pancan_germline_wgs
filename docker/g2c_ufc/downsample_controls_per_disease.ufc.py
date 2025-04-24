@@ -159,7 +159,7 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
     matched_controls = []
 
     # Iterate over ancestry + sex combinations in cases
-    for (pop, sex), case_group in cases.groupby(['intake_qc_pop', 'sex']):
+    for (pop, sex), case_group in cases.groupby(['intake_qc_pop', 'sex_karyotype']):
         case_count = len(case_group)
         max_controls = case_count * max_controls_per_case
         median_age = case_group['age'].median()
@@ -167,7 +167,7 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
         # Find matching controls for ancestry and sex
         potential_controls = controls[
             (controls['intake_qc_pop'] == pop) &
-            (controls['sex'] == sex)
+            (controls['sex_karyotype'] == sex)
         ].copy()
 
         if potential_controls.empty:
