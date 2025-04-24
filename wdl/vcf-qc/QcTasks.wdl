@@ -111,10 +111,9 @@ task ShardIntervals {
       -i intervals.prepped.bed.gz \
       -t $shard_size \
       --max-interval-size $shard_size \
-      --gatk-style \
-      -o stdout \
-    | bgzip -c \
-    > intervals.prepped.split.bed.gz
+      --bed-style \
+      -o intervals.prepped.split.bed
+    bgzip intervals.prepped.split.bed
 
     # Shard intervals
     k=1
@@ -124,19 +123,19 @@ task ShardIntervals {
       size=$(( $end - $start ))
 
       if [ $size -le $bp_remain ]; then
-        echo -e "$chrom\t$start\t$end" >> ~{prefix}.$k.bed
+        echo -e "$chrom\t$start\t$end" >> "~{prefix}.$k.bed"
         bp_remain=$(( $bp_remain - $size ))
 
       else
         new_end=$(( $start + $bp_remain ))
-        echo -e "$chrom\t$start\t$new_end" >> ~{prefix}.$k.bed
+        echo -e "$chrom\t$start\t$new_end" >> "~{prefix}.$k.bed"
         
         # Because we split all intervals to be <= shard_size above,
         # we know that the remainder must always be < shard_size
         ((k++))
         start=$new_end
         size=$(( $end - $start ))
-        echo -e "$chrom\t$start\t$end" >> ~{prefix}.$k.bed
+        echo -e "$chrom\t$start\t$end" >> "~{prefix}.$k.bed"
         bp_remain=$(( $shard_size - $size ))
       fi
 

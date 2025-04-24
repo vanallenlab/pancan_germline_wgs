@@ -118,9 +118,9 @@ gsutil cp \
   $MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/
 
 
-############################################
-# Collect initial short variant QC metrics #
-############################################
+##############################
+# Collect initial QC metrics #
+##############################
 
 # Note: this workflow is scattered across all five workspaces for max parallelization
 # It must be submitted as below in each workspace
@@ -138,7 +138,7 @@ if ! [ -e $staging_dir/calling_intervals ]; then
 fi
 
 # Write .json of contig-specific scatter counts
-echo "{ " > $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
+echo "{ " > $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
 while read contig; do
   kc=$( fgrep -v "@" \
           $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
@@ -146,18 +146,18 @@ while read contig; do
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
 done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
->> $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
-echo " }" >> $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json
+>> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
+echo " }" >> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
 
 # Build chromosome-specific override json of VCFs and VCF indexes
 add_contig_vcfs_to_chromshard_overrides_json \
-  $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
+  $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2 \
   filtered_vcfs \
   filtered_vcf_idxs
 
 # Write template input .json for short variant QC metric collection
-cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
+cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.benchmarking_shards": \$CONTIG_SCATTER_COUNT,
@@ -186,13 +186,13 @@ EOF
 # Submit, monitor, stage, and cleanup short variant QC metadata workflow
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
-  --input-json-template $staging_dir/CollectShortVariantQcMetrics.inputs.template.json \
-  --contig-variable-overrides $staging_dir/CollectShortVariantQcMetrics.contig_variable_overrides.json \
+  --input-json-template $staging_dir/CollectVcfQcMetrics.inputs.template.json \
+  --contig-variable-overrides $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json \
   --dependencies-zip g2c.dependencies.zip \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/ \
-  --name CollectInitialShortVariantQcMetrics \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/ \
+  --name CollectInitialVcfQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
-  --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollectVcfQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --no-cleanup \
   --hard-reset \
