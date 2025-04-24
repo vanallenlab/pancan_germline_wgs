@@ -381,16 +381,19 @@ task PrepSites {
     
     String prefix
 
-    Int? disk_gb
+    Int disk_gb = 25
     
     String g2c_analysis_docker
   }
 
+  parameter_meta {
+    beds: {
+      localization_optional: true
+    }
+  }
+
   Int loose_min_size = floor(min_size / lenient_size_scalar)
   Int loose_max_size = ceil(lenient_size_scalar * max_size)
-
-  Int default_disk_gb = ceil(5 * size(beds, "GB")) + 10
-  Int use_disk_gb = select_first([disk_gb, default_disk_gb])
 
   command <<<
     set -eu -o pipefail
@@ -429,7 +432,7 @@ task PrepSites {
     docker: g2c_analysis_docker
     memory: "1.75 GB"
     cpu: 1
-    disks: "local-disk ~{use_disk_gb} HDD"
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }

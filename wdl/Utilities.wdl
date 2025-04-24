@@ -231,57 +231,36 @@ task GetSamplesFromVcfHeader {
 }
 
 
-task IndexBed {
+task MakeTabixIndex {
   input {
-    File bed
+    File input_file
+    String file_type = "vcf"
     String docker
   }
 
-  Int disk_gb = ceil(1.25 * size(bed, "GB")) + 10
+  String outfile = basename(input_file, "gz") + "gz.tbi"
+  Int disk_gb = ceil(1.25 * size(input_file, "GB")) + 20
 
   command <<<
     set -eu -o pipefail
 
-    tabix -p bed -f ~{bed}
+    # Due to weirdness with call cacheing and where tabix writes 
+    # indexes by default, it seems safest to relocate the input
+    # file to the pwd before indexing it
+    
+    mv ~{input_file} ./
+    tabix -p ~{file_type} -f ~{basename(input_file)}
   >>>
 
   output {
-    File bed_idx = "~{bed}.tbi"
+    File tbi = "~{outfile}"
   }
 
   runtime {
     docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-  }
-}
-
-
-task IndexVcf {
-  input {
-    File vcf
-    String docker
-  }
-
-  Int disk_gb = ceil(1.25 * size(vcf, "GB")) + 10
-
-  command <<<
-    set -eu -o pipefail
-
-    tabix -p vcf -f ~{vcf}
-  >>>
-
-  output {
-    File vcf_idx = "~{vcf}.tbi"
-  }
-
-  runtime {
-    docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }

@@ -40,9 +40,9 @@ workflow ApplyScriptSingleVcf {
 
   # Index input VCF if necessary
   if (!defined(vcf_idx)) {
-    call Utilities.IndexVcf {
+    call Utilities.MakeTabixIndex as IndexVcf {
       input:
-        vcf = vcf,
+        input_file = vcf,
         docker = bcftools_docker
     }
   }
@@ -50,7 +50,7 @@ workflow ApplyScriptSingleVcf {
   call Parallelize.ApplyScript as ApplyScript {
     input:
       vcf = vcf,
-      vcf_idx = vcf_idx,
+      vcf_idx = select_first([vcf_idx, IndexVcf.tbi]),
       script = script,
       exec_prefix = exec_prefix,
       script_options = script_options,

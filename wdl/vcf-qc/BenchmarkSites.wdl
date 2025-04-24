@@ -40,48 +40,54 @@ workflow BenchmarkSites {
 
   # Index SNV BEDs
   if ( defined(source_snv_bed) ){
-    call Utils.IndexBed as IndexSourceSnvs {
+    call Utils.MakeTabixIndex as IndexSourceSnvs {
       input:
-        bed = select_first([source_snv_bed]),
+        input_file = select_first([source_snv_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
   if ( defined(target_snv_bed) ){
-    call Utils.IndexBed as IndexTargetSnvs {
+    call Utils.MakeTabixIndex as IndexTargetSnvs {
       input:
-        bed = select_first([target_snv_bed]),
+        input_file = select_first([target_snv_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
 
   # Index indel BEDs
   if ( defined(source_indel_bed) ){
-    call Utils.IndexBed as IndexSourceIndels {
+    call Utils.MakeTabixIndex as IndexSourceIndels {
       input:
-        bed = select_first([source_indel_bed]),
+        input_file = select_first([source_indel_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
   if ( defined(target_indel_bed) ){
-    call Utils.IndexBed as IndexTargetIndels {
+    call Utils.MakeTabixIndex as IndexTargetIndels {
       input:
-        bed = select_first([target_indel_bed]),
+        input_file = select_first([target_indel_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
 
   # Index SV BEDs
   if ( defined(source_sv_bed) ){
-    call Utils.IndexBed as IndexSourceSvs {
+    call Utils.MakeTabixIndex as IndexSourceSvs {
       input:
-        bed = select_first([source_sv_bed]),
+        input_file = select_first([source_sv_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
   if ( defined(target_sv_bed) ){
-    call Utils.IndexBed as IndexTargetSvs {
+    call Utils.MakeTabixIndex as IndexTargetSvs {
       input:
-        bed = select_first([target_sv_bed]),
+        input_file = select_first([target_sv_bed]),
+        file_type = "bed",
         docker = bcftools_docker
     }
   }
@@ -103,17 +109,17 @@ workflow BenchmarkSites {
         eval_interval_bed = eval_bed,
         genome_file = genome_file,
         source_snv_bed = source_snv_bed,
-        source_snv_bed_idx = IndexSourceSnvs.bed_idx,
+        source_snv_bed_idx = IndexSourceSnvs.tbi,
         target_snv_bed = target_snv_bed,
-        target_snv_bed_idx = IndexTargetSnvs.bed_idx,
+        target_snv_bed_idx = IndexTargetSnvs.tbi,
         source_indel_bed = source_indel_bed,
-        source_indel_bed_idx = IndexSourceIndels.bed_idx,
+        source_indel_bed_idx = IndexSourceIndels.tbi,
         target_indel_bed = target_indel_bed,
-        target_indel_bed_idx = IndexTargetIndels.bed_idx,
+        target_indel_bed_idx = IndexTargetIndels.tbi,
         source_sv_bed = source_sv_bed,
-        source_sv_bed_idx = IndexSourceSvs.bed_idx,
+        source_sv_bed_idx = IndexSourceSvs.tbi,
         target_sv_bed = target_sv_bed,
-        target_sv_bed_idx = IndexTargetSvs.bed_idx,
+        target_sv_bed_idx = IndexTargetSvs.tbi,
         eval_prefix = eval_name,
         source_prefix = source_prefix,
         target_prefix = target_prefix,

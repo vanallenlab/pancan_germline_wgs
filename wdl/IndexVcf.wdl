@@ -16,20 +16,20 @@ import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/w
 workflow IndexVcf {
   input {
     File vcf
-    Boolean copy_index_to_bam_bucket = false
+    Boolean copy_index_to_vcf_bucket = false
     String docker = "vanallenlab/g2c_pipeline:latest"
   }
 
-  call Utilities.IndexVcf {
+  call Utilities.MakeTabixIndex as IndexVcf {
      input:
-       vcf = vcf,
+       input_file = vcf,
        docker = docker
    }
 
-  if (copy_index_to_bam_bucket) {
+  if (copy_index_to_vcf_bucket) {
     call IndexBam.CopyIndex {
       input:
-        bai = IndexVcf.vcf_idx,
+        bai = IndexVcf.tbi,
         bam = vcf,
         suffix = "tbi",
         docker = docker
@@ -37,7 +37,7 @@ workflow IndexVcf {
   }
   
   output {
-    File vcf_index = select_first([CopyIndex.bai_copy, IndexVcf.vcf_idx])
+    File vcf_index = select_first([CopyIndex.bai_copy, IndexVcf.tbi])
   }
 }
 
