@@ -64,7 +64,6 @@ def initial_filter(df,min_age=0,max_age=200,sex_karyotypes={"XX","XY"},apparent_
     df = df[df['apparent_aneuploidies'].isin(apparent_aneuploidies)]
     df = df[df['age'] >= min_age]
     df = df[df['age'] <= max_age]
-    df.to_csv("blah.tsv",sep='\t',index=False)
     return df
 
 def dfs_independent_set(G, node_list, selected, best, cancer_status):
@@ -135,6 +134,72 @@ def maximal_non_related_subset_dfs(family, kinship_file, meta):
     dfs_independent_set(G, node_list, selected, best, cancer_status)
 
     return best[0]
+
+def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 3, seed: int = 42) -> pd.DataFrame:
+    """
+    Match controls to cases based on ancestry (intake_qc_pop), sex, and cohort if available.
+    Try to balance age within each matched group.
+    
+    Parameters:
+        meta: DataFrame with at least ['cancer', 'intake_qc_pop', 'sex', 'age', 'cohort']
+        max_controls_per_case: Max number of controls to retain per case (default: 3)
+        seed: Seed for reproducible sampling
+
+    Returns:
+        DataFrame of all cases and matched controls.
+    """
+    np.random.seed(seed)
+
+    # Define control and case status
+    is_control = meta['cancer'].str.lower().str.contains('control')
+    is_case = ~meta['cancer'].isin(['control', 'unknown'])
+
+    cases = meta[is_case].copy()
+    controls = meta[is_control].copy()
+    matched_controls = []
+
+    # Iterate over ancestry + sex combinations in cases
+    for (pop, sex), case_group in cases.groupby(['intake_qc_pop', 'sex']):
+        case_count = len(case_group)
+        max_controls = case_count * max_controls_per_case
+        median_age = case_group['age'].median()
+
+        # Find matching controls for ancestry and sex
+        potential_controls = controls[
+            (controls['intake_qc_pop'] == pop) &
+            (controls['sex'] == sex)
+        ].copy()
+
+        if potential_controls.empty:
+            continue
+
+        # Prefer controls from same cohort if possible
+        matched_from_cohort = []
+        for cohort in case_group['cohort'].unique():
+            controls_in_cohort = potential_controls[potential_controls['cohort'] == cohort].copy()
+            if controls_in_cohort.empty:
+                continue
+
+            controls_in_cohort['age_diff'] = (controls_in_cohort['age'] - median_age).abs()
+            controls_in_cohort = controls_in_cohort.sort_values('age_diff')
+            matched_from_cohort.append(controls_in_cohort)
+
+        # Combine cohort-matched and fallback to any remaining controls
+        combined_candidates = pd.concat(matched_from_cohort + [potential_controls], ignore_index=True).drop_duplicates()
+        combined_candidates['age_diff'] = (combined_candidates['age'] - median_age).abs()
+
+        selected = (
+            combined_candidates
+            .sort_values('age_diff')
+            .head(max_controls)
+        )
+        matched_controls.append(selected)
+
+    # Combine everything
+    matched_controls_df = pd.concat(matched_controls, ignore_index=True)
+    final_meta = pd.concat([cases, matched_controls_df], ignore_index=True)
+
+    return final_meta
 
 
 def main():
@@ -219,6 +284,12 @@ def main():
     with open(args.log_file, "a") as f:
         f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes}.\n")
 
+    # Downsample controls to match on cases ancestry
+    meta = match_controls_by_ancestry(meta)
+    sample_size5 = len(meta)
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tMatched by ancestry allowing 3x controls as cases per ancestry.\n")
+
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
     non_familial_set = extract_non_familial_set(samples=set(meta['original_id']),kinship_file=args.kinship)
@@ -232,9 +303,9 @@ def main():
     # Filter our data to our maximal unrelated set of individuals
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
 
-    sample_size5 = len(meta)
+    sample_size6 = len(meta)
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tExcluded due to relatedness with other individuals.\n")
+        f.write(f"{sample_size6}\t{(sample_size5 - sample_size6)}\t{round(((sample_size5 - sample_size6)/sample_size5),3) * 100}\tExcluded due to relatedness with other individuals.\n")
 
     
     ## Print Summary Statistics
