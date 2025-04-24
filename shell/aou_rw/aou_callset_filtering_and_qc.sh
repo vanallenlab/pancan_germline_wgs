@@ -137,13 +137,15 @@ if ! [ -e $staging_dir/calling_intervals ]; then
     $staging_dir/calling_intervals/
 fi
 
-# Write .json of contig-specific scatter counts
+# Initialize .json of contig-specific overrieds for SV VCF paths and scatter counts
 echo "{ " > $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
 while read contig; do
   kc=$( fgrep -v "@" \
           $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
         | wc -l | awk '{ printf "%i\n", $1 }' )
-  echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
+  echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc,"
+  echo "\"CONTIG_VCFS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.posthoc_filtered.vcf.gz\"],"
+  echo "\"CONTIG_VCF_IDXS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi\"] },"
 done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
@@ -200,59 +202,6 @@ code/scripts/manage_chromshards.py \
   --max-attempts 2
 
 
-#################################
-# Collect initial SV QC metrics #
-#################################
-
-# Note: this workflow is scattered across all five workspaces for max parallelization
-# It must be submitted as below in each workspace
-
-# Reaffirm staging directory
-staging_dir=staging/initial_qc
-if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
-
-# Write template input .json for short variant QC metric collection
-cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
-{
-  "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "CollectVcfQcMetrics.benchmarking_shards": 25,
-  "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.easy.\$CONTIG.bed.gz",
-                                                  "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.hard.\$CONTIG.bed.gz"],
-  "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
-  "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
-  "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
-  "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
-  "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-  "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
-  "CollectVcfQcMetrics.n_records_per_shard": 10000,
-  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc.\$CONTIG",
-  "CollectVcfQcMetrics.shard_vcf": true,
-  "CollectVcfQcMetrics.site_benchmark_dataset_names": ["gnomad_v4"],
-  "CollectVcfQcMetrics.snv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.snv.sites.bed.gz"],
-  "CollectVcfQcMetrics.sv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.sv.sites.bed.gz"],
-  "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
-  "CollectVcfQcMetrics.vcfs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz"],
-  "CollectVcfQcMetrics.vcf_idxs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi"]
-}
-EOF
-
-# Submit, monitor, stage, and cleanup SV QC metadata workflow
-code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
-  --input-json-template $staging_dir/CollectSVQcMetrics.inputs.template.json \
-  --dependencies-zip g2c.dependencies.zip \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/ \
-  --name CollectInitialSvQcMetrics \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
-  --status-tsv cromshell/progress/dfci-g2c.v1.CollectSvQcMetrics.initial_qc.progress.tsv \
-  --workflow-id-log-prefix "dfci-g2c.v1" \
-  --no-cleanup \
-  --hard-reset \
-  --outer-gate 30 \
-  --max-attempts 2
-
-
 ##########################################
 # Analyze & visualize initial QC metrics #
 ##########################################
@@ -272,25 +221,18 @@ for key in size_distrib af_distrib size_vs_af_distrib \
 done
 for k in $( seq 1 22 ) X Y; do
   
-  # Localize output tracker jsons
+  # Localize output tracker json and get URIs for QC metrics
+  json_fname=CollectInitialVcfQcMetrics.chr$k.outputs.json
   gsutil cp \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/ShortVariantMetrics/chr$k/CollectInitialShortVariantQcMetrics.chr$k.outputs.json \
-    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/SVMetrics/chr$k/CollectInitialSvQcMetrics.chr$k.outputs.json \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/chr$k/$json_fname \
     $staging_dir/
-
-  # Get URIs for QC metrics
-  for jprefix in CollectInitialShortVariantQcMetrics CollectInitialSvQcMetrics; do
-    json=$staging_dir/$jprefix.chr$k.outputs.json
-    for key in size_distrib af_distrib size_vs_af_distrib \
-               all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
-      jq .$key $json | fgrep -xv "null" | tr -d '"' >> $staging_dir/$key.uris.list
-    done
+  for key in size_distrib af_distrib size_vs_af_distrib \
+             all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
+    jq .$key $staging_dir/$json_fname | fgrep -xv "null" | tr -d '"' >> $staging_dir/$key.uris.list
   done
 
-  # Clear local copies of output tracker jsons
-  rm \
-    $staging_dir/CollectInitialShortVariantQcMetrics.chr$k.outputs.json \
-    $staging_dir/CollectInitialSvQcMetrics.chr$k.outputs.json
+  # Clear local copy of output tracker json
+  rm $staging_dir/$json_fname
 done
 
 # Write input .json for short variant QC metric collection
@@ -303,8 +245,8 @@ cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d2eae38",
-  "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
+  "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
   "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )
 }

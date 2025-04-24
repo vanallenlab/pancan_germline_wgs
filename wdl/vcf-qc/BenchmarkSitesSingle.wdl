@@ -10,7 +10,7 @@
 # Expects that both callsets have already been processed by CollectVcfQcMetrics.wdl
 
 
-version 1.1
+version 1.0
 
 
 import "QcTasks.wdl" as QcTasks

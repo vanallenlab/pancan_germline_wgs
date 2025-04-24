@@ -19,12 +19,14 @@ from sys import stdin, stdout
 
 def update(d, u):
     """
-    Union-style dictionary update for nested dictionaries
-    Taken from https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
+    Nuanced dictionary update function for handling nested dictionaries
+    Adopted from https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
     """
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):
             d[k] = update(d.get(k, {}), v)
+        elif isinstance(v, list):
+            d[k] = d.get(k, []) + v
         else:
             d[k] = v
     return d
@@ -42,7 +44,8 @@ def main():
     parser.add_argument('-o', '--output-json', help='output .json', default='stdout')
     parser.add_argument('--hard-overwrite', default=False, action='store_true',
                         help='Overwrite all values for overlapping keys. ' +
-                        '[Default: take the union of all nested objects]')
+                        '[Default: only hard-overwrite shared keys within ' +
+                        'nested objects]')
     args = parser.parse_args()
 
     # Open and read contents of input json

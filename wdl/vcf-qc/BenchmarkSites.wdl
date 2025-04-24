@@ -8,7 +8,7 @@
 # Expects that both callsets have already been processed by CollectVcfQcMetrics.wdl
 
 
-version 1.1
+version 1.0
 
 
 import "BenchmarkSitesSingle.wdl" as BenchSingle
@@ -18,19 +18,13 @@ import "Utilities.wdl" as Utils
 workflow BenchmarkSites {
   input {
     File? source_snv_bed
-    File? source_snv_bed_idx
     File? source_indel_bed
-    File? source_indel_bed_idx
     File? source_sv_bed
-    File? source_sv_bed_idx
     String source_prefix
 
     File? target_snv_bed
-    File? target_snv_bed_idx
     File? target_indel_bed
-    File? target_indel_bed_idx
     File? target_sv_bed
-    File? target_sv_bed_idx
     String target_prefix
 
     Array[File] eval_interval_beds
@@ -44,71 +38,53 @@ workflow BenchmarkSites {
     String g2c_analysis_docker
   }
 
-  # Index SNV BEDs as necessary
-  if ( defined(source_snv_bed) && !defined(source_snv_bed_idx) ){
+  # Index SNV BEDs
+  if ( defined(source_snv_bed) ){
     call Utils.IndexBed as IndexSourceSnvs {
       input:
         bed = select_first([source_snv_bed]),
         docker = bcftools_docker
     }
   }
-  File? source_snv_bed_idx_use = if defined(source_snv_bed) 
-                                 then select_first([source_snv_bed_idx, IndexSourceSnvs.bed_idx])
-                                 else None
-  if ( defined(target_snv_bed) && !defined(target_snv_bed_idx) ){
+  if ( defined(target_snv_bed) ){
     call Utils.IndexBed as IndexTargetSnvs {
       input:
         bed = select_first([target_snv_bed]),
         docker = bcftools_docker
     }
   }
-  File? target_snv_bed_idx_use = if defined(target_snv_bed) 
-                                 then select_first([target_snv_bed_idx, IndexTargetSnvs.bed_idx])
-                                 else None
 
-  # Index indel BEDs as necessary
-  if ( defined(source_indel_bed) && !defined(source_indel_bed_idx) ){
+  # Index indel BEDs
+  if ( defined(source_indel_bed) ){
     call Utils.IndexBed as IndexSourceIndels {
       input:
         bed = select_first([source_indel_bed]),
         docker = bcftools_docker
     }
   }
-  File? source_indel_bed_idx_use = if defined(source_indel_bed) 
-                                   then select_first([source_indel_bed_idx, IndexSourceIndels.bed_idx])
-                                   else None
-  if ( defined(target_indel_bed) && !defined(target_indel_bed_idx) ){
+  if ( defined(target_indel_bed) ){
     call Utils.IndexBed as IndexTargetIndels {
       input:
         bed = select_first([target_indel_bed]),
         docker = bcftools_docker
     }
   }
-  File? target_indel_bed_idx_use = if defined(target_indel_bed) 
-                                   then select_first([target_indel_bed_idx, IndexTargetIndels.bed_idx])
-                                   else None
 
-  # Index SV BEDs as necessary
-  if ( defined(source_sv_bed) && !defined(source_sv_bed_idx) ){
+  # Index SV BEDs
+  if ( defined(source_sv_bed) ){
     call Utils.IndexBed as IndexSourceSvs {
       input:
         bed = select_first([source_sv_bed]),
         docker = bcftools_docker
     }
   }
-  File? source_sv_bed_idx_use = if defined(source_sv_bed) 
-                                then select_first([source_sv_bed_idx, IndexSourceSvs.bed_idx])
-                                else None
-  if ( defined(target_sv_bed) && !defined(target_sv_bed_idx) ){
+  if ( defined(target_sv_bed) ){
     call Utils.IndexBed as IndexTargetSvs {
       input:
         bed = select_first([target_sv_bed]),
         docker = bcftools_docker
     }
   }
-  File? target_sv_bed_idx_use = if defined(target_sv_bed) 
-                                then select_first([target_sv_bed_idx, IndexTargetSvs.bed_idx])
-                                else None
 
   Int n_eval_beds = length(eval_interval_beds)
   Int shards_per_eval_bed = floor(total_shards / n_eval_beds)
@@ -127,17 +103,17 @@ workflow BenchmarkSites {
         eval_interval_bed = eval_bed,
         genome_file = genome_file,
         source_snv_bed = source_snv_bed,
-        source_snv_bed_idx = source_snv_bed_idx_use,
+        source_snv_bed_idx = IndexSourceSnvs.bed_idx,
         target_snv_bed = target_snv_bed,
-        target_snv_bed_idx = target_snv_bed_idx_use,
+        target_snv_bed_idx = IndexTargetSnvs.bed_idx,
         source_indel_bed = source_indel_bed,
-        source_indel_bed_idx = source_indel_bed_idx_use,
+        source_indel_bed_idx = IndexSourceIndels.bed_idx,
         target_indel_bed = target_indel_bed,
-        target_indel_bed_idx = target_indel_bed_idx_use,
+        target_indel_bed_idx = IndexTargetIndels.bed_idx,
         source_sv_bed = source_sv_bed,
-        source_sv_bed_idx = source_sv_bed_idx_use,
+        source_sv_bed_idx = IndexSourceSvs.bed_idx,
         target_sv_bed = target_sv_bed,
-        target_sv_bed_idx = target_sv_bed_idx_use,
+        target_sv_bed_idx = IndexTargetSvs.bed_idx,
         eval_prefix = eval_name,
         source_prefix = source_prefix,
         target_prefix = target_prefix,

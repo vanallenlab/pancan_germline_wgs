@@ -6,7 +6,7 @@
 # Generic WDL tasks used for VCF quality control
 
 
-version 1.1
+version 1.0
 
 
 task CollectSiteMetrics {
@@ -175,7 +175,7 @@ task SumCompressedDistribs {
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/sum_compressed_distribs.py \
       -o "~{out_prefix}.merged.tsv" \
       -k ~{n_key_columns} \
-      ~{sep(" ", distrib_tsvs)}
+      ~{sep=" " distrib_tsvs}
     gzip -f "~{out_prefix}.merged.tsv"
   >>>
 

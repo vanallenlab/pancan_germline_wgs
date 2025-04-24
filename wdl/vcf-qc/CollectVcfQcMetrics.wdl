@@ -6,7 +6,7 @@
 # Collect quality metrics for assessing a GATK joint-genotyped VCF (SNVs/indels and/or SVs)
 
 
-version 1.1
+version 1.0
 
 
 import "BenchmarkSites.wdl" as BenchSites
@@ -31,10 +31,10 @@ workflow CollectVcfQcMetrics {
 
     Float common_af_cutoff = 0.001              # Minimum AF for a variant to be included in common variant subsets
 
-    Array[File]? snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File]? indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File]? sv_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[String]? site_benchmark_dataset_names
+    Array[File?] snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] sv_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[String?] site_benchmark_dataset_names
 
     Array[File]? benchmark_interval_beds        # BED files of intervals to consider for benchmarking evaluation
     Array[String]? benchmark_interval_bed_names # Descriptive names for each set of evaluation intervals
@@ -294,9 +294,9 @@ workflow CollectVcfQcMetrics {
   #########################
 
   # Compute site-level benchmarking metrics
-  Int n_site_benchmark_datasets = if defined(site_benchmark_dataset_names) then length(select_first([site_benchmark_dataset_names])) else 0
+  Int n_site_benchmark_datasets = length(site_benchmark_dataset_names)
 
-  if ( defined(site_benchmark_dataset_names) ) {
+  if ( n_site_benchmark_datasets > 0 ) {
     scatter ( site_bench_idx in range(n_site_benchmark_datasets) ) {
       call BenchSites.BenchmarkSites {
         input:
@@ -304,10 +304,10 @@ workflow CollectVcfQcMetrics {
           source_indel_bed = CollapseAllIndels.merged_file,
           source_sv_bed = CollapseAllSvs.merged_file,
           source_prefix = output_prefix,
-          target_snv_bed = select_first([snv_site_benchmark_beds])[site_bench_idx],
-          target_indel_bed = select_first([indel_site_benchmark_beds])[site_bench_idx],
-          target_sv_bed = select_first([sv_site_benchmark_beds])[site_bench_idx],
-          target_prefix = select_first([site_benchmark_dataset_names])[site_bench_idx],
+          target_snv_bed = select_all(snv_site_benchmark_beds)[site_bench_idx],
+          target_indel_bed = select_all(indel_site_benchmark_beds)[site_bench_idx],
+          target_sv_bed = select_all(sv_site_benchmark_beds)[site_bench_idx],
+          target_prefix = select_all(site_benchmark_dataset_names)[site_bench_idx],
           eval_interval_beds = select_first([benchmark_interval_beds]),
           eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
           genome_file = select_first([genome_file]),
@@ -522,7 +522,7 @@ task PreprocessVcf {
     set -eu -o pipefail
 
     # Define superset of samples whose GTs we need for subsequent analysis
-    cat ~{sep(" ", all_sample_lists)} | sort -V | uniq > all.samples.list
+    cat ~{sep=" " all_sample_lists} | sort -V | uniq > all.samples.list
 
     # Preprocess VCF
     bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
