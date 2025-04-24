@@ -199,7 +199,7 @@ code/scripts/manage_chromshards.py \
   --no-cleanup \
   --hard-reset \
   --outer-gate 30 \
-  --max-attempts 2
+  --max-attempts 1
 
 
 ##########################################

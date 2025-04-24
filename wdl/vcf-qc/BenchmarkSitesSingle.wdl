@@ -414,7 +414,7 @@ task PrepSites {
     > ~{prefix}.ref.bed.gz
 
     # Further filter the lenient "ref" set to produce a strict "query" set
-    /opt/pancancer_wgs/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
       -i ~{prefix}.ref.bed.gz \
       -t ~{eval_interval_bed} \
       -f ~{strict_interval_coverage} \
