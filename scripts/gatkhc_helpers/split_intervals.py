@@ -229,7 +229,7 @@ def main():
                         help='Write output as BED intervals with 0-based coordinates ' +
                         '[default: write Picard-style intervals with header]')
     parser.add_argument('-o', '--output-intervals', required=True,
-                        help='Path to output .interval_list', default='stdin')
+                        help='Path to output .interval_list', default='stdout')
     parser.add_argument('-v', '--verbose', action='store_true', help='Print ' +
                         'diagnostic logging to stdout')
     args = parser.parse_args()

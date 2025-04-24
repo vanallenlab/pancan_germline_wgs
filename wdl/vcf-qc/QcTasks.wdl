@@ -109,8 +109,8 @@ task ShardIntervals {
     # Ensure no interval is larger than shard_size
     /opt/pancan_germline_wgs/scripts/gatkhc_helpers/split_intervals.py \
       -i intervals.prepped.bed.gz \
-      -t ~{shard_size} \
-      --max-interval-size ~{shard_size} \
+      -t $shard_size \
+      --max-interval-size $shard_size \
       --gatk-style \
       -o stdout \
     | bgzip -c \
@@ -118,7 +118,7 @@ task ShardIntervals {
 
     # Shard intervals
     k=1
-    bp_remain=~{shard_size}
+    bp_remain=$shard_size
     while read chrom start end; do
 
       size=$(( $end - $start ))
@@ -137,12 +137,12 @@ task ShardIntervals {
         start=$new_end
         size=$(( $end - $start ))
         echo -e "$chrom\t$start\t$end" >> ~{prefix}.$k.bed
-        bp_remain=$(( ~{shard_size} - $size ))
+        bp_remain=$(( $shard_size - $size ))
       fi
 
     done < <( zcat intervals.prepped.split.bed.gz )
     
-    bgzip ~{prefix}.*.bed
+    find ./ -name "~{prefix}.*.bed" | xargs -I {} bgzip {}
   >>>
 
   output {

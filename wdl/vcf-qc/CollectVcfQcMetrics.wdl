@@ -9,6 +9,7 @@
 version 1.0
 
 
+import "BenchmarkSites.wdl" as BenchSites
 import "QcTasks.wdl" as QcTasks
 import "Utilities.wdl" as Utils
 
@@ -18,17 +19,30 @@ workflow CollectVcfQcMetrics {
     Array[File] vcfs
     Array[File] vcf_idxs
 
-    File? trios_fam_file                       # .fam file of known families for Mendelian transmission analyses
-    File? sample_priority_list                 # Rank-ordered list of samples to retain for sample-level analyses
-    Int n_for_sample_level_analyses = 1000     # Number of samples to use for sample-level summary analyses
+    File? trios_fam_file                        # .fam file of known families for Mendelian transmission analyses
+    File? sample_priority_list                  # Rank-ordered list of samples to retain for sample-level analyses
+    Int n_for_sample_level_analyses = 1000      # Number of samples to use for sample-level summary analyses
 
-    Boolean shard_vcf = true                   # Should the input VCF be sharded for QC collection?
-    File? scatter_intervals_list               # GATK-style intervals file for scattering over vcf 
-                                               # (any tabix-compliant interval definitions should work)
-    Int n_records_per_shard = 25000            # Number of records per shard. This will only be used as a backup if 
-                                               # scatter_intervals_list is not provided and shard_vcf is true
+    Boolean shard_vcf = true                    # Should the input VCF be sharded for QC collection?
+    File? scatter_intervals_list                # GATK-style intervals file for scattering over vcf 
+                                                # (any tabix-compliant interval definitions should work)
+    Int n_records_per_shard = 25000             # Number of records per shard. This will only be used as a backup if 
+                                                # scatter_intervals_list is not provided and shard_vcf is true
 
-    Float common_af_cutoff = 0.001             # Minimum AF for a variant to be included in common variant subsets
+    Float common_af_cutoff = 0.001              # Minimum AF for a variant to be included in common variant subsets
+
+    Array[File]? snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File]? snv_site_benchmark_bed_idxs
+    Array[File]? indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File]? indel_site_benchmark_bed_idxs
+    Array[File]? sv_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File]? sv_site_benchmark_bed_idxs
+    Array[String]? site_benchmark_dataset_names
+
+    Array[File]? benchmark_interval_beds        # BED files of intervals to consider for benchmarking evaluation
+    Array[String]? benchmark_interval_bed_names # Descriptive names for each set of evaluation intervals
+    File? genome_file                           # BEDTools-style .genome file
+    Int benchmarking_shards = 2500              # Number of parallel tasks to use for site benchmarking
 
     String output_prefix
 
@@ -157,9 +171,9 @@ workflow CollectVcfQcMetrics {
     }
   }
 
-  #####################
-  ### METRIC COLLECTION
-  #####################
+  ###########################
+  ### BASIC METRIC COLLECTION
+  ###########################
 
   Array[File] site_vcf_shards = flatten(PreprocessVcf.sites_vcf)
   Array[File] site_vcf_shard_idxs = flatten(PreprocessVcf.sites_vcf_idx)
@@ -178,9 +192,6 @@ workflow CollectVcfQcMetrics {
         g2c_analysis_docker = g2c_analysis_docker
     }
 
-    # Compute site-level benchmarking metrics
-    # TODO: implement this
-
     # Compute sample-level metrics
     # TODO: implement this
 
@@ -191,21 +202,17 @@ workflow CollectVcfQcMetrics {
     # TODO: implement this
   }
 
-  ##################
-  ### OUTPUT CLEANUP
-  ##################
-
-  # Collapse all SV sites
-  Array[File] all_sv_beds = select_all(CollectSiteMetrics.sv_sites)
-  if ( length(all_sv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseAllSvs {
+  # Collapse all SNV sites
+  Array[File] all_snv_beds = select_all(CollectSiteMetrics.snv_sites)
+  if ( length(all_snv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseAllSnvs {
       input:
-        shards = all_sv_beds,
+        shards = all_snv_beds,
         concat_command = "zcat",
         sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
         compression_command = "bgzip -c",
         input_has_header = true,
-        output_filename = output_prefix + ".all_svs.bed.gz",
+        output_filename = output_prefix + ".all_snvs.bed.gz",
         docker = bcftools_docker
       }
   }
@@ -225,6 +232,21 @@ workflow CollectVcfQcMetrics {
       }
   }
 
+  # Collapse all indel sites
+  Array[File] all_indel_beds = select_all(CollectSiteMetrics.indel_sites)
+  if ( length(all_indel_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseAllIndels {
+      input:
+        shards = all_indel_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".all_indels.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+
   # Collapse common indel sites
   Array[File] common_indel_beds = select_all(CollectSiteMetrics.common_indel_sites)
   if ( length(common_indel_beds) > 0 ) {
@@ -236,6 +258,21 @@ workflow CollectVcfQcMetrics {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = output_prefix + ".common_indels.bed.gz",
+        docker = bcftools_docker
+      }
+  }
+
+  # Collapse all SV sites
+  Array[File] all_sv_beds = select_all(CollectSiteMetrics.sv_sites)
+  if ( length(all_sv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseAllSvs {
+      input:
+        shards = all_sv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".all_svs.bed.gz",
         docker = bcftools_docker
       }
   }
@@ -254,6 +291,44 @@ workflow CollectVcfQcMetrics {
         docker = bcftools_docker
       }
   }
+
+  #########################
+  ### EXTERNAL BENCHMARKING
+  #########################
+
+  # Compute site-level benchmarking metrics
+  Int n_site_benchmark_datasets = if defined(site_benchmark_dataset_names) then length(select_first([site_benchmark_dataset_names])) else 0
+
+  if ( defined(site_benchmark_dataset_names) ) {
+    scatter ( site_bench_idx in range(n_site_benchmark_datasets) ) {
+      call BenchSites.BenchmarkSites {
+        input:
+          source_snv_bed = CollapseAllSnvs.merged_file,
+          source_indel_bed = CollapseAllIndels.merged_file,
+          source_sv_bed = CollapseAllSvs.merged_file,
+          source_prefix = output_prefix,
+          target_snv_bed = select_first([snv_site_benchmark_beds])[site_bench_idx],
+          target_snv_bed_idx = select_first([snv_site_benchmark_bed_idxs])[site_bench_idx],
+          target_indel_bed = select_first([indel_site_benchmark_beds])[site_bench_idx],
+          target_indel_bed_idx = select_first([indel_site_benchmark_bed_idxs])[site_bench_idx],
+          target_sv_bed = select_first([sv_site_benchmark_beds])[site_bench_idx],
+          target_sv_bed_idx = select_first([sv_site_benchmark_bed_idxs])[site_bench_idx],
+          target_prefix = select_first([site_benchmark_dataset_names])[site_bench_idx],
+          eval_interval_beds = select_first([benchmark_interval_beds]),
+          eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
+          genome_file = select_first([genome_file]),
+          total_shards = benchmarking_shards,
+          common_af_cutoff = common_af_cutoff,
+          bcftools_docker = bcftools_docker,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
+  
+
+  ##################
+  ### OUTPUT CLEANUP
+  ##################
 
   # Collapse size distributions
   call QcTasks.SumCompressedDistribs as SumSizeDistribs {
@@ -281,6 +356,8 @@ workflow CollectVcfQcMetrics {
   }
 
   output {
+    File? all_snvs_bed = CollapseAllSnvs.merged_file
+    File? all_indels_bed = CollapseAllIndels.merged_file
     File? all_svs_bed = CollapseAllSvs.merged_file
     File? common_snvs_bed = CollapseCommonSnvs.merged_file
     File? common_indels_bed = CollapseCommonIndels.merged_file
@@ -289,6 +366,17 @@ workflow CollectVcfQcMetrics {
     File size_distrib = SumSizeDistribs.merged_distrib
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
+
+    Array[Array[File?]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
+    Array[Array[File?]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds
+    Array[Array[File?]]? site_benchmark_common_indel_ppv_beds = BenchmarkSites.common_indel_ppv_beds
+    Array[Array[File?]]? site_benchmark_common_indel_sens_beds = BenchmarkSites.common_indel_sens_beds
+    Array[Array[File?]]? site_benchmark_common_sv_ppv_beds = BenchmarkSites.common_sv_ppv_beds
+    Array[Array[File?]]? site_benchmark_common_sv_sens_beds = BenchmarkSites.common_sv_sens_beds
+    Array[Array[File]]? site_benchmark_ppv_by_sizes = BenchmarkSites.ppv_by_sizes
+    Array[Array[File]]? site_benchmark_sensitivity_by_sizes = BenchmarkSites.sensitivity_by_sizes
+    Array[Array[File]]? site_benchmark_ppv_by_freqs = BenchmarkSites.ppv_by_freqs
+    Array[Array[File]]? site_benchmark_sensitivity_by_freqs = BenchmarkSites.sensitivity_by_freqs
   }
 }
 
