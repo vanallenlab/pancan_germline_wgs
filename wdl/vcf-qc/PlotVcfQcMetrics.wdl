@@ -7,7 +7,7 @@
 # See CollectVcfQcMetrics.wdl for the generation of inputs for this workflow
 
 
-version 1.0
+version 1.1
 
 
 import "QcTasks.wdl" as QcTasks

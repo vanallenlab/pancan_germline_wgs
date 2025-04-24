@@ -6,7 +6,7 @@
 # Collect quality metrics for assessing a GATK joint-genotyped VCF (SNVs/indels and/or SVs)
 
 
-version 1.0
+version 1.1
 
 
 import "BenchmarkSites.wdl" as BenchSites
@@ -430,7 +430,6 @@ task CleanFam {
     cpu: 2
     disks: "local-disk 20 HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -456,11 +455,11 @@ task ChooseTargetSamples {
     if [ ~{defined(sample_priority_list)} == "true" ]; then
       fgrep \
         -xf ~{all_samples_list} \
-        ~{default="" sample_priority_list} \
+        ~{select_first([sample_priority_list, ""])} \
       | head -n ~{n_samples} \
       >> "~{outfile}" || true
       fgrep \
-        -xvf ~{default="" sample_priority_list} \
+        -xvf ~{select_first([sample_priority_list, ""])} \
         ~{all_samples_list} \
       > remainder.samples.list
     else
@@ -490,7 +489,6 @@ task ChooseTargetSamples {
     cpu: 2
     disks: "local-disk 20 HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -515,7 +513,6 @@ task PreprocessVcf {
 
   Array[File] all_sample_lists = select_all([trio_samples, target_samples, benchmarking_samples])
 
-  String outfile = out_prefix + ".vcf.gz"
   String sites_outfile = out_prefix + ".sites.vcf.gz"
 
   Int default_disk_gb = ceil(3 * size(vcf, "GB")) + 10
@@ -525,7 +522,7 @@ task PreprocessVcf {
     set -eu -o pipefail
 
     # Define superset of samples whose GTs we need for subsequent analysis
-    cat ~{sep=" " all_sample_lists} | sort -V | uniq > all.samples.list
+    cat ~{sep(" ", all_sample_lists)} | sort -V | uniq > all.samples.list
 
     # Preprocess VCF
     bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
@@ -558,11 +555,10 @@ task PreprocessVcf {
 
   runtime {
     docker: docker
-    memory: mem_gb + " GB"
+    memory: "~{mem_gb} GB"
     cpu: n_cpu
-    disks: "local-disk " + hdd_gb + " HDD"
+    disks: "local-disk ~{hdd_gb} HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 

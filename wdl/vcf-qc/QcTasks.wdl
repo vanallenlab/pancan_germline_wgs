@@ -6,7 +6,7 @@
 # Generic WDL tasks used for VCF quality control
 
 
-version 1.0
+version 1.1
 
 
 task CollectSiteMetrics {
@@ -72,9 +72,8 @@ task CollectSiteMetrics {
     docker: g2c_analysis_docker
     memory: "3.5 GB"
     cpu: 2
-    disks: "local-disk " + disk_gb + " HDD"
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -99,6 +98,7 @@ task ShardIntervals {
     | cut -f1-3 \
     | sort -Vk1,1 -k2,2n -k3,3n \
     | bedtools merge -i - \
+    | bgzip -c \
     > intervals.prepped.bed.gz
 
     # Estimate total size per shard
@@ -153,7 +153,7 @@ task ShardIntervals {
     docker: g2c_analysis_docker
     memory: "1.75 GB"
     cpu: 1
-    disks: "local-disk " + default_disk_gb + " HDD"
+    disks: "local-disk ~{default_disk_gb} HDD"
     preemptible: 3
   }
 }
@@ -176,7 +176,7 @@ task SumCompressedDistribs {
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/sum_compressed_distribs.py \
       -o "~{out_prefix}.merged.tsv" \
       -k ~{n_key_columns} \
-      ~{sep=" " distrib_tsvs}
+      ~{sep(" ", distrib_tsvs)}
     gzip -f "~{out_prefix}.merged.tsv"
   >>>
 
@@ -188,9 +188,8 @@ task SumCompressedDistribs {
     docker: g2c_analysis_docker
     memory: "1.75 GB"
     cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 

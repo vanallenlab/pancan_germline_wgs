@@ -40,6 +40,9 @@ def main():
     parser.add_argument('-i', '--input-json', help='input .json', default='stdin')
     parser.add_argument('-u', '--update-json', help='update .json', required=True)
     parser.add_argument('-o', '--output-json', help='output .json', default='stdout')
+    parser.add_argument('--hard-overwrite', default=False, action='store_true',
+                        help='Overwrite all values for overlapping keys. ' +
+                        '[Default: take the union of all nested objects]')
     args = parser.parse_args()
 
     # Open and read contents of input json
@@ -52,7 +55,10 @@ def main():
     # Read contents of update json and update input json accordingly
     with open(args.update_json) as jup:
         updates = json.load(jup)
-        data = update(data, updates)
+        if args.hard_overwrite:
+            data.update(updates)
+        else:
+            data = update(data, updates)
 
     # Format updated json and print to --output-json
     if args.output_json in '- stdout /dev/stdout'.split():

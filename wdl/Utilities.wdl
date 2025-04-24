@@ -22,8 +22,8 @@ task ConcatTextFiles {
   }
 
   Int disk_gb = ceil(2 * size(shards, "GB")) + 25
-  String sort = if defined(sort_command) then " | " + sort_command else ""
-  String compress = if defined(compression_command) then " | " + compression_command else ""
+  String sort = if defined(sort_command) then " | " + select_first([sort_command, ""]) else ""
+  String compress = if defined(compression_command) then " | " + select_first([compression_command, ""]) else ""
   String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
 
   command <<<
@@ -188,7 +188,6 @@ task GetContigsFromVcfHeader {
 
   output {
     Array[String] contigs = read_lines("contigs.list")
-    File vcf_idx_out = select_first([vcf_idx, vcf + ".tbi"])
   }
 
   runtime {
@@ -313,7 +312,6 @@ task ParseIntervals {
     cpu: 1
     disks: "local-disk 25 HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -514,7 +512,6 @@ task StreamSliceVcf {
     cpu: n_cpu
     disks: "local-disk " + hdd_gb + " HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -550,6 +547,5 @@ task SumSvCountsPerSample {
     cpu: n_cpu
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    max_retries: 1
   }
 }

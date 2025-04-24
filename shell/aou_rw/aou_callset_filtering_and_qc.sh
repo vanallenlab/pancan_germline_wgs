@@ -47,6 +47,7 @@ mv code/refs/json/aou.cromwell_options.default.json2 \
 
 # Create dependencies .zip for workflow submissions
 cd code/wdl/pancan_germline_wgs && \
+cp vcf-qc/*.wdl ./ && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
@@ -194,8 +195,8 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectShortVariantQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --no-cleanup \
+  --hard-reset \
   --outer-gate 30 \
-  --submission-gate 10 \
   --max-attempts 2
 
 
@@ -247,6 +248,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectSvQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --no-cleanup \
+  --hard-reset \
   --outer-gate 30 \
   --max-attempts 2
 

@@ -10,7 +10,7 @@
 # Expects that both callsets have already been processed by CollectVcfQcMetrics.wdl
 
 
-version 1.0
+version 1.1
 
 
 import "QcTasks.wdl" as QcTasks
@@ -370,7 +370,7 @@ workflow BenchmarkSitesSingle {
 # and inclusive of all variants with size within [min_size / 3, 3 * max_size]
 task PrepSites {
   input {
-    Array[String] beds
+    Array[File] beds
     Array[File] bed_idxs
     File eval_interval_bed
 
@@ -429,9 +429,8 @@ task PrepSites {
     docker: g2c_analysis_docker
     memory: "1.75 GB"
     cpu: 1
-    disks: "local-disk " + use_disk_gb + " HDD"
+    disks: "local-disk ~{use_disk_gb} HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -482,10 +481,9 @@ task CompareSites {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: mem_gb + " GB"
+    memory: "~{mem_gb} GB"
     cpu: n_cpu
-    disks: "local-disk " + use_disk_gb + " HDD"
+    disks: "local-disk ~{use_disk_gb} HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
