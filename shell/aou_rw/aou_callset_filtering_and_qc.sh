@@ -173,20 +173,14 @@ cat << EOF > $staging_dir/CollectShortVariantQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 7.5,
   "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
   "CollectVcfQcMetrics.shard_vcf": false,
+  "CollectVcfQcMetrics.site_benchmark_dataset_names": ["gnomad_v4"],
+  "CollectVcfQcMetrics.snv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.snv.sites.bed.gz"],
+  "CollectVcfQcMetrics.sv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.sv.sites.bed.gz"],
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
   "CollectVcfQcMetrics.vcfs": \$CONTIG_VCFS,
   "CollectVcfQcMetrics.vcf_idxs": \$CONTIG_VCF_IDXS
 }
 EOF
-
-  "Array[File]? (optional)",
-  "CollectVcfQcMetrics.indel_site_benchmark_bed_idxs": "Array[File]? (optional)",
-  "CollectVcfQcMetrics.site_benchmark_dataset_names": "Array[String]? (optional)",
-  "CollectVcfQcMetrics.snv_site_benchmark_beds": "Array[File]? (optional)",
-  "CollectVcfQcMetrics.snv_site_benchmark_bed_idxs": "Array[File]? (optional)",
-  "CollectVcfQcMetrics.sv_site_benchmark_beds": "Array[File]? (optional)",
-  "CollectVcfQcMetrics.sv_site_benchmark_bed_idxs": "Array[File]? (optional)",
-
 
 # Submit, monitor, stage, and cleanup short variant QC metadata workflow
 code/scripts/manage_chromshards.py \
@@ -220,13 +214,22 @@ if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 cat << EOF > $staging_dir/CollectSVQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "CollectVcfQcMetrics.benchmarking_shards": 25,
+  "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.easy.\$CONTIG.bed.gz",
+                                                  "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.hard.\$CONTIG.bed.gz"],
+  "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
+  "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
+  "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
   "CollectVcfQcMetrics.n_records_per_shard": 10000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatksv.initial_qc.\$CONTIG",
   "CollectVcfQcMetrics.shard_vcf": true,
+  "CollectVcfQcMetrics.site_benchmark_dataset_names": ["gnomad_v4"],
+  "CollectVcfQcMetrics.snv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.snv.sites.bed.gz"],
+  "CollectVcfQcMetrics.sv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.sv.sites.bed.gz"],
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
   "CollectVcfQcMetrics.vcfs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz"],
   "CollectVcfQcMetrics.vcf_idxs": ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/\$CONTIG/HardFilterPart2/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi"]
