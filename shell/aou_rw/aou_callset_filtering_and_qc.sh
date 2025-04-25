@@ -167,7 +167,7 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:04de433",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:7520a26",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",

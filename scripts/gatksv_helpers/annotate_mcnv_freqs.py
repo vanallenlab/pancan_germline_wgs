@@ -12,8 +12,8 @@ This is a greatly simplified version of GATK-SV compute_AFs.py
 import sys
 import argparse
 import pysam
-from svtk import utils as svu
 from collections import Counter
+from g2cpy import is_multiallelic
 
 
 def calc_cn_freq(record, samples, ref_CN=2):
@@ -94,7 +94,7 @@ def main():
 
     # Iterate over VCF and annotate multiallelic records
     for r in vcf:
-        if not svu.is_biallelic(r):
+        if is_multiallelic(r):
             r = calc_cn_freq(r, samples_list)
         fout.write(r)
 

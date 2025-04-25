@@ -129,3 +129,17 @@ def determine_filetype(path, return_extension=False):
         return None, None
     else:
         return None
+
+
+def is_multiallelic(record):
+    """
+    Check if pysam.VariantRecord is multiallelic (including mCNVs)
+    """
+
+    if 'MULTIALLELIC' in record.filter \
+    or len(record.alleles) > 2 \
+    or record.info.get('SVTYPE', '') in 'CNV MCNV'.split():
+        return True
+    else:
+        return False
+

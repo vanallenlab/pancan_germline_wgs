@@ -156,12 +156,21 @@ workflow CollectVcfQcMetrics {
       File pp_vcf = pp_vcf_info.left
       File pp_vcf_idx = pp_vcf_info.right
 
+      # Check the header of each shard for the presence of mCNVs
+      call Utils.McnvHeaderCheck as McnvCheck {
+        input:
+          vcf = pp_vcf,
+          vcf_idx = pp_vcf_idx,
+          bcftools_docker = bcftools_docker
+      }
+
       call PreprocessVcf {
         input:
           vcf = pp_vcf,
           vcf_idx = pp_vcf_idx,
           target_samples = ChooseTargetSamples.target_samples,
           trio_samples = CleanFam.trio_samples_list,
+          has_mcnvs = McnvCheck.has_mcnvs,
           out_prefix = basename(vcf, ".vcf.gz"),
           docker = bcftools_docker
       }
@@ -501,6 +510,7 @@ task PreprocessVcf {
     File target_samples
     File? trio_samples
     File? benchmarking_samples
+    Boolean has_mcnvs = false
     
     String out_prefix
     
@@ -515,6 +525,8 @@ task PreprocessVcf {
 
   String sites_outfile = out_prefix + ".sites.vcf.gz"
 
+  String mcnv_anno = if has_mcnvs then "| /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - -" else ""
+
   Int default_disk_gb = ceil(3 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
 
@@ -526,7 +538,7 @@ task PreprocessVcf {
 
     # Preprocess VCF
     bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
-    | /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - - \
+    ~{mcnv_anno} \
     | bcftools view \
       --samples-file all.samples.list \
       --no-update \
