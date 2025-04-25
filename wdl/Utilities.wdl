@@ -14,7 +14,7 @@ task McnvHeaderCheck {
   input {
     File vcf
     File vcf_idx
-    String bcftools_docker
+    String docker
   }
 
   parameter_meta {
@@ -48,7 +48,7 @@ task McnvHeaderCheck {
   }
 
   runtime {
-    docker: bcftools_docker
+    docker: docker
     memory: "3.75 GB"
     cpu: 2
     disks: "local-disk 15 HDD"

@@ -109,7 +109,7 @@ workflow CollectVcfQcMetrics {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
-        bcftools_docker = bcftools_docker
+        docker = g2c_analysis_docker
     }
 
     if ( shard_vcf ) {
