@@ -161,7 +161,14 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
     # Iterate over ancestry + sex combinations in cases
     for (pop, sex), case_group in cases.groupby(['intake_qc_pop', 'sex_karyotype']):
         case_count = len(case_group)
-        max_controls = case_count * max_controls_per_case
+
+        # To account for ancestry groups with disproportionately few cases, 
+        # we cap the control-to-case ratio at 3:1 when such imbalances are present. 
+        if (max_controls_per_case < 3):
+            max_controls = case_count * 3
+        else:
+            max_controls = case_count * max_controls_per_case
+
         median_age = case_group['age'].median()
 
         # Find matching controls for ancestry and sex
@@ -201,6 +208,41 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
 
     return final_meta
 
+
+def get_min_case_control_ratio(meta: pd.DataFrame):
+    """
+    Returns the case:control ratio for each ancestry group and identifies the smallest ratio.
+    
+    Parameters:
+        meta: DataFrame with 'cancer' and 'intake_qc_pop' columns
+    
+    Returns:
+        A Series with case/control ratios per ancestry, and a printed note about the smallest one.
+    """
+    # Define cases and controls
+    meta = meta.copy()
+    meta['is_case'] = ~meta['cancer'].str.lower().isin(['control', 'unknown'])
+
+    # Group by ancestry
+    grouped = meta.groupby('intake_qc_pop')['is_case']
+
+    # Count cases and controls
+    counts = grouped.agg(['sum', 'count'])  # sum = cases, count - sum = controls
+    counts['controls'] = counts['count'] - counts['sum']
+    counts['case_control_ratio'] = counts['sum'] / counts['controls']
+
+    # Handle div-by-zero (if any population has 0 controls)
+    counts['case_control_ratio'] = counts['case_control_ratio'].replace([float('inf')], float('nan'))
+
+    # Drop intermediate columns for clarity
+    ratio_series = counts['case_control_ratio']
+    
+    # Print info on the ancestry with the lowest ratio
+    min_pop = ratio_series.idxmin()
+    min_val = ratio_series.min()
+    print(f"Smallest case:control ratio is {min_val:.3f} in population: {min_pop}")
+
+    return min_val
 
 def main():
     """
@@ -284,12 +326,7 @@ def main():
     with open(args.log_file, "a") as f:
         f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes}.\n")
 
-    # Downsample controls to match on cases ancestry
-    meta = match_controls_by_ancestry(meta)
-    sample_size5 = len(meta)
-    with open(args.log_file, "a") as f:
-        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tMatched by ancestry allowing 3x controls as cases per ancestry.\n")
-
+    
     ## Grab maximally unrelated set; enriching for cases ##
     # Grab all cases not involved in a family
     non_familial_set = extract_non_familial_set(samples=set(meta['original_id']),kinship_file=args.kinship)
@@ -303,11 +340,17 @@ def main():
     # Filter our data to our maximal unrelated set of individuals
     meta = meta[meta['original_id'].isin(non_familial_set.union(familial_set))]
 
+    sample_size5 = len(meta)
+    with open(args.log_file, "a") as f:
+        f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tExcluded due to relatedness with other individuals.\n")
+
+    # Downsample controls to match on cases ancestry
+    min_ancestry_case_control_ratio = get_min_case_control_ratio(meta)
+    meta = match_controls_by_ancestry(meta, max_controls_per_case = min_ancestry_case_control_ratio)
     sample_size6 = len(meta)
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size6}\t{(sample_size5 - sample_size6)}\t{round(((sample_size5 - sample_size6)/sample_size5),3) * 100}\tExcluded due to relatedness with other individuals.\n")
+        f.write(f"{sample_size6}\t{(sample_size5 - sample_size6)}\t{round(((sample_size5 - sample_size6)/sample_size5),3) * 100}\tMatched by ancestry allowing 3x controls as cases per ancestry.\n")
 
-    
     ## Print Summary Statistics
     with open(args.log_file, 'a') as f:
         f.write("===== Summary Report =====\n\n")
@@ -317,8 +360,9 @@ def main():
         f.write(f"Total individuals: {total_count}\n\n")
 
         # Count per cohort
-        f.write("Counts by cohort:\n")
-        f.write(meta['cohort'].value_counts().to_string())
+        f.write("Counts of cohort per cancer:\n")
+        cohort_counts = meta.groupby('cancer')['cohort'].value_counts().unstack(fill_value=0)
+        f.write(cohort_counts.to_string())
         f.write("\n\n")
 
         # Count per cancer
