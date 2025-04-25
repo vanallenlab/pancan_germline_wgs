@@ -104,6 +104,14 @@ workflow CollectVcfQcMetrics {
     File vcf = input_vcf_info.left
     File vcf_idx = input_vcf_info.right
 
+    # Check the header of each input VCF for the presence of mCNVs
+    call Utils.McnvHeaderCheck as McnvCheck {
+      input:
+        vcf = vcf,
+        vcf_idx = vcf_idx,
+        bcftools_docker = bcftools_docker
+    }
+
     if ( shard_vcf ) {
 
       # Default to scattering over prespecified intervals, as this is most compute efficient
@@ -148,21 +156,12 @@ workflow CollectVcfQcMetrics {
                                                ShardVcf.vcf_shard_idxs,
                                                [vcf_idx]])
 
-
     # Scatter over VCF shards and preprocess each shard
     Array[Pair[File, File]] pp_vcf_infos = zip(vcf_shards, vcf_shard_idxs)
     scatter ( pp_vcf_info in pp_vcf_infos ) {
 
       File pp_vcf = pp_vcf_info.left
       File pp_vcf_idx = pp_vcf_info.right
-
-      # Check the header of each shard for the presence of mCNVs
-      call Utils.McnvHeaderCheck as McnvCheck {
-        input:
-          vcf = pp_vcf,
-          vcf_idx = pp_vcf_idx,
-          bcftools_docker = bcftools_docker
-      }
 
       call PreprocessVcf {
         input:
