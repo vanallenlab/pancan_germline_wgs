@@ -229,19 +229,19 @@ def get_min_case_control_ratio(meta: pd.DataFrame):
     # Count cases and controls
     counts = grouped.agg(['sum', 'count'])  # sum = cases, count - sum = controls
     counts['controls'] = counts['count'] - counts['sum']
-    counts['case_control_ratio'] = counts['sum'] / counts['controls']
+    counts['control_case_ratio'] =  counts['controls'] / counts['sum']
 
     # Handle div-by-zero (if any population has 0 controls)
-    counts['case_control_ratio'] = counts['case_control_ratio'].replace([float('inf')], float('nan'))
+    counts['control_case_ratio'] = counts['control_case_ratio'].replace([float('inf')], float('nan'))
 
     # Drop intermediate columns for clarity
-    ratio_series = counts['case_control_ratio']
+    ratio_series = counts['control_case_ratio']
     
     # Print info on the ancestry with the lowest ratio
     min_pop = ratio_series.idxmin()
     min_val = ratio_series.min()
-    print(f"Smallest case:control ratio is {min_val:.3f} in population: {min_pop}")
-
+    print(f"Smallest control:case ratio is {min_val:.3f} in population: {min_pop}")
+    print(f"Ratio Series: {ratio_series}")
     return min_val
 
 def main():
