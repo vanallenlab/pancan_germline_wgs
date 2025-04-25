@@ -13,8 +13,10 @@ Enforce strict adherence to query intervals for a BED file of variant summary me
 
 # Import libraries
 import argparse
+import gzip
 import pandas as pd
 import pybedtools as pbt
+from g2cpy import determine_filetype
 
 
 def main():
@@ -42,7 +44,17 @@ def main():
     # Load target intervals as both pbt.BedTool and pd.DataFrame
     tbt = pbt.BedTool(args.target_intervals)
     tdf = tbt.to_dataframe()
-    
+
+    # Read and save header line from --input-bed
+    if 'compressed' in determine_filetype(args.input_bed):
+        with gzip.open(args.input_bed,  'rt') as fin:
+            header = fin.readline().rstrip()
+    else:
+        with open(args.input_bed) as fin:
+            header = fin.readline().rstrip()
+    if not header.startswith('#'):
+        header = None
+
     # Open connection to input variants
     vbt = pbt.BedTool(args.input_bed)
     n_fields = len(vbt[0].fields)
@@ -53,7 +65,7 @@ def main():
         coverage(b=tbt).\
         filter(lambda x: float(x.fields[-1]) >= args.frac_coverage).\
         cut(range(n_fields)).\
-        saveas(args.output_bed)
+        saveas(args.output_bed, trackline=header)
 
 
 if __name__ == '__main__':

@@ -168,7 +168,7 @@ def main():
             varlen = np.abs(len(alt) - len(ref))
 
         # Clean up AC/AF for CNVs
-        if cnf != "." and cnc != ".":
+        if cnf != '.' and cnc != '.':
             ac = int(cnc)
             af = float(cnf)
 
@@ -202,8 +202,8 @@ def main():
             x_counter[vc][vsc][x_size_ge[np.argmin(varlen >= x_size_ge)-1]][np.argmax(af < x_af_lt)] += 1
 
         # Infer genotype frequencies for diploid loci
-        freq_het = '.'
-        freq_hom = '.'
+        freq_het = 'NA'
+        freq_hom = 'NA'
         if an != '.' and ac_het != '.' and ac_hom != '.' and ac_hemi != '.':
             an = int(an)
             ac_het = int(ac_het)
@@ -216,9 +216,13 @@ def main():
                 freq_hom = '{:.2e}'.format((ac_hom / 2) / n_bi)
 
         # Convert long floats to scientific notation
-        if af != '.':
+        if af == '.':
+            af = 'NA'
+        else:
             af = '{:.2e}'.format(af)
-        if hwe != '.':
+        if hwe == '.':
+            hwe = 'NA'
+        else:
             hwe = '{:.2e}'.format(float(hwe))
 
         # Write reformatted variant data to out .bed

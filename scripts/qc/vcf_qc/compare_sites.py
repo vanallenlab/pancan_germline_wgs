@@ -19,6 +19,7 @@ import pandas as pd
 import pybedtools as pbt
 from Bio import bgzf
 from collections import Counter
+from g2cpy import astype_default
 from os import remove
 from re import sub
 
@@ -49,8 +50,9 @@ def populate_nodes(hits_g, bt, prefix=''):
     for vt in bt:
         vid = prefix + vt.name
         hits_g.add_node(vid, chrom=vt.chrom, pos=int(vt.start), end=int(vt.end), 
-                        vc=vt.fields[4], vsc=vt.fields[5], size=int(vt.fields[6]),
-                        af=float(vt.fields[8]))
+                        vc=vt.fields[4], vsc=vt.fields[5], 
+                        size=astype_default(vt.fields[6], int, np.nan),
+                        af=astype_default(vt.fields[8], float, np.nan))
 
     return hits_g
 
@@ -185,6 +187,9 @@ def prune_hits(hits_g):
 
     n_edges = {nid : len(hits_g.edges(nid)) for nid in node_ids}
 
+    if len(n_edges) == 0:
+        return hits_g
+
     # Loop and prune edges until all nodes are first-degree
     while max(n_edges.values()) > 1:
 
@@ -267,7 +272,7 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
     return pbt.BedTool('\n'.join(bt_strs), from_string=True).sort(g=genome)
 
 
-def compress_overlap_distribs(bt, mode='size', max_size=1000000, 
+def compress_overlap_distribs(bt, mode='size', max_size=1000000, min_af=1e-05,
                               af_d_breaks=[0.01, 0.1, 0.5, 1]):
     """
     Compress variant overlap information contained in a pbt.BedTool 
@@ -322,7 +327,6 @@ def compress_overlap_distribs(bt, mode='size', max_size=1000000,
     elif mode == 'af':
 
         # Assign each variant to an AF bin
-        min_af = np.nanmin(df.af)
         af_le = np.array([10 ** k for k in range(int(np.ceil(np.log10(min_af))), 1, 1)])
         df['af_bin'] = df.af.apply(lambda x: np.argmax(x <= af_le))
 

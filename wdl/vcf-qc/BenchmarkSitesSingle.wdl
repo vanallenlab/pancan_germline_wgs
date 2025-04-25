@@ -403,6 +403,10 @@ task PrepSites {
       ln -s $bed_idx .
     done < ~{write_lines(bed_idxs)}
 
+    # Save header line for first BED
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    tabix --only-header -p bed -R ~{eval_interval_bed} ~{beds[0]} > header.bed
+
     # Loop over each bed and use tabix to remotely extract only the variants needed
     while read bed_uri; do
       export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
@@ -410,11 +414,12 @@ task PrepSites {
     done < ~{write_lines(beds)} \
     | awk -v FS="\t" -v min_size=~{loose_min_size} -v max_size=~{loose_max_size} \
       '{ if ($7>=min_size && $7<=max_size) print }' \
-    | sort -Vk1,1 -k2,2n -k3,3n | uniq | bgzip -c \
+    | sort -Vk1,1 -k2,2n -k3,3n | uniq \
+    | cat header.bed - | bgzip -c \
     > ~{prefix}.ref.bed.gz
 
     # Further filter the lenient "ref" set to produce a strict "query" set
-    if [ $( zcat ~{prefix}.ref.bed.gz | wc -l ) -gt 0 ]; then
+    if [ $( zcat ~{prefix}.ref.bed.gz | fgrep -v "#" | wc -l ) -gt 0 ]; then
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
         -i ~{prefix}.ref.bed.gz \
         -t ~{eval_interval_bed} \
