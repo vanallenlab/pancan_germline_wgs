@@ -230,7 +230,7 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
 
     # Simplified output line:
     # chrom, start, end, id, vc, vsc, size, af, match_id, match_af, match_dist
-    bed_line_fmt = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2e}\t{}\t{:.2e}\t{:.2}'
+    bed_line_fmt = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2e}\t{}\t{}\t{}'
 
     # Gather BED 
     bt_strs = []
@@ -246,14 +246,12 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
         # Gather matching variant information
         edges = list(hits_g.edges(nid))
         if len(edges) == 0:
-            match_id = '.'
-            match_af = np.nan
-            match_dist = np.nan
+            match_id, match_af, match_dist = ['NA'] * 3
         elif len(edges) == 1:
             match_nid = list(set(edges[0]).difference(set([nid])))[0]
             match_id = sub('^' + ref_prefix, '', match_nid)
-            match_af = hits_g.nodes[match_nid].get('af')
-            match_dist = hits_g[nid][match_nid]['dist']
+            match_af = '{:.2e}'.format(hits_g.nodes[match_nid].get('af'))
+            match_dist = '{:.2}'.format(hits_g[nid][match_nid]['dist'])
         else:
             msg = 'Node {} from has more than one edge after pruning. ' + \
                   'This indicates a bug that needs to be fixed. Exiting.'
