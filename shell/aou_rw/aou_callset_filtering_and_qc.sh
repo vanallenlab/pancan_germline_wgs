@@ -163,8 +163,8 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.benchmarking_shards": \$CONTIG_SCATTER_COUNT,
-  "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.easy.\$CONTIG.bed.gz",
-                                                  "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.hard.\$CONTIG.bed.gz"],
+  "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.easy.\$CONTIG.bed.gz",
+                                                  "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",

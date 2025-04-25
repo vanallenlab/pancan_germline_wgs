@@ -179,8 +179,8 @@ workflow BenchmarkSitesSingle {
     if ( do_sv ) {
       call PrepSites as PrepSourceSvs {
         input:
-          beds = select_all([source_sv_bed, source_sv_bed]),
-          bed_idxs = select_all([source_sv_bed_idx, source_sv_bed_idx]),
+          beds = select_all([source_sv_bed, source_indel_bed]),
+          bed_idxs = select_all([source_sv_bed_idx, source_indel_bed_idx]),
           eval_interval_bed = eval_shard,
           min_size = 50,
           max_size = 1000000000,
@@ -190,8 +190,8 @@ workflow BenchmarkSitesSingle {
 
       call PrepSites as PrepTargetSvs {
         input:
-          beds = select_all([target_sv_bed, target_sv_bed]),
-          bed_idxs = select_all([target_sv_bed_idx, target_sv_bed_idx]),
+          beds = select_all([target_sv_bed, target_indel_bed]),
+          bed_idxs = select_all([target_sv_bed_idx, target_indel_bed_idx]),
           eval_interval_bed = eval_shard,
           min_size = 50,
           max_size = 1000000000,
@@ -414,13 +414,17 @@ task PrepSites {
     > ~{prefix}.ref.bed.gz
 
     # Further filter the lenient "ref" set to produce a strict "query" set
-    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
-      -i ~{prefix}.ref.bed.gz \
-      -t ~{eval_interval_bed} \
-      -f ~{strict_interval_coverage} \
-      -m ~{min_size} \
-      -M ~{max_size} \
-      -o ~{prefix}.query.bed.gz
+    if [ $( zcat ~{prefix}.ref.bed.gz | wc -l ) -gt 0 ]; then
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
+        -i ~{prefix}.ref.bed.gz \
+        -t ~{eval_interval_bed} \
+        -f ~{strict_interval_coverage} \
+        -m ~{min_size} \
+        -M ~{max_size} \
+        -o ~{prefix}.query.bed.gz
+    else
+      cp ~{prefix}.ref.bed.gz ~{prefix}.query.bed.gz
+    fi
   >>>
 
   output {
@@ -462,7 +466,7 @@ task CompareSites {
   command <<<
     set -eu -o pipefail
 
-    /opt/pancancer_wgs/pancan_germline_wgs/scripts/qc/vcf_qc/compare_sites.py \
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_sites.py \
       -a ~{query_bed} \
       -b ~{ref_bed} \
       -g ~{genome_file} \
