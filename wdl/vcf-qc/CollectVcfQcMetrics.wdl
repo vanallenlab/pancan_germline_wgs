@@ -526,6 +526,7 @@ task PreprocessVcf {
 
     # Preprocess VCF
     bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
+    | /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - - \
     | bcftools view \
       --samples-file all.samples.list \
       --no-update \
