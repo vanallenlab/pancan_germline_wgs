@@ -33,10 +33,11 @@ task McnvHeaderCheck {
     bcftools view --header-only ~{vcf} > header.vcf
 
     # Check for header rows potentially indicative of MCNVs
-    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf
-    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf
-    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf
-    if [ $( cat mcnv.header.vcf | wc -l) -gt 0 ]; then
+    touch mcnv.header.vcf
+    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
+    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
+    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
+    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
       echo "true" > has_mcnvs.txt
     else
       echo "false" > has_mcnvs.txt
