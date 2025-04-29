@@ -97,7 +97,8 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
 
     # Use cromshell list-outputs to get and read a melted dict-like .txt of outputs
     crom_query = 'cromshell --no_turtle -t ' + str(timeout) + \
-                 ' --machine_processable list-outputs ' + workflow_id
+                 ' --machine_processable list-outputs --json-summary ' + \
+                 workflow_id
     attempts = 0
     while attempts < max_retries:
         crom_query_res = subprocess.run(crom_query, capture_output=True, shell=True, 
@@ -113,23 +114,30 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
     # Iterate over each output mentioned by cromwell and move each to staging_bucket
     # While relocating output files, build an outputs .json to reflect their new locations
     outputs_dict = {}
-    for entry in crom_query_res.rstrip().split('\n'):
+    for key, src_vals in json.loads(crom_query_res).items():
 
-        key, src_uri = sub('^' + wdl_name + '\.', '', entry).split(': ')
-    
-        # Format destination URI to keep nested structure of subworkflows
-        # but to remove all arbitrary Cromwell hashes
-        dest_parts = [sub('^call-', '', x) for x in src_uri.split('/') 
-                      if x.startswith('call-') or x.startswith('shard-')]
-        dest_uri = '/'.join([staging_bucket] + dest_parts + [path.basename(src_uri)])
+        if isinstance(src_vals, str):
+            src_vals = [src_vals]
+        elif isinstance(src_vals, list):
+            src_vals = g2cpy.recursive_flatten(src_vals)
+        else:
+            msg = 'relocate_outputs cannot parse output "{}" due to unknown type'
+            exit(msg.format(key))
+
+        for src_uri in src_vals:
+            # Format destination URI to keep nested structure of subworkflows
+            # but to remove all arbitrary Cromwell hashes
+            dest_parts = [sub('^call-', '', x) for x in src_uri.split('/') 
+                          if x.startswith('call-') or x.startswith('shard-')]
+            dest_uri = '/'.join([staging_bucket] + dest_parts + [path.basename(src_uri)])
         
-        # Stage output
-        g2cpy.relocate_uri(src_uri, dest_uri, verbose=verbose)
+            # Stage output
+            g2cpy.relocate_uri(src_uri, dest_uri, verbose=verbose)
 
-        # Update outputs .json
-        if key not in outputs_dict.keys():
-            outputs_dict[key] = list()
-        outputs_dict[key].append(dest_uri)
+            # Update outputs .json
+            if key not in outputs_dict.keys():
+                outputs_dict[key] = list()
+            outputs_dict[key].append(dest_uri)
 
     # Write updated output .json to file and copy that file into staging_bucket
     for key in outputs_dict.keys():

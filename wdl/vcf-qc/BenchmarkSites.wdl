@@ -131,12 +131,12 @@ workflow BenchmarkSites {
   }
 
   output {
-    Array[File?] common_snv_ppv_beds = BenchmarkTask.common_snv_ppv_bed
-    Array[File?] common_snv_sens_beds = BenchmarkTask.common_indel_ppv_bed
-    Array[File?] common_indel_ppv_beds = BenchmarkTask.common_indel_ppv_bed
-    Array[File?] common_indel_sens_beds = BenchmarkTask.common_indel_sens_bed
-    Array[File?] common_sv_ppv_beds = BenchmarkTask.common_sv_ppv_bed
-    Array[File?] common_sv_sens_beds = BenchmarkTask.common_sv_sens_bed
+    Array[File] common_snv_ppv_beds = select_all(BenchmarkTask.common_snv_ppv_bed)
+    Array[File] common_snv_sens_beds = select_all(BenchmarkTask.common_indel_ppv_bed)
+    Array[File] common_indel_ppv_beds = select_all(BenchmarkTask.common_indel_ppv_bed)
+    Array[File] common_indel_sens_beds = select_all(BenchmarkTask.common_indel_sens_bed)
+    Array[File] common_sv_ppv_beds = select_all(BenchmarkTask.common_sv_ppv_bed)
+    Array[File] common_sv_sens_beds = select_all(BenchmarkTask.common_sv_sens_bed)
     Array[File] ppv_by_sizes = BenchmarkTask.ppv_by_size
     Array[File] sensitivity_by_sizes = BenchmarkTask.sensitivity_by_size
     Array[File] ppv_by_freqs = BenchmarkTask.ppv_by_freq

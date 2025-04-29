@@ -171,7 +171,7 @@ workflow CollectVcfQcMetrics {
           trio_samples = CleanFam.trio_samples_list,
           has_mcnvs = McnvCheck.has_mcnvs,
           out_prefix = basename(vcf, ".vcf.gz"),
-          docker = bcftools_docker
+          docker = g2c_analysis_docker
       }
     }
   }
@@ -369,12 +369,12 @@ workflow CollectVcfQcMetrics {
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
 
-    Array[Array[File?]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
-    Array[Array[File?]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds
-    Array[Array[File?]]? site_benchmark_common_indel_ppv_beds = BenchmarkSites.common_indel_ppv_beds
-    Array[Array[File?]]? site_benchmark_common_indel_sens_beds = BenchmarkSites.common_indel_sens_beds
-    Array[Array[File?]]? site_benchmark_common_sv_ppv_beds = BenchmarkSites.common_sv_ppv_beds
-    Array[Array[File?]]? site_benchmark_common_sv_sens_beds = BenchmarkSites.common_sv_sens_beds
+    Array[Array[File]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
+    Array[Array[File]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds
+    Array[Array[File]]? site_benchmark_common_indel_ppv_beds = BenchmarkSites.common_indel_ppv_beds
+    Array[Array[File]]? site_benchmark_common_indel_sens_beds = BenchmarkSites.common_indel_sens_beds
+    Array[Array[File]]? site_benchmark_common_sv_ppv_beds = BenchmarkSites.common_sv_ppv_beds
+    Array[Array[File]]? site_benchmark_common_sv_sens_beds = BenchmarkSites.common_sv_sens_beds
     Array[Array[File]]? site_benchmark_ppv_by_sizes = BenchmarkSites.ppv_by_sizes
     Array[Array[File]]? site_benchmark_sensitivity_by_sizes = BenchmarkSites.sensitivity_by_sizes
     Array[Array[File]]? site_benchmark_ppv_by_freqs = BenchmarkSites.ppv_by_freqs

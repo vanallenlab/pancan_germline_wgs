@@ -19,7 +19,7 @@ import pandas as pd
 import pybedtools as pbt
 from Bio import bgzf
 from collections import Counter
-from g2cpy import astype_default
+from g2cpy import astype_default, bgzip, make_tabix_index
 from os import remove
 from re import sub
 
@@ -366,8 +366,8 @@ def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, genome,
     bed_out = out_prefix + '.sites.bed'
     bt = bt.saveas(bed_out, trackline=bed_header)
     if gzip:
-        bt = bt.tabix(force=True)
-        remove(bed_out)
+        bt = pbt.BedTool(bgzip(bed_out, return_new_fn=True))
+        make_tabix_index(bed_out + '.gz')
 
     # Subset outer join to common sites and write common subset to file, if optioned
     if common_af is not None:
@@ -375,8 +375,8 @@ def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, genome,
         common_bt = bt.filter(lambda f: float(f[7]) >= common_af).saveas()
         common_bt = common_bt.saveas(common_bed_out, trackline=bed_header)
         if gzip:
-            common_bt = common_bt.tabix(force=True)
-            remove(common_bed_out)
+            common_bt = pbt.BedTool(bgzip(common_bed_out, return_new_fn=True))
+            make_tabix_index(common_bed_out + '.gz')
 
     # Compress outer join by variant class, subclass, and size
     size_d = compress_overlap_distribs(bt, mode='size')

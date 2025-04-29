@@ -11,15 +11,19 @@ Genomics-related helper functions
 """
 
 
+import subprocess
 from re import sub
 
 
-def bgzip(filename):
+def bgzip(filename, return_new_fn=False):
     """
     Bgzip a file
     """
 
     subprocess.run(['bgzip', '-f', filename])
+
+    if return_new_fn:
+        return filename + '.gz'
 
 
 def chrom2int(contig):
@@ -131,6 +135,14 @@ def determine_filetype(path, return_extension=False):
         return None
 
 
+def make_tabix_index(filename):
+    """
+    Index a bgzipped file with tabix
+    """
+
+    subprocess.run(['tabix', '-f', filename])
+
+
 def is_multiallelic(record):
     """
     Check if pysam.VariantRecord is multiallelic (including mCNVs)
@@ -142,4 +154,5 @@ def is_multiallelic(record):
         return True
     else:
         return False
+
 
