@@ -251,6 +251,7 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                         "STU" = SAS.colors[["light2"]]),
     "var.class.colors" = var.class.colors,
     "var.subclass.colors" = c(snv.colors, indel.colors, sv.colors),
+    "var.ref.color" = "#99ADBA",
     "snv.colors" = snv.colors,
     "indel.colors" = indel.colors,
     "sv.colors" = sv.colors,

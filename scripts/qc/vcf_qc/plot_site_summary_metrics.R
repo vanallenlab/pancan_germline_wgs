@@ -67,7 +67,9 @@ read.sv.sizes <- function(tsv.in){
 ######################
 # Summary plot of variant counts by class & subclass
 plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
-                               bar.sep=0.1, parmar=c(0.1, 7.5, 2, 2)){
+                               ref.size.d=NULL, ref.title=NULL,
+                               bar.sep=0.1, ref.pt.cex=2/3,
+                               parmar=c(0.1, 7.5, 2, 2)){
   # Simplify count data
   k <- log10(apply(df[, -c(1:2)], 1, sum))
   k.order <- order(k)
@@ -75,23 +77,52 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   df <- df[k.order, ]
   names(k) <- df$subclass
 
+  # Simplify & align reference counts, if provided
+  if(is.null(ref.size.d)){
+    add.ref <- FALSE
+  }else{
+    add.ref <- TRUE
+    ref.df <- ref.size.d$df
+    ref.df <- ref.df[which(ref.df$subclass %in% names(k)), ]
+    ref.k <- log10(apply(ref.df[, -c(1:2)], 1, sum))
+    names(ref.k) <- ref.df$subclass
+    ref.k <- sapply(names(k), function(vsc){
+      if(vsc %in% names(ref.k)){as.numeric(ref.k[vsc])}else{0}
+    })
+  }
+
   # Get plot parameters
-  xlims <- c(0, max(ceiling(k)))
-  ylims <- c(0, length(k)+bar.sep)
+  xlims <- c(0, max(c(ceiling(k), ceiling(ref.k))))
+  ylims <- c(if(add.ref){-1}else{0}, length(k)+bar.sep)
   bar.cols <- var.class.colors[df$class]
-  bar.labs <- sapply(10^k, clean.numeric.labels,
-                     acceptable.decimals=0,
+  bar.labs <- sapply(10^k, clean.numeric.labels,acceptable.decimals=0,
                      min.label.length=3)
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar)
-  # abline(v=0, col="gray90", lwd=2)
 
-  # Add bars & count labels
+  # Add bars
   rect(xleft=rep(0, length(k)), xright=k,
        ybottom=(1:length(k)) - 1 + bar.sep, ytop=(1:length(k)) - bar.sep,
        col=bar.cols, xpd=T)
-  text(x=k-0.5, y=(1:length(k))-0.55, pos=4, cex=4.5/6, labels=bar.labs, xpd=T)
+
+  # Add reference markers, if optioned
+  if(add.ref){
+    ref.pw.col <- remap(as.character(ref.k <= k),
+                        c("TRUE"="white", "FALSE"=var.ref.color))
+    segments(y0=(1:length(ref.k)) - 1 + (2.5*bar.sep),
+             y1=(1:length(ref.k)) - (2.5*bar.sep),
+             x0=ref.k, x1=ref.k, col=ref.pw.col, lend="round")
+    ref.legend.buffer <- 0.03
+    text(x=par("usr")[2]+(5*ref.legend.buffer*diff(par("usr")[1:2])),
+         y=par("usr")[3]+(ref.legend.buffer*diff(par("usr")[3:4])),
+         labels=if(!is.null(ref.title)){paste("Hashes =", ref.title)}else{"Hashes = ref. data"},
+         pos=2, cex=5/6, xpd=T, col=var.ref.color, xpd=T)
+  }
+
+  # Add count labels to right Y axis
+  axis(4, at=(1:length(k))-0.5, tick=F, line=-0.9,
+       cex.axis=4.5/6, labels=bar.labs, las=2)
 
   # Add top Y axis
   minor.ticks <- log10(logscale.minor)
@@ -111,7 +142,7 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   bracket.lab.buf <- -0.075 * vc.x
   if(has.short.variants){
     snv.bracket.y <- c(min(which(df$class == "snv")) - 1 + bar.sep,
-                         max(which(df$class == "snv")) - bar.sep)
+                       max(which(df$class == "snv")) - bar.sep)
     staple.bracket(x0=vc.x, x1=vc.x, y0=snv.bracket.y[1], y1=snv.bracket.y[2])
     text(x=vc.x+bracket.lab.buf, y=mean(snv.bracket.y)-0.1, labels="SNVs",
          cex=5/6, pos=2, xpd=T)
@@ -133,9 +164,10 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
 }
 
 # Volcano of signed variant sizes
-plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
-                              minor.tck=-0.01, major.tck=-0.0275,
-                              parmar=c(2, 2.75, 0.25, 0.1)){
+plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
+                              snv.width=0.2, snv.gap=0.15, indel.gap=0,
+                              minor.tck=-0.01, major.tck=-0.0275, ref.lty=1,
+                              ref.hex.gap=0.01, parmar=c(2, 2.75, 0.25, 0.1)){
   # Get partitioned densities
   df <- size.d$df
   breaks <- log10(size.d$breaks)
@@ -145,10 +177,24 @@ plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
   GAIN.k <- log10(as.numeric(apply(df[which(df$subclass %in% c("INS", "DUP", "CNV")), -c(1:2)], 2, sum)))
   LOSS.k <- log10(as.numeric(df[which(df$subclass == "DEL"), -c(1:2)]))
 
+  # Get reference densities, if optioned
+  if(is.null(ref.size.d)){
+    add.ref <- FALSE
+  }else{
+    add.ref <- TRUE
+    ref.breaks <- log10(ref.size.d$breaks)
+    ref.df <- ref.size.d$df
+    ref.snv.k <- log10(sum(as.numeric(apply(ref.df[which(ref.df$class == "snv"), -c(1:2)], 2, sum))))
+    ref.ins.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "ins"), -c(1:2)]))
+    ref.del.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "del"), -c(1:2)]))
+    ref.GAIN.k <- log10(as.numeric(apply(ref.df[which(ref.df$subclass %in% c("INS", "DUP", "CNV")), -c(1:2)], 2, sum)))
+    ref.LOSS.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "DEL"), -c(1:2)]))
+  }
+
   # Get plot values
   xlims <- c(-1, 1) * (max(breaks) + 0.1 + (0.5*snv.width) + snv.gap + indel.gap)
   xlims[1] <- xlims[1]-0.1
-  ylims <- c(0, log10(max(df[, -c(1:2)])))
+  ylims <- c(0, log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar, xaxs="r")
@@ -157,10 +203,10 @@ plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
   rect(xleft=-0.5*snv.width, xright=0.5*snv.width,
        ybottom=0, ytop=snv.k, col=var.class.colors["snv"],
        border=NA, bty="n")
-  # segments(x0=-0.5*class.gap, x1=0.5*class.gap,
-  #          y0=snv.k, y1=snv.k, xpd=T)
-  # axis(1, at=c(-0.5, 0.5) * snv.width, tck=0, labels=NA)
-  # axis(1, at=0, tick=F, line=-0.9, cex.axis=5/6, labels=0)
+  if(add.ref){
+    segments(x0=-0.5*snv.width, x1=0.5*snv.width, y0=ref.snv.k, y1=ref.snv.k,
+             lty=ref.lty, col=if(ref.snv.k >= (1-ref.hex.gap)*snv.k){var.ref.color}else{"white"})
+  }
 
   # Add indel polygons
   indel.idx <- which(breaks >= 0 & breaks < log10(50))
@@ -169,14 +215,49 @@ plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
   polygon(x=c(ins.xy$x, rev(ins.xy$x)),
           y=c(ins.xy$y, rep(0, length(ins.xy$x))),
           col=var.class.colors["indel"], border=NA, bty="n")
-  # points(x=ins.xy$x, y=ins.xy$y, type="l")
   del.xy <- step.function(x=breaks[indel.idx] + snv.gap + (0.5 * snv.width),
                           y=del.k[indel.idx], offset=1)
   polygon(x=-c(del.xy$x, rev(del.xy$x)),
           y=c(del.xy$y, rep(0, length(del.xy$x))),
           col=var.class.colors["indel"], border=NA, bty="n")
-  # points(x=-del.xy$x, y=del.xy$y, type="l")
 
+  # Add indel reference ticks
+  if(add.ref){
+    ref.indel.idx <- which(ref.breaks >= 0 & ref.breaks <= log10(50))
+    ref.ins.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
+                       "y"=ref.ins.k[ref.indel.idx])
+    ref.ins.col <- sapply(1:(length(ref.ins.xy$x)-1), function(r){
+      ovr.idx <- which(sapply(ins.xy$x, is.inside, interval=ref.ins.xy$x[c(r, r+1)]))
+      if(length(ovr.idx) == 0){return(var.ref.color)}
+      if(mean(ref.ins.xy$y[r] >= (1-ref.hex.gap)*ins.xy$y[ovr.idx]) >= 0.5){
+        return(var.ref.color)
+      }else{
+          return("white")
+        }
+    })
+    segments(x0=ref.ins.xy$x[-length(ref.ins.xy$x)],
+             x1=ref.ins.xy$x[-1],
+             y0=ref.ins.xy$y[-length(ref.ins.xy$y)],
+             y1=ref.ins.xy$y[-length(ref.ins.xy$y)],
+             lty=ref.lty, col=ref.ins.col, lend="butt")
+
+    ref.del.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
+                       "y"=ref.del.k[ref.indel.idx])
+    ref.del.col <- sapply(1:(length(ref.del.xy$x)-1), function(r){
+      ovr.idx <- which(sapply(del.xy$x, is.inside, interval=ref.del.xy$x[c(r, r+1)]))
+      if(length(ovr.idx) == 0){return(var.ref.color)}
+      if(mean(ref.del.xy$y[r] >= (1-ref.hex.gap)*del.xy$y[ovr.idx]) >= 0.5){
+        return(var.ref.color)
+      }else{
+          return("white")
+        }
+    })
+    segments(x0=-ref.del.xy$x[-length(ref.del.xy$x)],
+             x1=-ref.del.xy$x[-1],
+             y0=ref.del.xy$y[-length(ref.del.xy$y)],
+             y1=ref.del.xy$y[-length(ref.del.xy$y)],
+             lty=ref.lty, col=ref.del.col, lend="butt")
+  }
 
   # Add indel axes
   logscale.indels <- logscale.minor[which(logscale.minor >= 1 & logscale.minor < 50)]
@@ -205,6 +286,44 @@ plot.size.volcano <- function(size.d, snv.width=0.2, snv.gap=0.15, indel.gap=0,
           y=c(loss.xy$y, rep(0, length(loss.xy$x))),
           col=var.class.colors["sv"], border=NA, bty="n", xpd=T)
   # points(x=-loss.xy$x, y=loss.xy$y, type="l", xpd=T)
+
+  # Add SV reference ticks
+  if(add.ref){
+    ref.sv.idx <- which(ref.breaks >= log10(50))
+    ref.gain.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                        "y"=ref.GAIN.k[ref.sv.idx])
+    ref.gain.col <- sapply(1:(length(ref.gain.xy$x)-1), function(r){
+      ovr.idx <- which(sapply(gain.xy$x, is.inside, interval=ref.gain.xy$x[c(r, r+1)]))
+      if(length(ovr.idx) == 0){return(var.ref.color)}
+      if(mean(ref.gain.xy$y[r] >= (1-ref.hex.gap)*gain.xy$y[ovr.idx]) >= 0.5){
+        return(var.ref.color)
+      }else{
+          return("white")
+        }
+    })
+    segments(x0=ref.gain.xy$x[-length(ref.gain.xy$x)],
+             x1=ref.gain.xy$x[-1],
+             y0=ref.gain.xy$y[-length(ref.gain.xy$y)],
+             y1=ref.gain.xy$y[-length(ref.gain.xy$y)],
+             lty=ref.lty, col=ref.gain.col, lend="butt")
+
+    ref.loss.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                        "y"=ref.LOSS.k[ref.sv.idx])
+    ref.loss.col <- sapply(1:(length(ref.loss.xy$x)-1), function(r){
+      ovr.idx <- which(sapply(loss.xy$x, is.inside, interval=ref.loss.xy$x[c(r, r+1)]))
+      if(length(ovr.idx) == 0){return(var.ref.color)}
+      if(mean(ref.loss.xy$y[r] >= (1-ref.hex.gap)*loss.xy$y[ovr.idx]) >= 0.5){
+        return(var.ref.color)
+      }else{
+          return("white")
+        }
+    })
+    segments(x0=-ref.loss.xy$x[-length(ref.loss.xy$x)],
+             x1=-ref.loss.xy$x[-1],
+             y0=ref.loss.xy$y[-length(ref.loss.xy$y)],
+             y1=ref.loss.xy$y[-length(ref.loss.xy$y)],
+             lty=ref.lty, col=ref.loss.col, lend="butt")
+  }
 
   # Add SV axes
   # logscale.major.bp.labels[which(logscale.major.bp.labels == "1Mb")] <- ">1Mb"
@@ -414,30 +533,27 @@ parser$add_argument("--sv-sites", metavar=".bed", type="character",
                     help="SV sites .bed file")
 parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
                     help="Allele frequency threshold for common variants")
+parser$add_argument("--ref-size-distrib", metavar=".tsv", type="character",
+                    help=paste("Precomputed binned variant size distribution ",
+                               "for a desired external reference dataset"))
+parser$add_argument("--ref-af-distrib", metavar=".tsv", type="character",
+                    help=paste("Precomputed binned variant AF distribution ",
+                               "for a desired external reference dataset"))
+parser$add_argument("--ref-title", metavar="path", type="character",
+                    help="String title for --ref-size-distrib / --ref-af-distrib")
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     help="String or path to use as prefix for output plots",
                     default="./vcf_qc")
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("size_distrib" = "~/scratch/gnomad_sites_test/gnomad.v4.1.size_distribution.merged.tsv.gz",
-#              "af_distrib" = "~/scratch/gnomad_sites_test/gnomad.v4.1.af_distribution.merged.tsv.gz",
-#              "joint_distrib" = "~/scratch/gnomad_sites_test/gnomad.v4.1.size_vs_af_distribution.merged.tsv.gz",
-#              "sv_sites" = "~/scratch/YL.sv.site_metrics.dev.sv.sites.bed.gz",
-#              "common_af" = 0.001,
-#              "out_prefix" = "~/scratch/qc.test")
-# # DEV:
-# args <- list("size_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.size_distrib.tsv.gz",
-#              "af_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.af_distrib.tsv.gz",
-#              "joint_distrib" = "~/scratch/PedSV.sv.site_metrics.dev.size_vs_af_distrib.tsv.gz",
-#              "sv_sites" = "~/scratch/PedSV.sv.site_metrics.dev.sv.sites.bed.gz",
-#              "common_af" = 0.01,
-#              "out_prefix" = "~/scratch/pedsv.qc.test")
-# # DEV:
 # args <- list("size_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_distribution.merged.tsv.gz",
 #              "af_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.af_distribution.merged.tsv.gz",
 #              "joint_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_vs_af_distribution.merged.tsv.gz",
 #              "common_af" = 0.001,
+#              "ref_size_distrib" = "~/scratch/gnomad.v4.1.chr22.size_distribution.merged.tsv.gz",
+#              "ref_af_distrib" = "~/scratch/gnomad.v4.1.chr22.af_distribution.merged.tsv.gz",
+#              "ref_title" = "gnomAD v4.1",
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
 
@@ -446,6 +562,8 @@ size.d <- read.distrib(args$size_distrib)
 af.d <- read.distrib(args$af_distrib)
 joint.d <- read.distrib(args$joint_distrib, key.cols=1:3)
 sv.sizes <- read.sv.sizes(args$sv_sites)
+ref.size.d <- read.distrib(args$ref_size_distrib)
+ref.af.d <- read.distrib(args$ref_af_distrib)
 
 # Check if short variant & SV data are present in compressed distributions
 has.short.variants <- (any(c("snv", "indel") %in% size.d$df$class)
@@ -459,12 +577,14 @@ has.svs <- ("sv" %in% size.d$df$class
 if(!is.null(size.d)){
   pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
       height=2.25, width=2.85)
-  plot.counts.by.vsc(size.d$df, has.short.variants, has.svs)
+  plot.counts.by.vsc(size.d$df, has.short.variants, has.svs,
+                     ref.size.d, ref.title=args$ref_title)
   dev.off()
 }else if(!is.null(freq.d)){
   pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
       height=2.25, width=2.85)
-  plot.counts.by.vsc(freq.d$df, has.short.variants, has.svs)
+  plot.counts.by.vsc(freq.d$df, has.short.variants, has.svs,
+                     ref.af.d, ref.title=args$ref_title)
   dev.off()
 }
 
@@ -473,7 +593,7 @@ if(!is.null(size.d)){
   # Volcano of variant sizes
   pdf(paste(args$out_prefix, "variant_size_volcano.pdf", sep="."),
       height=2.25, width=4.1)
-  plot.size.volcano(size.d, snv.gap=0.15, indel.gap=0)
+  plot.size.volcano(size.d, ref.size.d, args$ref.title)
   dev.off()
 }
 # Cowplot of SV sizes by subclass

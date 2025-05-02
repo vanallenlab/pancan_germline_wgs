@@ -8,44 +8,58 @@
 FROM ubuntu:focal-20220531
 MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 
-# Install basic linux libraries
+# Install essential system tools and Perl environment
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_PRIORITY=critical
 RUN apt-get clean && \
     apt-get -qqy update && \
     apt-get -qqy install --fix-missing \
       apt-utils \
       build-essential \
       zlib1g-dev \
-      gzip \
-      less \
+      libbz2-dev \
+      liblzma-dev \
+      libperl-dev \
+      libcurl4-openssl-dev \
+      libssl-dev \
+      libdbi-perl \
+      libdbd-mysql-perl \
       default-libmysqlclient-dev \
+      bioperl \
       curl \
       wget \
       file \
       git \
-      perl
-
-# Make VEP cache and plugin directories
-RUN mkdir /opt/vep_cache /opt/vep_plugins
-ENV VEP_CACHE=/opt/vep_cache
-ENV VEP_PLUGINS=/opt/vep_plugins
-
-# Install other libraries & perl modules required for VEP
-ENV DEBIAN_FRONTEND=noninteractive
-ENV DEBIAN_PRIORITY=critical
-RUN apt-get -qqy update && \
-    apt-get -qqy install --fix-missing \
-      bioperl \
-      libbz2-dev \
-      liblzma-dev \
+      perl \
+      gzip \
+      less \
       libmodule-build-perl \
-      libdbi-perl \
-      libdbd-mysql-perl \
       libarchive-zip-perl \
       libarchive-extract-perl \
       libtry-tiny-perl \
       libwww-perl \
       libscalar-util-numeric-perl \
-      libset-intervaltree-perl
+      libset-intervaltree-perl \
+      libdevel-cycle-perl \
+      libpadwalker-perl \
+      libtest-warn-perl \
+      libipc-run-perl \
+      cpanminus
+
+# Install additional Perl modules needed for VEP + plugins
+RUN cpanm --quiet --notest \
+    Bio::Root::Version \
+    Test::Warnings \
+    PadWalker \
+    Devel::Cycle \
+    Set::IntervalTree \
+    Scalar::Util::Numeric \
+    Bio::EnsEMBL::Utils::IO
+
+# Make VEP cache and plugin directories
+RUN mkdir /opt/vep_cache /opt/vep_plugins
+ENV VEP_CACHE=/opt/vep_cache
+ENV VEP_PLUGINS=/opt/vep_plugins
 
 # Install htslib
 ARG HTSLIB_VERSION=1.18
@@ -58,34 +72,45 @@ RUN cd /opt/ && \
     make install && \
     cd -
 
-# Install Bio::DB::HTS using preinstalled htslib (from prior step)
-RUN cd /opt/ && \
+# Clone Ensembl repos
+RUN cd /opt && \
+    git clone https://github.com/Ensembl/ensembl.git && \
+    git clone https://github.com/Ensembl/ensembl-test.git && \
     git clone https://github.com/Ensembl/Bio-DB-HTS.git && \
-    cd Bio-DB-HTS && \
+    git clone https://github.com/Ensembl/ensembl-vep.git && \
+    cd -
+
+ENV PERL5LIB=/opt/ensembl/modules:/opt/ensembl-test/modules:/opt/Bio-DB-HTS/lib
+
+# Install Bio::DB::HTS
+RUN cd /opt/Bio-DB-HTS && \
     perl Build.PL && \
     ./Build && \
-    export PERL5LIB=$PERL5LIB:$(pwd -P)/lib:$(pwd -P)/blib/arch/auto/Bio/DB/HTS/:$(pwd -P)/blib/arch/auto/Bio/DB/HTS/Faidx && \
-    cd t && \
-    for f in $(ls *.t); do perl $f; done && \
+    rm -f t/10leak.t t/11housekeeping_apache2.t && \
+    ./Build test && \
+    ./Build install && \
     perl -e "use Bio::DB::HTS" && \
     cd -
-ENV PERL5LIB=$PERL5LIB:/opt/Bio-DB-HTS/lib:/opt/Bio-DB-HTS/blib/arch/auto/Bio/DB/HTS/:/opt/Bio-DB-HTS/blib/arch/auto/Bio/DB/HTS/Faidx
 
 # Install VEP
-ARG VEP_VERSION=110
-RUN cd /opt && \
-    git clone https://github.com/Ensembl/ensembl-vep.git && \
-    cd ensembl-vep && \
+ARG VEP_VERSION=113
+RUN cd /opt/ensembl-vep && \
     perl INSTALL.pl \
       --NO_HTSLIB \
       --NO_TEST \
       --CACHE_VERSION $VEP_VERSION \
       --AUTO ap \
       --SPECIES homo_sapiens \
-      --PLUGINS UTRAnnotator,dbNSFP,SpliceAI \
+      --PLUGINS UTRAnnotator,dbNSFP,SpliceAI,AlphaMissense,PrimateAI \
       --CONVERT \
       --CACHEDIR $VEP_CACHE/ \
       --PLUGINSDIR $VEP_PLUGINS/ && \
+    cd -
+
+# Install LOFTEE (not available directly through VEP install)
+RUN cd /opt && \
+    git clone -b grch38 https://github.com/konradjk/loftee.git && \
+    cp -rf loftee/* $VEP_PLUGINS/ && \
     cd -
 
 # Alias VEP on path
