@@ -317,9 +317,9 @@ def main():
     # Do initial filtering of dataset
     if args.sex_karyotypes:
         study_sex_karyotypes = set(args.sex_karyotypes.split(','))
-        meta = initial_filter(meta,sex_karyotypes=study_sex_karyotypes,args.cohorts)
+        meta = initial_filter(meta,sex_karyotypes=study_sex_karyotypes,cohorts = args.cohorts)
     else:
-        meta = initial_filter(meta,args.cohorts)
+        meta = initial_filter(meta,cohorts = args.cohorts)
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size4 = len(meta)
