@@ -20,6 +20,10 @@ workflow PlotVcfQcMetrics {
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
 
+    Array[File]? ref_size_distribution_tsvs
+    Array[File]? ref_af_distribution_tsvs
+    String ref_cohort_prefix = "ref_dataset"
+
     Array[File]? all_sv_beds
     Array[File]? common_snv_beds
     Array[File]? common_indel_beds
@@ -70,6 +74,34 @@ workflow PlotVcfQcMetrics {
     }
   }
   File joint_distrib = select_first([SumJointDistribs.merged_distrib, size_vs_af_distribution_tsvs[0]])
+
+  # If necessary, collapse reference size distribution into a single file
+  if ( defined(ref_size_distribution_tsvs) ) {
+    Array[File] rsdt_array = select_all(select_first([ref_size_distribution_tsvs]))
+    if ( length(rsdt_array) > 1 ) {
+      call QcTasks.SumCompressedDistribs as SumRefSizeDistribs {
+        input:
+          distrib_tsvs = rsdt_array,
+          out_prefix = ref_cohort_prefix + ".size_distribution",
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+    File ref_size_distrib = select_first([SumRefSizeDistribs.merged_distrib, rsdt_array[0]])
+  }
+
+  # If necessary, collapse reference AF distribution into a single file
+  if ( defined(ref_af_distribution_tsvs) ) {
+    Array[File] radt_array = select_all(select_first([ref_af_distribution_tsvs]))
+    if ( length(radt_array) > 1 ) {
+      call QcTasks.SumCompressedDistribs as SumRefAfDistribs {
+        input:
+          distrib_tsvs = radt_array,
+          out_prefix = ref_cohort_prefix + ".af_distribution",
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+    File ref_af_distrib = select_first([SumRefAfDistribs.merged_distrib, radt_array[0]])
+  }
 
   # If necessary, collapse all SV BEDs
   if ( length(select_first(select_all([all_sv_beds]))) > 1 ) {
@@ -146,11 +178,14 @@ workflow PlotVcfQcMetrics {
       af_distrib = af_distrib,
       joint_distrib = joint_distrib,
       common_af_cutoff = common_af_cutoff,
+      ref_size_distrib = ref_size_distrib,
+      ref_af_distrib = ref_af_distrib,
       all_svs_bed = all_svs_bed,
       common_snvs_bed = common_snvs_bed,
       common_indels_bed = common_indels_bed,
       common_svs_bed = common_svs_bed,
       output_prefix = output_prefix,
+      ref_title = ref_cohort_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
 
@@ -177,12 +212,15 @@ task PlotSiteMetrics {
     File af_distrib
     File joint_distrib
     Float common_af_cutoff
+    File? ref_size_distrib
+    File? ref_af_distrib
     File? all_svs_bed
     File? common_snvs_bed
     File? common_indels_bed
     File? common_svs_bed
 
     String output_prefix
+    String? ref_title
 
     Float mem_gb = 7.5
     Int n_cpu = 4
@@ -194,6 +232,16 @@ task PlotSiteMetrics {
   Array[File?] loc_inputs = [size_distrib, af_distrib, joint_distrib, all_svs_bed,
                              common_snvs_bed, common_indels_bed, common_svs_bed]
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
+
+  Boolean has_ref_size = defined(ref_size_distrib)
+  String ref_size_bname = if has_ref_size then basename(select_first([ref_size_distrib])) else ""
+  String ref_size_cmd = if has_ref_size then "--ref-size-distrib ~{ref_size_bname}" else ""
+
+  Boolean has_ref_af = defined(ref_af_distrib)
+  String ref_af_bname = if has_ref_af then basename(select_first([ref_af_distrib])) else ""
+  String ref_af_cmd = if has_ref_af then "--ref-af-distrib ~{ref_af_bname}" else ""
+
+  String ref_title_cmd = if defined(ref_title) then "--ref-title ~{ref_title}" else ""
 
   Boolean has_all_svs = defined(all_svs_bed)
   String all_sv_bname = if has_all_svs then basename(select_first([all_svs_bed])) else ""
@@ -228,6 +276,9 @@ task PlotSiteMetrics {
       --size-distrib ~{size_distrib} \
       --af-distrib ~{af_distrib} \
       --joint-distrib ~{joint_distrib} \
+      ~{ref_size_cmd} \
+      ~{ref_af_cmd} \
+      --ref-title "~{ref_title}" \
       ~{summary_sv_cmd} \
       --common-af ~{common_af_cutoff} \
       --out-prefix site_metrics/~{output_prefix}

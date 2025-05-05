@@ -588,10 +588,6 @@ parser$add_argument("--af-distrib", metavar=".tsv", type="character",
                     help="Precomputed binned variant AF distribution")
 parser$add_argument("--joint-distrib", metavar=".tsv", type="character",
                     help="Precomputed variant size vs. AF distribution")
-parser$add_argument("--sv-sites", metavar=".bed", type="character",
-                    help="SV sites .bed file")
-parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
-                    help="Allele frequency threshold for common variants")
 parser$add_argument("--ref-size-distrib", metavar=".tsv", type="character",
                     help=paste("Precomputed binned variant size distribution ",
                                "for a desired external reference dataset"))
@@ -600,6 +596,10 @@ parser$add_argument("--ref-af-distrib", metavar=".tsv", type="character",
                                "for a desired external reference dataset"))
 parser$add_argument("--ref-title", metavar="path", type="character",
                     help="String title for --ref-size-distrib / --ref-af-distrib")
+parser$add_argument("--sv-sites", metavar=".bed", type="character",
+                    help="SV sites .bed file")
+parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
+                    help="Allele frequency threshold for common variants")
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     help="String or path to use as prefix for output plots",
                     default="./vcf_qc")
