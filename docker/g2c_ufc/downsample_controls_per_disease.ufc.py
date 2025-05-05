@@ -56,9 +56,9 @@ def extract_family_units(kinship_file):
     
     return family_units
 
-def initial_filter(df,min_age=0,max_age=200,sex_karyotypes={"XX","XY"},apparent_aneuploidies={0}):
+def initial_filter(df,min_age=0,max_age=200,sex_karyotypes={"XX","XY"},apparent_aneuploidies={0},cohorts="aou"):
 
-    cohort_set = {'aou','ceph','mesa','ufc'}
+    cohort_set = set(cohorts.split(','))
     df = df[df['cohort'].isin(cohort_set)]
     df = df[df['sex_karyotype'].isin(sex_karyotypes)]
     df = df[df['apparent_aneuploidies'].isin(apparent_aneuploidies)]
@@ -266,6 +266,7 @@ def main():
     parser.add_argument('--outfile', required=True, help='output.tsv')
     parser.add_argument('--exclude-samples',required=False, help='Samples to Exclude')
     parser.add_argument('--log-file', required=False, help='Path to log file')
+    parser.add_argument('--cohorts',required=True, help='Comma delimited string denoting which cohorts to include')
     args = parser.parse_args()
 
     # Make the log file
@@ -316,9 +317,9 @@ def main():
     # Do initial filtering of dataset
     if args.sex_karyotypes:
         study_sex_karyotypes = set(args.sex_karyotypes.split(','))
-        meta = initial_filter(meta,sex_karyotypes=study_sex_karyotypes)
+        meta = initial_filter(meta,sex_karyotypes=study_sex_karyotypes,args.cohorts)
     else:
-        meta = initial_filter(meta)
+        meta = initial_filter(meta,args.cohorts)
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size4 = len(meta)
