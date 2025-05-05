@@ -183,26 +183,11 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
         if potential_controls.empty:
             continue
 
-        # Prefer controls from same cohort if possible
-        matched_from_cohort = []
-        for cohort in case_group['cohort'].unique():
-            controls_in_cohort = potential_controls[potential_controls['cohort'] == cohort].copy()
-            if controls_in_cohort.empty:
-                continue
+        # Prioritize controls by age difference
+        potential_controls['age_diff'] = (potential_controls['age'] - median_age).abs()
+        potential_controls = potential_controls.drop_duplicates(subset='original_id')
+        selected = potential_controls.sort_values('age_diff').head(max_controls)
 
-            controls_in_cohort['age_diff'] = (controls_in_cohort['age'] - median_age).abs()
-            controls_in_cohort = controls_in_cohort.sort_values('age_diff')
-            matched_from_cohort.append(controls_in_cohort)
-
-        # Combine cohort-matched and fallback to any remaining controls
-        combined_candidates = pd.concat(matched_from_cohort + [potential_controls], ignore_index=True).drop_duplicates()
-        combined_candidates['age_diff'] = (combined_candidates['age'] - median_age).abs()
-
-        selected = (
-            combined_candidates
-            .sort_values('age_diff')
-            .head(max_controls)
-        )
         already_matched_control_ids.update(selected['original_id'])
         matched_controls.append(selected)
 
