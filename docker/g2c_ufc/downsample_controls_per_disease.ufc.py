@@ -150,6 +150,8 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
     """
     np.random.seed(seed)
 
+    already_matched_control_ids = set()
+
     # Define control and case status
     is_control = meta['cancer'].str.lower().str.contains('control')
     is_case = ~meta['cancer'].isin(['control', 'unknown'])
@@ -174,7 +176,8 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
         # Find matching controls for ancestry and sex
         potential_controls = controls[
             (controls['intake_qc_pop'] == pop) &
-            (controls['sex_karyotype'] == sex)
+            (controls['sex_karyotype'] == sex) &
+            (~controls.index.isin(already_matched_control_ids))
         ].copy()
 
         if potential_controls.empty:
@@ -200,6 +203,7 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
             .sort_values('age_diff')
             .head(max_controls)
         )
+        already_matched_control_ids.update(selected.index)
         matched_controls.append(selected)
 
     # Combine everything
@@ -325,7 +329,7 @@ def main():
     sample_size4 = len(meta)
 
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes}.\n")
+        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes} and not in {args.cohort} cohort(s).\n")
 
     
     ## Grab maximally unrelated set; enriching for cases ##
