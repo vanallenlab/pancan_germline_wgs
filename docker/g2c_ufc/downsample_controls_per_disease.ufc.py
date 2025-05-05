@@ -329,7 +329,7 @@ def main():
     sample_size4 = len(meta)
 
     with open(args.log_file, "a") as f:
-        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes} and not in {args.cohort} cohort(s).\n")
+        f.write(f"{sample_size4}\t{(sample_size3 - sample_size4)}\t{round(((sample_size3 - sample_size4)/sample_size3),3) * 100}\tRemove samples that are not {args.sex_karyotypes} and not in {args.cohorts} cohort(s).\n")
 
     
     ## Grab maximally unrelated set; enriching for cases ##
