@@ -92,7 +92,11 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   }
 
   # Get plot parameters
-  xlims <- c(0, max(c(ceiling(k), ceiling(ref.k))))
+  if(add.ref){
+    xlims <- c(0, max(c(ceiling(k), ceiling(ref.k))))
+  }else{
+    xlims <- c(0, max(c(ceiling(k))))
+  }
   ylims <- c(if(add.ref){-1}else{0}, length(k)+bar.sep)
   bar.cols <- var.class.colors[df$class]
   bar.labs <- sapply(10^k, clean.numeric.labels,acceptable.decimals=0,
@@ -114,10 +118,14 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
              y1=(1:length(ref.k)) - (2.5*bar.sep),
              x0=ref.k, x1=ref.k, col=ref.pw.col, lend="round")
     ref.legend.buffer <- 0.03
+    if(!is.null(ref.title)){
+      ref.legend <- paste("Hashes:", ref.title)
+    }else{
+      ref.legend <- "Hashes: ref. data"
+    }
     text(x=par("usr")[2]+(5*ref.legend.buffer*diff(par("usr")[1:2])),
          y=par("usr")[3]+(ref.legend.buffer*diff(par("usr")[3:4])),
-         labels=if(!is.null(ref.title)){paste("Hashes =", ref.title)}else{"Hashes = ref. data"},
-         pos=2, cex=5/6, xpd=T, col=var.ref.color, xpd=T)
+         labels=ref.legend, pos=2, cex=5/6, xpd=T, col=var.ref.color, xpd=T)
   }
 
   # Add count labels to right Y axis
@@ -164,17 +172,20 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
 }
 
 # Volcano of signed variant sizes
-plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
+plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
                               snv.width=0.2, snv.gap=0.15, indel.gap=0,
                               minor.tck=-0.01, major.tck=-0.0275, ref.lty=1,
                               ref.hex.gap=0.01, parmar=c(2, 2.75, 0.25, 0.1)){
   # Get partitioned densities
   df <- size.d$df
+  GAIN.vsc <- c("INS", "DUP", "CNV")
   breaks <- log10(size.d$breaks)
-  snv.k <- log10(sum(as.numeric(apply(df[which(df$class == "snv"), -c(1:2)], 2, sum))))
+  snv.k <- log10(sum(as.numeric(apply(df[which(df$class == "snv"),
+                                         -c(1:2)], 2, sum))))
   ins.k <- log10(as.numeric(df[which(df$subclass == "ins"), -c(1:2)]))
   del.k <- log10(as.numeric(df[which(df$subclass == "del"), -c(1:2)]))
-  GAIN.k <- log10(as.numeric(apply(df[which(df$subclass %in% c("INS", "DUP", "CNV")), -c(1:2)], 2, sum)))
+  GAIN.k <- log10(as.numeric(apply(df[which(df$subclass %in% GAIN.vsc),
+                                      -c(1:2)], 2, sum)))
   LOSS.k <- log10(as.numeric(df[which(df$subclass == "DEL"), -c(1:2)]))
 
   # Get reference densities, if optioned
@@ -184,17 +195,23 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
     add.ref <- TRUE
     ref.breaks <- log10(ref.size.d$breaks)
     ref.df <- ref.size.d$df
-    ref.snv.k <- log10(sum(as.numeric(apply(ref.df[which(ref.df$class == "snv"), -c(1:2)], 2, sum))))
+    ref.snv.k <- log10(sum(as.numeric(apply(ref.df[which(ref.df$class == "snv"),
+                                                   -c(1:2)], 2, sum))))
     ref.ins.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "ins"), -c(1:2)]))
     ref.del.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "del"), -c(1:2)]))
-    ref.GAIN.k <- log10(as.numeric(apply(ref.df[which(ref.df$subclass %in% c("INS", "DUP", "CNV")), -c(1:2)], 2, sum)))
+    ref.GAIN.k <- log10(as.numeric(apply(ref.df[which(ref.df$subclass %in% GAIN.vsc),
+                                                -c(1:2)], 2, sum)))
     ref.LOSS.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "DEL"), -c(1:2)]))
   }
 
   # Get plot values
   xlims <- c(-1, 1) * (max(breaks) + 0.1 + (0.5*snv.width) + snv.gap + indel.gap)
   xlims[1] <- xlims[1]-0.1
-  ylims <- c(0, log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
+  if(add.ref){
+    ylims <- c(0, log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
+  }else{
+    ylims <- c(0, log10(max(df[, -c(1:2)])))
+  }
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar, xaxs="r")
@@ -204,8 +221,13 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
        ybottom=0, ytop=snv.k, col=var.class.colors["snv"],
        border=NA, bty="n")
   if(add.ref){
+    if(ref.snv.k >= (1-ref.hex.gap)*snv.k){
+      snv.ref.color <-var.ref.color
+    }else{
+      snv.ref.color <-"white"
+    }
     segments(x0=-0.5*snv.width, x1=0.5*snv.width, y0=ref.snv.k, y1=ref.snv.k,
-             lty=ref.lty, col=if(ref.snv.k >= (1-ref.hex.gap)*snv.k){var.ref.color}else{"white"})
+             lty=ref.lty, col=snv.ref.color)
   }
 
   # Add indel polygons
@@ -232,8 +254,8 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
       if(mean(ref.ins.xy$y[r] >= (1-ref.hex.gap)*ins.xy$y[ovr.idx]) >= 0.5){
         return(var.ref.color)
       }else{
-          return("white")
-        }
+        return("white")
+      }
     })
     segments(x0=ref.ins.xy$x[-length(ref.ins.xy$x)],
              x1=ref.ins.xy$x[-1],
@@ -249,8 +271,8 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
       if(mean(ref.del.xy$y[r] >= (1-ref.hex.gap)*del.xy$y[ovr.idx]) >= 0.5){
         return(var.ref.color)
       }else{
-          return("white")
-        }
+        return("white")
+      }
     })
     segments(x0=-ref.del.xy$x[-length(ref.del.xy$x)],
              x1=-ref.del.xy$x[-1],
@@ -298,8 +320,8 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
       if(mean(ref.gain.xy$y[r] >= (1-ref.hex.gap)*gain.xy$y[ovr.idx]) >= 0.5){
         return(var.ref.color)
       }else{
-          return("white")
-        }
+        return("white")
+      }
     })
     segments(x0=ref.gain.xy$x[-length(ref.gain.xy$x)],
              x1=ref.gain.xy$x[-1],
@@ -315,8 +337,8 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
       if(mean(ref.loss.xy$y[r] >= (1-ref.hex.gap)*loss.xy$y[ovr.idx]) >= 0.5){
         return(var.ref.color)
       }else{
-          return("white")
-        }
+        return("white")
+      }
     })
     segments(x0=-ref.loss.xy$x[-length(ref.loss.xy$x)],
              x1=-ref.loss.xy$x[-1],
@@ -362,6 +384,15 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title="Ref. data",
        labels="Indels", font=3, pos=2, col=var.class.colors["indel"], xpd=T)
   text(x=-log10(50)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
        labels="SVs", font=3, pos=2, col=var.class.colors["sv"], xpd=T)
+  if(add.ref){
+    if(!is.null(ref.title)){
+      ref.legend <- paste("Hashes:\n", ref.title)
+    }else{
+      ref.legend <- "Hashes:\nref. data"
+    }
+    text(x=par("usr")[2], y=0.925*par("usr")[4], pos=2, cex=4.5/6,
+         col=var.ref.color, xpd=T, labels=ref.legend)
+  }
   # n.balcpx <- sum(df[which(df$subclass %in% c("INV", "CPX", "CTX", "OTH")), -c(1:2)])
   # balcpx.lab <- clean.numeric.labels(n.balcpx)
   # text(x=par("usr")[2], y=0.8*par("usr")[4], col=annotation.color, cex=5/6, pos=2,
@@ -386,20 +417,36 @@ sv.size.cowplot <- function(sv.sizes){
 
 
 # Plot AF distribution per variant class
-plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3,
-                             y.title="Variant count", common.af=0.001,
-                             parmar=c(2, 2.75, 0.25, 2.5)){
+plot.af.distribs <- function(af.df, breaks, ref.af.df=NULL, colors=NULL,
+                             group.names=NULL, lwd=3, y.title="Variant count",
+                             common.af=0.001, parmar=c(2, 2.75, 0.25, 2.5)){
   # Prepare AF data
   af.dat <- lapply(1:nrow(af.df), function(i){
     step.function(x=breaks, y=unlist(log10(af.df[i, ])),
                   offset=0, interpolate=TRUE)
   })
+  if(!is.null(ref.af.df)){
+    add.ref <- TRUE
+    ref.af.dat <- lapply(1:nrow(ref.af.df), function(i){
+      step.function(x=breaks, y=unlist(log10(ref.af.df[i, ])),
+                    offset=0, interpolate=TRUE)
+    })
+  }else{
+    add.ref <- FALSE
+  }
 
   # Get plot parameters
   xlims <- c(min(sapply(af.dat, function(l){l$x})) - 0.1,
              max(sapply(af.dat, function(l){l$x})))
-  ylims <- c(max(c(0, (floor(10 * min(sapply(af.dat, function(l){l$y}))) / 10) - 0.1)),
-             (ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.25)
+  if(add.ref){
+    ymin <- max(c(0,
+                  min(c((floor(10 * min(sapply(af.dat, function(l){l$y}))) / 10) - 0.1,
+                        (floor(10 * min(sapply(ref.af.dat, function(l){l$y}))) / 10) - 0.1))))
+  }else{
+    ymin <- max(c(0, (floor(10 * min(sapply(af.dat, function(l){l$y}))) / 10) - 0.1))
+  }
+  ymax <- (ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.25
+  ylims <- c(ymin, ymax)
   if(is.null(colors)){
     colors <- rev(greyscale.palette(length(af.dat)))
   }
@@ -409,7 +456,7 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
 
   # Add distinction between rare & common, if optioned
   if(!is.null(common.af)){
-    abline(v=log10(common.af), col=annotation.color, lty=5)
+    abline(v=log10(common.af), col=annotation.color)
     text(x=log10(common.af)+(0.035*diff(par("usr")[1:2])),
          y=par("usr")[4]-(0.04*diff(par("usr")[3:4])),
          cex=5/6, pos=2, labels="Rare", xpd=T)
@@ -420,6 +467,17 @@ plot.af.distribs <- function(af.df, breaks, colors=NULL, group.names=NULL, lwd=3
          y=par("usr")[4]-(0.13*diff(par("usr")[3:4])),
          labels=bquote("(AF" >= .(paste(round(100 * common.af, 1), "%)", sep=""))),
          cex=5/6, pos=4, xpd=T)
+  }
+
+  # Add ref ticks first s/t main data can be overplotted
+  if(add.ref){
+    sapply(1:length(ref.af.dat), function(i){
+      segments(x0=ref.af.dat[[i]]$x[c(TRUE, FALSE)],
+               x1=ref.af.dat[[i]]$x[c(FALSE, TRUE)],
+               y0=ref.af.dat[[i]]$y[c(TRUE, FALSE)],
+               y1=ref.af.dat[[i]]$y[c(TRUE, FALSE)],
+               col=colors[i], lend="butt", lwd=lwd/2)
+    })
   }
 
   # Add step functions and group names (if optioned)
@@ -495,7 +553,8 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
     af.labels <- head(af.labels.pct, length(af.bins))
     parse.any <- FALSE
   }
-  legend.y.pos <- (c(0, cumsum(plot.df[-nrow(plot.df), ncol(plot.df)])) + cumsum(plot.df[, ncol(plot.df)])) / 2
+  legend.y.pos <- (c(0, cumsum(plot.df[-nrow(plot.df), ncol(plot.df)]))
+                   + cumsum(plot.df[, ncol(plot.df)])) / 2
   legend.y.pos <- yaxis.legend(af.labels, x=ncol(plot.df)-bar.sep,
                                y.positions=legend.y.pos, parse.labels=parse.any,
                                upper.limit=0.975, colors=af.pal, sep.wex=0.5,
@@ -573,28 +632,43 @@ has.svs <- ("sv" %in% size.d$df$class
             | "sv" %in% af.d$df$class
             | "sv" %in% joint.d$df$class)
 
+
 # Summary of variant counts
-if(!is.null(size.d)){
-  pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
-      height=2.25, width=2.85)
-  plot.counts.by.vsc(size.d$df, has.short.variants, has.svs,
-                     ref.size.d, ref.title=args$ref_title)
-  dev.off()
-}else if(!is.null(freq.d)){
-  pdf(paste(args$out_prefix, "variant_count_bars.pdf", sep="."),
-      height=2.25, width=2.85)
-  plot.counts.by.vsc(freq.d$df, has.short.variants, has.svs,
-                     ref.af.d, ref.title=args$ref_title)
-  dev.off()
+count.use.d <- head(c(size.d, af.d), 1)
+count.use.ref.d <- head(c(ref.size.d, ref.af.d), 1)
+if(!is.null(count.use.d)){
+  for(has.ref in unique(c(FALSE, !is.null(count.use.ref.d)))){
+    if(has.ref){
+      pdf.suffix <- "with_ref.pdf"
+      ref.d.sub <- count.use.ref.d
+    }else{
+      pdf.suffix <- "pdf"
+      ref.d.sub <- NULL
+    }
+    pdf(paste(args$out_prefix, "variant_count_bars", pdf.suffix, sep="."),
+        height=2.25, width=2.85)
+    plot.counts.by.vsc(count.use.d$df, has.short.variants, has.svs,
+                       ref.d.sub, ref.title=args$ref_title)
+    dev.off()
+  }
 }
 
-# Size plots
+
+# Volcano of variant sizes
 if(!is.null(size.d)){
-  # Volcano of variant sizes
-  pdf(paste(args$out_prefix, "variant_size_volcano.pdf", sep="."),
-      height=2.25, width=4.1)
-  plot.size.volcano(size.d, ref.size.d, args$ref.title)
-  dev.off()
+  for(has.ref in unique(c(FALSE, !is.null(ref.size.d)))){
+    if(has.ref){
+      pdf.suffix <- "with_ref.pdf"
+      ref.d.sub <- ref.size.d
+    }else{
+      pdf.suffix <- "pdf"
+      ref.d.sub <- NULL
+    }
+    pdf(paste(args$out_prefix, "variant_size_volcano", pdf.suffix, sep="."),
+        height=2.25, width=4.1)
+    plot.size.volcano(size.d, ref.d.sub, ref.title=args$ref_title)
+    dev.off()
+  }
 }
 # Cowplot of SV sizes by subclass
 if(!is.null(sv.sizes)){
@@ -604,51 +678,86 @@ if(!is.null(sv.sizes)){
   dev.off()
 }
 
+
 # AF plots
 if(!is.null(af.d)){
-  # Step function of AFs
-  classes.in.af <- intersect(c("snv", "indel", "sv"), af.d$df$class)
-  main.af.df <- do.call("rbind", lapply(classes.in.af, function(vc){
-    apply(af.d$df[which(af.d$df$class == vc), -c(1:2)], 2, sum)
-  }))
-  pdf(paste(args$out_prefix, "af_distribs.pdf", sep="."),
-      height=2.25, width=2.5)
-  plot.af.distribs(main.af.df, breaks=log10(af.d$breaks),
-                   colors=var.class.colors[classes.in.af],
-                   group.names=paste(var.class.abbrevs[classes.in.af], "s", sep=""),
-                   common.af=args$common_af)
-  dev.off()
+  for(has.ref in unique(c(FALSE, !is.null(ref.af.d)))){
+    if(has.ref){
+      pdf.suffix <- "with_ref.pdf"
+    }else{
+      pdf.suffix <- "pdf"
+    }
 
-  # Supplementary step function of AFs for short variants by subclass
-  if(has.short.variants){
-    short.af.df <- do.call("rbind", lapply(c("ti", "tv", "del", "ins"), function(vsc){
-      apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
+    # Step function of AFs
+    classes.in.af <- intersect(c("snv", "indel", "sv"), af.d$df$class)
+    main.af.df <- do.call("rbind", lapply(classes.in.af, function(vc){
+      apply(af.d$df[which(af.d$df$class == vc), -c(1:2)], 2, sum)
     }))
-    pdf(paste(args$out_prefix, "af_distribs.short_vars.pdf", sep="."),
+    if(has.ref){
+      main.ref.af.df <- do.call("rbind", lapply(classes.in.af, function(vc){
+        apply(ref.af.d$df[which(ref.af.d$df$class == vc), -c(1:2)], 2, sum)
+      }))
+    }else{
+      main.ref.af.df <- NULL
+    }
+    pdf(paste(args$out_prefix, "af_distribs", pdf.suffix, sep="."),
         height=2.25, width=2.5)
-    plot.af.distribs(short.af.df, breaks=log10(af.d$breaks),
-                     colors=var.subclass.colors[c("ti", "tv", "del", "ins")],
-                     group.names=var.subclass.abbrevs[c("ti", "tv", "del", "ins")],
-                     y.title="Short variant count", lwd=2, common.af=args$common_af)
+    plot.af.distribs(main.af.df, breaks=log10(af.d$breaks), main.ref.af.df,
+                     colors=var.class.colors[classes.in.af],
+                     group.names=paste(var.class.abbrevs[classes.in.af], "s", sep=""),
+                     common.af=args$common_af)
     dev.off()
-  }
 
-  # Supplementary step function of AFs for SVs by subclass
-  if(has.svs){
-    svs.in.af <- intersect(names(sv.colors), af.d$df$subclass)
-    sv.af.df <- do.call("rbind", lapply(svs.in.af, function(vsc){
-      apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
-    }))
-    pdf(paste(args$out_prefix, "af_distribs.svs.pdf", sep="."),
-        height=2.25, width=2.5)
-    plot.af.distribs(sv.af.df, breaks=log10(af.d$breaks),
-                     colors=sv.colors[svs.in.af],
-                     group.names=var.subclass.abbrevs[svs.in.af],
-                     y.title="SV count", lwd=2, common.af=args$common_af,
-                     parmar=c(2, 2.75, 0.25, 2.75))
-    dev.off()
+    # Supplementary step function of AFs for short variants by subclass
+    if(has.short.variants){
+      short.af.df <- do.call("rbind",
+                             lapply(c("ti", "tv", "del", "ins"), function(vsc){
+                               apply(af.d$df[which(af.d$df$subclass == vsc),
+                                             -c(1:2)], 2, sum)
+                             }))
+      if(has.ref){
+        short.ref.af.df <- do.call("rbind",
+                                   lapply(c("ti", "tv", "del", "ins"), function(vsc){
+                                     apply(ref.af.d$df[which(ref.af.d$df$subclass == vsc),
+                                                       -c(1:2)], 2, sum)
+                                   }))
+      }else{
+        short.ref.af.df <- NULL
+      }
+      pdf(paste(args$out_prefix, "af_distribs.short_vars", pdf.suffix, sep="."),
+          height=2.25, width=2.5)
+      plot.af.distribs(short.af.df, breaks=log10(af.d$breaks), short.ref.af.df,
+                       colors=var.subclass.colors[c("ti", "tv", "del", "ins")],
+                       group.names=var.subclass.abbrevs[c("ti", "tv", "del", "ins")],
+                       y.title="Short variant count", lwd=2, common.af=args$common_af)
+      dev.off()
+    }
+
+    # Supplementary step function of AFs for SVs by subclass
+    if(has.svs){
+      svs.in.af <- intersect(names(sv.colors), af.d$df$subclass)
+      sv.af.df <- do.call("rbind", lapply(svs.in.af, function(vsc){
+        apply(af.d$df[which(af.d$df$subclass == vsc), -c(1:2)], 2, sum)
+      }))
+      if(has.ref){
+        sv.ref.af.df <- do.call("rbind", lapply(svs.in.af, function(vsc){
+          apply(ref.af.d$df[which(ref.af.d$df$subclass == vsc), -c(1:2)], 2, sum)
+        }))
+      }else{
+        sv.ref.af.df <- NULL
+      }
+      pdf(paste(args$out_prefix, "af_distribs.svs", pdf.suffix, sep="."),
+          height=2.25, width=2.5)
+      plot.af.distribs(sv.af.df, breaks=log10(af.d$breaks), sv.ref.af.df,
+                       colors=sv.colors[svs.in.af],
+                       group.names=var.subclass.abbrevs[svs.in.af],
+                       y.title="SV count", lwd=2, common.af=args$common_af,
+                       parmar=c(2, 2.75, 0.25, 2.75))
+      dev.off()
+    }
   }
 }
+
 
 # 2D comparison of sizes vs. AFs
 if(!is.null(joint.d)){
