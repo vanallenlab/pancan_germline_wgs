@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # Adapted from Ryan L. Collins, Riaz Gillani, Jett Crowdis and the Van Allen Laboratory
-# Copyright (c) 2023 Noah Fields and the Van Allen Laboratory
+# Copyright (c) 2025 Noah Fields and the Van Allen Laboratory
 # Distributed under terms of the GPL-2.0 License (see LICENSE)
 # Contact: Noah D. Fields <Noah_Fields@dfci.harvard.edu>
 
@@ -177,7 +177,7 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
         potential_controls = controls[
             (controls['intake_qc_pop'] == pop) &
             (controls['sex_karyotype'] == sex) &
-            (~controls.index.isin(already_matched_control_ids))
+            (~controls['original_id'].isin(already_matched_control_ids))
         ].copy()
 
         if potential_controls.empty:
@@ -203,7 +203,7 @@ def match_controls_by_ancestry(meta: pd.DataFrame, max_controls_per_case: int = 
             .sort_values('age_diff')
             .head(max_controls)
         )
-        already_matched_control_ids.update(selected.index)
+        already_matched_control_ids.update(selected['original_id'])
         matched_controls.append(selected)
 
     # Combine everything
