@@ -27,26 +27,19 @@ load.constants("all")
 # Data Functions #
 ##################
 # Load a site metrics BED file and subset to minimal required columns
-read.bed <- function(bed.in, common_af=0){
-  keep.cols <- c("af", "freq_het", "freq_hom", "hwe")
+read.bed <- function(bed.in, common_af=0, autosomes.only=T){
   df <- read.table(bed.in, header=T, sep="\t", comment.char="",
-                   check.names=F, quote="")[, keep.cols]
-  df <- as.data.frame(apply(df, 2, as.numeric))
+                   check.names=F, quote="")
+  if(autosomes.only){
+    df <- df[df[, 1] %in% c(1:22, paste("chr", c(1:22), sep="")), ]
+  }
+  keep.cols <- c("af", "freq_het", "freq_hom", "hwe")
+  df <- as.data.frame(apply(df[, keep.cols], 2, as.numeric))
   df <- df[which(df$af >= common_af), ]
+  df <- df[complete.cases(df), ]
   df[, c("hwe.x", "hwe.y")] <- t(apply(df[, c("freq_het", "freq_hom")], 1,
                                        function(freqs){calc.hwe.xy(freqs[1], freqs[2])}))
   return(as.data.frame(df))
-}
-
-# Convert het/hom frequencies to ternary (x, y) coordinates for HWE
-calc.hwe.xy <- function(f.het, f.hom){
-  if(is.na(f.het) | is.na(f.hom)){
-    return(c(NA, NA))
-  }
-  # Assuming equilateral triangle with l(sides) = 1
-  x <- f.hom + (0.5*f.het)
-  y <- sin(60 * pi / 180) * f.het
-  c(x, y)
 }
 
 
@@ -54,13 +47,25 @@ calc.hwe.xy <- function(f.het, f.hom){
 # Plotting Functions #
 ######################
 # HWE ternary plot
-hwe.plot <- function(df, title="All variants", pt.cex=0.05,
-                     pt.alpha=1, parmar=c(1.75, 2, 1.25, 1)){
+hwe.plot <- function(df, title="All variants", pt.cex=NULL, pt.pch=NULL,
+                     pt.alpha=NULL, parmar=c(1.75, 2, 1.25, 1)){
   # Get plot data
   df <- df[which(!is.na(df$hwe.x) & !is.na(df$hwe.y) & !is.na(df$hwe)), ]
   ytop <- sin(60 * pi / 180)
   bonf.p <- 0.05 / nrow(df)
   n.p.bins <- floor(10 * -log10(bonf.p))
+
+  # Dynamically determine point properties
+  pt.params <- scatterplot.point.params(nrow(df), cex.start=0.3)
+  if(is.null(pt.cex)){
+    pt.cex <- pt.params$cex
+  }
+  if(is.null(pt.pch)){
+    pt.pch <- pt.params$pch
+  }
+  if(is.null(pt.alpha)){
+    pt.alpha <- pt.params$alpha
+  }
   p.pal <- rev(viridis(n.p.bins + 1, begin=0.1, end=0.95))
   pt.cols <- p.pal[sapply(floor(10 * -log10(df$hwe)),
                           function(v){min(v, n.p.bins)}) + 1]
@@ -74,7 +79,7 @@ hwe.plot <- function(df, title="All variants", pt.cex=0.05,
 
   # Add bottom X axis
   clean.axis(1, at=seq(0, 1, 0.25), label.units="percent", label.line=-1,
-             title="Homozygote freq.", title.line=-0.25)
+             title="Homozygotes", title.line=-0.25)
 
   # Add left diagonal X axis
   segments(x0=0, x1=0.5, y0=0, y1=ytop)
@@ -88,9 +93,9 @@ hwe.plot <- function(df, title="All variants", pt.cex=0.05,
            y0=diag.ax.y.at, y1=diag.ax.y.at + diag.ax.y.adj, xpd=T)
   text(x=diag.ax.x.at+0.025, y=diag.ax.y.at+0.015, pos=2, cex=4.5/6,
        labels=paste(seq(0, 100, 25), "%", sep=""), xpd=T)
-  text(x=mean(diag.ax.x.at) - (11*diag.ax.x.adj),
-       y=mean(diag.ax.y.at) + (11*diag.ax.y.adj),
-       srt=60, labels="Heterozygote freq.", xpd=T)
+  text(x=mean(diag.ax.x.at) - (10*diag.ax.x.adj),
+       y=mean(diag.ax.y.at) + (10*diag.ax.y.adj),
+       srt=60, labels="Heterozygotes", xpd=T)
 
   # Add legend
   legend.left <- 0.75
@@ -134,27 +139,37 @@ hwe.plot <- function(df, title="All variants", pt.cex=0.05,
   mtext(3, line=0.4, text=title)
   n.all <- nrow(df)
   n.pass <- sum(df$hwe >= bonf.p)
-  n.formatted <- clean.numeric.labels(c(n.all, n.pass), acceptable.decimals=1)
+  n.formatted <- clean.numeric.labels(c(n.pass, n.all), acceptable.decimals=1)
   n.formatted[1] <- gsub("k|M|B|T", "", n.formatted[1])
   pct.pass <- n.pass / n.all
   subtitle <- paste(n.formatted[1], " / ",
                     n.formatted[2], " (", round(100*pct.pass, 1),
-                 "%) pass HWE", sep="")
+                    "%) pass HWE", sep="")
   mtext(3, cex=5/6, text=subtitle, line=-0.4)
 
   # Add points
   points(df$hwe.x, df$hwe.y, pch=1, cex=pt.cex, col=pt.cols, xpd=T)
+
+  return(c(pct.pass, n.all))
 }
 
 # Plot wrapper function for all site-level pointwise plots
 pointwise.plots <- function(df, out.prefix, fname.suffix="all",
-                            title="All variants", hwe.pt.cex=0.05,
-                            hwe.pt.alpha=1){
+                            title="All variants"){
+
+  ss.df <- data.frame("analysis"=character(), "measure"=character(),
+                      "value"=numeric(), "n"=numeric())
+  ss.prefix <- gsub("[ ]+", "_", fname.suffix)
+
   # HWE plot as .png
   png(paste(out.prefix, fname.suffix, "hwe.png", sep="."),
       height=2.25*300, width=2.25*300, res=300)
-  hwe.plot(df, title=title, pt.cex=hwe.pt.cex, pt.alpha=hwe.pt.alpha)
+  m.tmp <- hwe.plot(df, title=title)
   dev.off()
+
+  ss.df[1, ] <- c(paste(ss.prefix, "common_hwe", sep="."), "pct_pass", m.tmp)
+
+  return(ss.df)
 }
 
 
@@ -197,10 +212,11 @@ if(!is.null(args$snvs)){
   snv.df <- read.bed(args$snvs, args$common_af)
 
   # Plot SNV metrics
-  pointwise.plots(snv.df, args$out_prefix, fname.suffix="snv",
+  snv.ss <- pointwise.plots(snv.df, args$out_prefix, fname.suffix="snv",
                   title="Common SNVs")
 }else{
   snv.df <- NULL
+  snv.ss <- NULL
 }
 
 # Load & plot indels, if provided
@@ -209,11 +225,12 @@ if(!is.null(args$indels)){
   indel.df <- read.bed(args$indels, args$common_af)
 
   # Plot indel metrics
-  pointwise.plots(indel.df, args$out_prefix, fname.suffix="indel",
+  indel.ss <- pointwise.plots(indel.df, args$out_prefix, fname.suffix="indel",
                   title="Common indels")
 
 }else{
   indel.df <- NULL
+  indel.ss <- NULL
 }
 
 # Load & plot SVs, if provided
@@ -222,10 +239,11 @@ if(!is.null(args$svs)){
   sv.df <- read.bed(args$svs, args$common_af)
 
   # Plot SV metrics
-  pointwise.plots(sv.df, args$out_prefix, fname.suffix="sv",
+  sv.ss <- pointwise.plots(sv.df, args$out_prefix, fname.suffix="sv",
                   title="Common SVs")
 }else{
   sv.df <- NULL
+  sv.ss <- NULL
 }
 
 # Combine & plot all variant types, if optioned
@@ -234,7 +252,15 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
   all.df <- do.call("rbind", list(snv.df, indel.df, sv.df))
 
   # Plot all metrics
-  pointwise.plots(all.df, args$out_prefix, fname.suffix="all",
+  all.ss <- pointwise.plots(all.df, args$out_prefix, fname.suffix="all",
                   title="All common variants")
+}else{
+  all.ss <- NULL
 }
+
+# Combine summary statistics and write to .tsv
+ss.out <- do.call("rbind", list(snv.ss, indel.ss, sv.ss, all.ss))
+colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
+write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
+            col.names=T, row.names=F, sep="\t", quote=F)
 

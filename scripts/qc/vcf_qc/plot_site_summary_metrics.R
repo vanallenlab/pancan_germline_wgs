@@ -30,22 +30,6 @@ sv.dens.bw <- c("DEL" = 0.5,
 ##################
 # Data Functions #
 ##################
-# Clean size or AF breaks encoded as strings
-clean.breaks <- function(vals){
-  as.numeric(gsub("ge|lt|bp", "", vals))
-}
-
-# Import a precomputed compressed summary distribution
-read.distrib <- function(tsv.in, key.cols=1:2){
-  if(is.null(tsv.in)){return(NULL)}
-  df <- read.table(tsv.in, header=T, sep="\t", comment.char="",
-                   quote="", check.names=F)
-  colnames(df)[1] <- gsub("#", "", colnames(df)[1])
-  df[, -key.cols] <- apply(df[, -key.cols], 2, as.numeric)
-  dist.breaks <- clean.breaks(colnames(df)[-key.cols])
-  list("df" = df, "breaks" = dist.breaks)
-}
-
 # Load all SV sizes from an SV sites BED and split by subclass
 read.sv.sizes <- function(tsv.in){
   if(is.null(tsv.in)){return(NULL)}
@@ -61,6 +45,55 @@ read.sv.sizes <- function(tsv.in){
   return(sv.sizes)
 }
 
+# Compute allele frequency summary metrics for all classes & subclasses
+get.af.ss <- function(af.d, common.af=0.01){
+  af.df <- af.d$df
+  breaks <- af.d$breaks
+
+  # Get column indexes for singleton, rare non-singleton, and common
+  # This assumes the first frequency column is always singleton (or close enough)
+  singleton.cidx <- 3
+  rare.cidx <- setdiff(which(breaks < common.af) + 2, singleton.cidx)
+  common.cidx <- which(breaks >= common.af) + 2
+  cidx.list <- list(singleton.cidx, rare.cidx, common.cidx)
+  bin.prefixes <- c("pct_singletons", "pct_rare", "pct_common")
+
+  # Get statistics across all variant classes
+  n.all <- sapply(cidx.list, function(cidx){sum(af.df[, cidx])})
+  ss.df <- data.frame("analysis" = paste(bin.prefixes, "all", sep="."),
+                      "measure" = "percent",
+                      "value" = n.all / sum(n.all),
+                      "n" = sum(n.all))
+
+  # Get statistics across major variant classes
+  vc.ss <- do.call("rbind", lapply(names(var.class.abbrevs), function(vc){
+    vc.n <- sapply(cidx.list, function(cidx){
+      sum(af.df[which(af.df$class %in% vc), cidx])
+    })
+    if(sum(vc.n) > 0){
+      data.frame("analysis" = paste(bin.prefixes, vc, sep="."),
+                 "measure" = "percent",
+                 "value" = vc.n / sum(vc.n),
+                 "n" = sum(vc.n))
+    }
+  }))
+
+  # Get statistics across variant subclasses
+  vsc.ss <- do.call("rbind", lapply(names(var.subclass.abbrevs), function(vsc){
+    vsc.n <- sapply(cidx.list, function(cidx){
+      sum(af.df[which(af.df$subclass %in% vsc), cidx])
+    })
+    if(sum(vsc.n) > 0){
+      data.frame("analysis" = paste(bin.prefixes, vsc, sep="."),
+                 "measure" = "percent",
+                 "value" = vsc.n / sum(vsc.n),
+                 "n" = sum(vsc.n))
+    }
+  }))
+
+  as.data.frame(rbind(ss.df, vc.ss, vsc.ss))
+}
+
 
 ######################
 # Plotting Functions #
@@ -70,6 +103,22 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
                                ref.size.d=NULL, ref.title=NULL,
                                bar.sep=0.1, ref.pt.cex=2/3,
                                parmar=c(0.1, 7.5, 2, 2)){
+
+  # Get summary statistics for output .tsv
+  ss.df <- data.frame("analysis"=character(), "measure"=character(),
+                      "value"=numeric(), "n"=numeric())
+  ss.df[1, ] <- c("site_count.all_variants", "count", rep(sum(df[, -(1:2)]), 2))
+  vc.counts <- data.frame(do.call("rbind", lapply(names(var.class.abbrevs), function(vc){
+    c(paste("site_count", vc, sep="."), "count",
+    rep(sum(df[which(df$class == vc), -(1:2)]), 2))
+  })))
+  vsc.counts <- data.frame(do.call("rbind", lapply(names(var.subclass.abbrevs), function(vsc){
+    c(paste("site_count", vsc, sep="."), "count",
+      rep(sum(df[which(df$subclass == vsc), -(1:2)]), 2))
+  })))
+  colnames(vc.counts) <- colnames(vsc.counts) <- colnames(ss.df)
+  ss.df <- as.data.frame(rbind(ss.df, vc.counts, vsc.counts))
+
   # Simplify count data
   k <- log10(apply(df[, -c(1:2)], 1, sum))
   k.order <- order(k)
@@ -119,9 +168,9 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
              x0=ref.k, x1=ref.k, col=ref.pw.col, lend="round")
     ref.legend.buffer <- 0.03
     if(!is.null(ref.title)){
-      ref.legend <- paste("Hashes:", ref.title)
+      ref.legend <- paste("Hashes from", ref.title)
     }else{
-      ref.legend <- "Hashes: ref. data"
+      ref.legend <- "Hashes from ref. cohort"
     }
     text(x=par("usr")[2]+(5*ref.legend.buffer*diff(par("usr")[1:2])),
          y=par("usr")[3]+(ref.legend.buffer*diff(par("usr")[3:4])),
@@ -169,6 +218,8 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
          labels="Structural\nvariants\n(>49 bp)",
          cex=5/6, pos=2, xpd=T)
   }
+
+  return(ss.df)
 }
 
 # Volcano of signed variant sizes
@@ -386,9 +437,9 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
        labels="SVs", font=3, pos=2, col=var.class.colors["sv"], xpd=T)
   if(add.ref){
     if(!is.null(ref.title)){
-      ref.legend <- paste("Hashes:\n", ref.title)
+      ref.legend <- paste("Hashes from\n", ref.title)
     }else{
-      ref.legend <- "Hashes:\nref. data"
+      ref.legend <- "Hashes from\nref. cohort"
     }
     text(x=par("usr")[2], y=0.925*par("usr")[4], pos=2, cex=4.5/6,
          col=var.ref.color, xpd=T, labels=ref.legend)
@@ -401,6 +452,25 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
 
 # Cowplot of SV sizes
 sv.size.cowplot <- function(sv.sizes){
+
+  # Get summary statistics for output .tsv
+  ss.df <- data.frame("analysis"=character(), "measure"=character(),
+                      "value"=numeric(), "n"=numeric())
+  ss.df[1, ] <- c("sv_size.all", "mean",
+                  mean(10^unlist(sv.sizes)),
+                  length(unlist(sv.sizes)))
+  ss.df[2, ] <- c("sv_size.all", "median",
+                  median(10^unlist(sv.sizes)),
+                  length(unlist(sv.sizes)))
+  vsc.ss <- data.frame(do.call("rbind", lapply(names(sv.sizes), function(vsc){
+    data.frame("analysis" = paste("sv_size", vsc, sep="."),
+               "measure" = c("mean", "median"),
+               "value" = c(mean(10^sv.sizes[[vsc]]), median(10^sv.sizes[[vsc]])),
+               "n" = length(sv.sizes[[vsc]]))
+  })))
+  ss.df <- as.data.frame(rbind(ss.df, vsc.ss))
+
+  # Plot sizes
   ridgeplot(sv.sizes, xlims=log10(c(10, 5000000)), x.axis.side=NA,
             names=var.subclass.abbrevs[names(sv.sizes)],
             bw.adj=sv.dens.bw[names(sv.sizes)], fill=sv.colors[names(sv.sizes)],
@@ -413,13 +483,15 @@ sv.size.cowplot <- function(sv.sizes){
              labels=logscale.major.bp.labels[seq(1, length(logscale.major.bp), 2)],
              labels.at=log10(logscale.major.bp)[seq(1, length(logscale.major.bp), 2)],
              label.line=-0.9, title.line=0, title="SV size")
+
+  return(ss.df)
 }
 
 
 # Plot AF distribution per variant class
 plot.af.distribs <- function(af.df, breaks, ref.af.df=NULL, colors=NULL,
                              group.names=NULL, lwd=3, y.title="Variant count",
-                             common.af=0.001, parmar=c(2, 2.75, 0.25, 2.5)){
+                             common.af=0.01, parmar=c(2, 2.75, 0.25, 2.5)){
   # Prepare AF data
   af.dat <- lapply(1:nrow(af.df), function(i){
     step.function(x=breaks, y=unlist(log10(af.df[i, ])),
@@ -544,10 +616,10 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
              title="Variant Proportion", title.line=0.6, label.line=-0.75)
 
   # Add right Y axis/legend hybrid
-  af.labels.pct <- rev(c("AF>10%", "AF<10%", "AF<1%", "AF<0.1%"))
+  af.labels.pct <- rev(c("AF>10%", "AF<10%", "AF<1%"))
   if(length(af.bins) > length(af.labels.pct)){
     af.labels <- c(rep("", length(af.labels.pct)),
-                   paste("AF<10^", -((length(af.labels.pct)+1):length(af.bins)), sep=""))
+                   paste("AF<10^", -((length(af.labels.pct)):length(af.bins)), sep=""))
     parse.any <- TRUE
   }else{
     af.labels <- head(af.labels.pct, length(af.bins))
@@ -609,20 +681,20 @@ args <- parser$parse_args()
 # args <- list("size_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_distribution.merged.tsv.gz",
 #              "af_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.af_distribution.merged.tsv.gz",
 #              "joint_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_vs_af_distribution.merged.tsv.gz",
+#              "sv_sites" = "~/scratch/gnomad_test.sv.sites.bed.gz",
 #              "common_af" = 0.001,
 #              "ref_size_distrib" = "~/scratch/gnomad.v4.1.chr22.size_distribution.merged.tsv.gz",
 #              "ref_af_distrib" = "~/scratch/gnomad.v4.1.chr22.af_distribution.merged.tsv.gz",
 #              "ref_title" = "gnomAD v4.1",
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
-
 # Read distributions
-size.d <- read.distrib(args$size_distrib)
-af.d <- read.distrib(args$af_distrib)
-joint.d <- read.distrib(args$joint_distrib, key.cols=1:3)
+size.d <- read.compressed.distrib(args$size_distrib)
+af.d <- read.compressed.distrib(args$af_distrib)
+joint.d <- read.compressed.distrib(args$joint_distrib, key.cols=1:3)
 sv.sizes <- read.sv.sizes(args$sv_sites)
-ref.size.d <- read.distrib(args$ref_size_distrib)
-ref.af.d <- read.distrib(args$ref_af_distrib)
+ref.size.d <- read.compressed.distrib(args$ref_size_distrib)
+ref.af.d <- read.compressed.distrib(args$ref_af_distrib)
 
 # Check if short variant & SV data are present in compressed distributions
 has.short.variants <- (any(c("snv", "indel") %in% size.d$df$class)
@@ -647,10 +719,12 @@ if(!is.null(count.use.d)){
     }
     pdf(paste(args$out_prefix, "variant_count_bars", pdf.suffix, sep="."),
         height=2.25, width=2.85)
-    plot.counts.by.vsc(count.use.d$df, has.short.variants, has.svs,
+    count.ss <- plot.counts.by.vsc(count.use.d$df, has.short.variants, has.svs,
                        ref.d.sub, ref.title=args$ref_title)
     dev.off()
   }
+}else{
+  count.ss <- NULL
 }
 
 
@@ -674,13 +748,19 @@ if(!is.null(size.d)){
 if(!is.null(sv.sizes)){
   pdf(paste(args$out_prefix, "sv_size_cowplot.pdf", sep="."),
       height=2.25, width=2.25)
-  sv.size.cowplot(sv.sizes)
+  sv.size.ss <- sv.size.cowplot(sv.sizes)
   dev.off()
+}else{
+  sv.size.ss <- NULL
 }
 
 
 # AF plots
 if(!is.null(af.d)){
+  # Gather AF summary statistics
+  af.ss <- get.af.ss(af.d)
+
+  # Generate AF distribution plots
   for(has.ref in unique(c(FALSE, !is.null(ref.af.d)))){
     if(has.ref){
       pdf.suffix <- "with_ref.pdf"
@@ -756,6 +836,8 @@ if(!is.null(af.d)){
       dev.off()
     }
   }
+}else{
+  af.ss <- NULL
 }
 
 
@@ -767,3 +849,9 @@ if(!is.null(joint.d)){
   dev.off()
 }
 
+
+# Combine summary statistics and write to .tsv
+ss.out <- do.call("rbind", list(count.ss, sv.size.ss, af.ss))
+colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
+write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
+            col.names=T, row.names=F, sep="\t", quote=F)

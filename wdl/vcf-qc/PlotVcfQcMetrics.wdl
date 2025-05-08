@@ -29,6 +29,10 @@ workflow PlotVcfQcMetrics {
     Array[File]? common_indel_beds
     Array[File]? common_sv_beds
 
+    # Array[Array[File]]? site_benchmark_common_snv_ppv_beds
+    # Array[Array[File]]? site_benchmark_common_indel_ppv_beds
+    # Array[Array[File]]? site_benchmark_common_sv_ppv_beds
+
     Float common_af_cutoff = 0.001
 
     String output_prefix
