@@ -205,6 +205,7 @@ workflow BenchmarkSitesSingle {
           ref_bed = PrepTargetSvs.ref_bed,
           genome_file = genome_file,
           mode = "both",
+          overlap_pad = 5,
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".sv." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
@@ -216,6 +217,7 @@ workflow BenchmarkSitesSingle {
           ref_bed = PrepSourceSvs.ref_bed,
           genome_file = genome_file,
           mode = "both",
+          overlap_pad = 5,
           common_af = common_af_cutoff,
           prefix = sens_prefix + ".sv." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
@@ -455,6 +457,7 @@ task CompareSites {
     File genome_file
     String mode
     Float common_af
+    Int overlap_pad = 1
     
     String prefix
 
@@ -478,6 +481,7 @@ task CompareSites {
       -o ~{prefix} \
       --common-af ~{common_af} \
       --mode ~{mode} \
+      --overlap-pad ~{overlap_pad} \
       --no-reverse \
       --gzip
   >>>

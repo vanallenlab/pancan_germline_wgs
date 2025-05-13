@@ -101,7 +101,7 @@ plot.af.scatter <- function(df, title=NULL, common.af=NULL, ref.prefix=NULL,
              label.line=-0.75, title=y.title, title.line=1.05)
 
   # Add points
-  pw.pal <- plasma(101, alpha=pt.alpha)
+  pw.pal <- inferno(101, alpha=pt.alpha, begin=0.075, end=0.9)
   pw.col.idx <- ceiling(100 * log10(sapply(af.d, function(v){min(c(v, 10))}))) + 1
   points(plot.vals, cex=pt.cex, pch=pt.pch, col=pw.pal[pw.col.idx])
 

@@ -374,8 +374,6 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
                     default="./vcf_qc")
 args <- parser$parse_args()
 
-print(args)
-
 # # DEV:
 # args <- list("sens_by_af" = c("~/scratch/site_benchmarking_dev/giab_easy.gnomad_v4_vs_dfci-g2c.v1.gatkhc.initial_qc.chr19.concordance_by_af.merged.tsv.gz",
 #                               "~/scratch/site_benchmarking_dev/giab_hard.gnomad_v4_vs_dfci-g2c.v1.gatkhc.initial_qc.chr19.concordance_by_af.merged.tsv.gz"),

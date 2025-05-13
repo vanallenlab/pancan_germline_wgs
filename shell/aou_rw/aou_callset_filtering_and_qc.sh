@@ -219,6 +219,11 @@ for key in size_distrib af_distrib size_vs_af_distrib \
     rm $staging_dir/$key.uris.list
   fi
 done
+for suffix in af_distribution size_distribution; do
+  if [ -e $staging_dir/gnomAD_$suffix.list ]; then
+    rm $staging_dir/gnomAD_$suffix.list
+  fi
+done
 for k in $( seq 1 22 ) X Y; do
   
   # Localize output tracker json and get URIs for QC metrics
@@ -230,9 +235,21 @@ for k in $( seq 1 22 ) X Y; do
              all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
     jq .$key $staging_dir/$json_fname | fgrep -xv "null" | tr -d '"' >> $staging_dir/$key.uris.list
   done
+  for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
+             site_benchmark_common_snv_ppv_beds \
+             site_benchmark_common_indel_ppv_beds \
+             site_benchmark_common_sv_ppv_beds; do
+    # TODO: figure this out
+  done
 
   # Clear local copy of output tracker json
   rm $staging_dir/$json_fname
+
+  # Add precomputed gnomAD v4.1 reference distributions to file lists
+  for suffix in af_distribution size_distribution; do
+    echo "gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/chr19/gnomad.v4.1.chr19.$suffix.merged.tsv.gz" \
+    >> $staging_dir/gnomAD_$suffix.list
+  done
 done
 
 # Write input .json for short variant QC metric collection
@@ -245,8 +262,19 @@ cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8009f0b",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:1bec451",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
+  "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.list ),
+  "PlotVcfQcMetrics.ref_cohort_prefix": "gnomAD_v4.1",
+  "PlotVcfQcMetrics.ref_cohort_plot_title": "gnomAD v4.1",
+  "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.list ),
+  "PlotVcfQcMetrics.site_benchmark_common_indel_ppv_beds": "Array[Array[Array[File]]]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_common_snv_ppv_beds": "Array[Array[Array[File]]]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_common_sv_ppv_beds": "Array[Array[Array[File]]]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_dataset_names": "Array[String]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_interval_names": "Array[String]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_ppv_by_freqs": "Array[Array[Array[File]]]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_sensitivity_by_freqs": "Array[Array[Array[File]]]? (optional)",
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
   "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )
 }

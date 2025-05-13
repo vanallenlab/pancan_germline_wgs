@@ -23,6 +23,7 @@ workflow PlotVcfQcMetrics {
     Array[File]? ref_size_distribution_tsvs
     Array[File]? ref_af_distribution_tsvs
     String ref_cohort_prefix = "ref_dataset"
+    String ref_cohort_plot_title = "Ref. data"
 
     Array[File]? all_sv_beds
     Array[File]? common_snv_beds
@@ -250,6 +251,7 @@ workflow PlotVcfQcMetrics {
           call QcTasks.SumCompressedDistribs as SumSiteBenchPpvByAf {
             input:
               distrib_tsvs = select_first([site_benchmark_ppv_by_freqs])[site_bench_di][site_bench_ii],
+              n_key_columns = 3,
               out_prefix = sbi_prefix + ".ppv_by_freq",
               g2c_analysis_docker = g2c_analysis_docker
           }
@@ -260,6 +262,7 @@ workflow PlotVcfQcMetrics {
           call QcTasks.SumCompressedDistribs as SumSiteBenchSensByAf {
             input:
               distrib_tsvs = select_first([site_benchmark_sensitivity_by_freqs])[site_bench_di][site_bench_ii],
+              n_key_columns = 3,
               out_prefix = sbi_prefix + ".sensitivity_by_freq",
               g2c_analysis_docker = g2c_analysis_docker
           }
