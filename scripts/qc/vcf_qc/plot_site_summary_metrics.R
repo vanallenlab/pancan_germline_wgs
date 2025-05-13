@@ -18,14 +18,6 @@ require(G2CR, quietly=TRUE)
 require(viridis, quietly=TRUE)
 load.constants("all")
 
-# Declare local custom constants
-sv.dens.bw <- c("DEL" = 0.5,
-                "DUP" = 3/4,
-                "CNV" = 0.5,
-                "INS" = 10,
-                "INV" = 4/5,
-                "CPX" = 1/3)
-
 
 ##################
 # Data Functions #
@@ -450,8 +442,8 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
   #      labels=paste("Not shown:\n", balcpx.lab, "balanced &\ncomplex SVs"), xpd=T)
 }
 
-# Cowplot of SV sizes
-sv.size.cowplot <- function(sv.sizes){
+# Ridgeplot of SV sizes
+sv.size.ridgeplot <- function(sv.sizes){
 
   # Get summary statistics for output .tsv
   ss.df <- data.frame("analysis"=character(), "measure"=character(),
@@ -471,13 +463,15 @@ sv.size.cowplot <- function(sv.sizes){
   ss.df <- as.data.frame(rbind(ss.df, vsc.ss))
 
   # Plot sizes
-  ridgeplot(sv.sizes, xlims=log10(c(10, 5000000)), x.axis.side=NA,
+  ridgeplot(sv.sizes, breaks=seq(log10(10), log10(3000000), by=0.2),
+            xlims=log10(c(10, 5000000)), x.axis.side=NA,
             names=var.subclass.abbrevs[names(sv.sizes)],
             bw.adj=sv.dens.bw[names(sv.sizes)], fill=sv.colors[names(sv.sizes)],
             fancy.light.fill=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.2, b=0.2),
-            fancy.median.color=adjust.color.hsb(sv.colors[names(sv.sizes)], b=-0.2),
+            fancy.quartile.color=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.25, b=0.3),
             border=adjust.color.hsb(sv.colors[names(sv.sizes)], b=-0.2),
-            border.lwd=2, fancy.median.lend="butt", parmar=c(2, 2, 0.1, 0.1))
+            border.lwd=1.5, fancy.quartile.lwd=1, fancy.quartile.lend="square",
+            hill.overlap=0.25, parmar=c(2, 2, 0.1, 0.1))
   axis(1, at=log10(logscale.minor), tck=-0.01, labels=NA, lwd=0.75)
   clean.axis(1, at=log10(logscale.major.bp),
              labels=logscale.major.bp.labels[seq(1, length(logscale.major.bp), 2)],
@@ -613,13 +607,13 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
 
   # Add left Y axis
   clean.axis(2, at=seq(0, 1, 0.25), label.units="percent",
-             title="Variant Proportion", title.line=0.6, label.line=-0.75)
+             title="Proportion of variants", title.line=0.6, label.line=-0.75)
 
   # Add right Y axis/legend hybrid
-  af.labels.pct <- rev(c("AF>10%", "AF<10%", "AF<1%"))
+  af.labels.pct <- c("\"AF\">\"10%\"", "\"AF\"<\"10%\"", "\"AF\"<\"1%\"")
   if(length(af.bins) > length(af.labels.pct)){
-    af.labels <- c(rep("", length(af.labels.pct)),
-                   paste("AF<10^", -((length(af.labels.pct)):length(af.bins)), sep=""))
+    af.labels <- rev(c(af.labels.pct,
+                   paste("AF<10^", -(length(af.labels.pct):(length(af.bins)-1)), sep="")))
     parse.any <- TRUE
   }else{
     af.labels <- head(af.labels.pct, length(af.bins))
@@ -632,10 +626,6 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
                                upper.limit=0.975, colors=af.pal, sep.wex=0.5,
                                label.cex=5/6, min.label.spacing=0.1,
                                return.label.pos=TRUE)
-  if(parse.any){
-    text(x=ncol(plot.df)-bar.sep+0.5, y=rev(legend.y.pos)[length(af.labels.pct):1],
-         labels=af.labels.pct, cex=5/6, pos=4, xpd=T)
-  }
 
   # Add bars last
   sapply(1:length(size.bins), function(x){
@@ -681,7 +671,7 @@ args <- parser$parse_args()
 # args <- list("size_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_distribution.merged.tsv.gz",
 #              "af_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.af_distribution.merged.tsv.gz",
 #              "joint_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_vs_af_distribution.merged.tsv.gz",
-#              "sv_sites" = "~/scratch/gnomad_test.sv.sites.bed.gz",
+#              "sv_sites" = "~/scratch/YL.sv.site_metrics.dev.sv.sites.bed.gz",
 #              "common_af" = 0.001,
 #              "ref_size_distrib" = "~/scratch/gnomad.v4.1.chr22.size_distribution.merged.tsv.gz",
 #              "ref_af_distrib" = "~/scratch/gnomad.v4.1.chr22.af_distribution.merged.tsv.gz",
@@ -744,11 +734,11 @@ if(!is.null(size.d)){
     dev.off()
   }
 }
-# Cowplot of SV sizes by subclass
+# Ridgeplot of SV sizes by subclass
 if(!is.null(sv.sizes)){
-  pdf(paste(args$out_prefix, "sv_size_cowplot.pdf", sep="."),
+  pdf(paste(args$out_prefix, "sv_size_ridgeplot.pdf", sep="."),
       height=2.25, width=2.25)
-  sv.size.ss <- sv.size.cowplot(sv.sizes)
+  sv.size.ss <- sv.size.ridgeplot(sv.sizes)
   dev.off()
 }else{
   sv.size.ss <- NULL
@@ -855,3 +845,4 @@ ss.out <- do.call("rbind", list(count.ss, sv.size.ss, af.ss))
 colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
 write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)
+

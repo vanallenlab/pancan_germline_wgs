@@ -29,9 +29,18 @@ workflow PlotVcfQcMetrics {
     Array[File]? common_indel_beds
     Array[File]? common_sv_beds
 
-    # Array[Array[File]]? site_benchmark_common_snv_ppv_beds
-    # Array[Array[File]]? site_benchmark_common_indel_ppv_beds
-    # Array[Array[File]]? site_benchmark_common_sv_ppv_beds
+    # Expected organization of site benchmarking inputs:
+    # Outer array: one entry per benchmarking dataset
+    # Middle arrays: one file per evaluation interval set
+    # Inner arrays: one or more files, such as one file per chromosome 
+    # (or just one file if already collapsed across all chromosomes)
+    Array[Array[Array[File]]]? site_benchmark_common_snv_ppv_beds
+    Array[Array[Array[File]]]? site_benchmark_common_indel_ppv_beds
+    Array[Array[Array[File]]]? site_benchmark_common_sv_ppv_beds
+    Array[Array[Array[File]]]? site_benchmark_ppv_by_freqs
+    Array[Array[Array[File]]]? site_benchmark_sensitivity_by_freqs
+    Array[String]? site_benchmark_dataset_names
+    Array[String]? site_benchmark_interval_names
 
     Float common_af_cutoff = 0.001
 
@@ -40,6 +49,17 @@ workflow PlotVcfQcMetrics {
     String bcftools_docker
     String g2c_analysis_docker
   }
+
+  Boolean has_site_benchmarking = ( (defined(site_benchmark_common_snv_ppv_beds) 
+                                     || defined(site_benchmark_common_indel_ppv_beds) 
+                                     || defined(site_benchmark_common_sv_ppv_beds) 
+                                     || defined(site_benchmark_ppv_by_freqs)
+                                     || defined(site_benchmark_sensitivity_by_freqs)) 
+                                    && defined(site_benchmark_dataset_names) 
+                                    && defined(site_benchmark_interval_names))
+  Int n_site_benchmark_datasets = length(select_all([site_benchmark_dataset_names]))
+  Int n_site_benchmark_intervals = length(select_all([site_benchmark_interval_names]))
+
 
   ######################
   ### DATA PREPROCESSING
@@ -171,6 +191,132 @@ workflow PlotVcfQcMetrics {
   File? common_svs_bed = select_first(select_all([CollapseCommonSvs.merged_file, 
                                                   select_first([common_sv_beds])[0]]))
 
+  # Preprocess site benchmarking, if provided
+  if (has_site_benchmarking) {
+    scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
+
+      String bd_name = flatten(select_all([site_benchmark_dataset_names]))[site_bench_di]
+      String sb_prefix = output_prefix + "." + bd_name
+
+      scatter ( site_bench_ii in range(n_site_benchmark_intervals) ) {
+
+        String bi_name = flatten(select_all([site_benchmark_interval_names]))[site_bench_ii]
+        String sbi_prefix = sb_prefix + "." + bi_name
+        
+        # Collapse site benchmarking SNV BEDs
+        if (defined(site_benchmark_common_snv_ppv_beds)) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchSnvs {
+            input:
+              shards = flatten(select_all([site_benchmark_common_snv_ppv_beds]))[site_bench_di][site_bench_ii],
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sbi_prefix + ".common_snvs.bed.gz",
+              docker = bcftools_docker
+          }
+        }
+        
+        # Collapse site benchmarking indel BEDs
+        if (defined(site_benchmark_common_indel_ppv_beds)) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchIndels {
+            input:
+              shards = flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii],
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sbi_prefix + ".common_indels.bed.gz",
+              docker = bcftools_docker
+          }
+        }
+        
+        # Collapse site benchmarking SV BEDs
+        if (defined(site_benchmark_common_sv_ppv_beds)) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchSvs {
+            input:
+              shards = flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii],
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sbi_prefix + ".common_svs.bed.gz",
+              docker = bcftools_docker
+          }
+        }
+
+        # Collapse compressed PPV tsvs
+        if (defined(site_benchmark_ppv_by_freqs)) {
+          call QcTasks.SumCompressedDistribs as SumSiteBenchPpvByAf {
+            input:
+              distrib_tsvs = select_first([site_benchmark_ppv_by_freqs])[site_bench_di][site_bench_ii],
+              out_prefix = sbi_prefix + ".ppv_by_freq",
+              g2c_analysis_docker = g2c_analysis_docker
+          }
+        }
+
+        # Collapse compressed sensitivity tsvs
+        if (defined(site_benchmark_sensitivity_by_freqs)) {
+          call QcTasks.SumCompressedDistribs as SumSiteBenchSensByAf {
+            input:
+              distrib_tsvs = select_first([site_benchmark_sensitivity_by_freqs])[site_bench_di][site_bench_ii],
+              out_prefix = sbi_prefix + ".sensitivity_by_freq",
+              g2c_analysis_docker = g2c_analysis_docker
+          }
+        }
+      }
+
+      # For each benchmarking dataset, further collapse SNVs across interval sets
+      if (defined(site_benchmark_common_snv_ppv_beds)) {
+        call Utils.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
+            input:
+              shards = select_all(CollapseSiteBenchSnvs.merged_file),
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sb_prefix + ".merged.common_snvs.bed.gz",
+              docker = bcftools_docker
+        }
+      }
+
+      # For each benchmarking dataset, further collapse indels across interval sets
+      if (defined(site_benchmark_common_snv_ppv_beds)) {
+        call Utils.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
+            input:
+              shards = select_all(CollapseSiteBenchIndels.merged_file),
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sb_prefix + ".merged.common_indels.bed.gz",
+              docker = bcftools_docker
+        }
+      }
+
+      # For each benchmarking dataset, further collapse SVs across interval sets
+      if (defined(site_benchmark_common_snv_ppv_beds)) {
+        call Utils.ConcatTextFiles as CollapseSiteBenchSvsUnion {
+            input:
+              shards = select_all(CollapseSiteBenchSvs.merged_file),
+              concat_command = "zcat",
+              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+              compression_command = "bgzip -c",
+              input_has_header = true,
+              output_filename = sb_prefix + ".merged.common_svs.bed.gz",
+              docker = bcftools_docker
+        }
+      }
+    }
+  }
+  Array[Array[File?]]? site_bench_snvs_merged = CollapseSiteBenchSnvs.merged_file
+  Array[Array[File?]]? site_bench_indels_merged = CollapseSiteBenchIndels.merged_file
+  Array[Array[File?]]? site_bench_svs_merged = CollapseSiteBenchSvs.merged_file
+  Array[File]? site_bench_snvs_merged_union = select_all(select_first([CollapseSiteBenchSnvsUnion.merged_file]))
+  Array[File]? site_bench_indels_merged_union = select_all(select_first([CollapseSiteBenchIndelsUnion.merged_file]))
+  Array[File]? site_bench_svs_merged_union = select_all(select_first([CollapseSiteBenchSvsUnion.merged_file]))
+
+
   #################
   ### VISUALIZATION
   #################
@@ -193,6 +339,38 @@ workflow PlotVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
+  # Plot site benchmarking, if provided
+  if (has_site_benchmarking) {
+    scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
+
+      String plot_bd_name = select_first([site_benchmark_dataset_names])[site_bench_di]
+
+      # Concatenate interval set-specific and union benchmarking BEDs for visualization
+      Array[String] site_bench_di_names = [select_first([site_benchmark_interval_names])[site_bench_di], "all"]
+      Array[File] site_bench_di_snv_to_plot = select_all([select_first([site_bench_snvs_merged])[site_bench_di], 
+                                                          select_first([site_bench_snvs_merged_union])[site_bench_di]])
+      Array[File] site_bench_di_indel_to_plot = select_all([select_first([site_bench_indels_merged])[site_bench_di], 
+                                                            select_first([site_bench_indels_merged_union])[site_bench_di]])
+      Array[File] site_bench_di_sv_to_plot = select_all([select_first([site_bench_svs_merged])[site_bench_di], 
+                                                         select_first([site_bench_svs_merged_union])[site_bench_di]])
+
+      call PlotSiteBenchmarking {
+        input:
+          ref_dataset_name = plot_bd_name,
+          eval_interval_names = site_bench_di_names,
+          snv_beds = site_bench_di_snv_to_plot,
+          indel_beds = site_bench_di_indel_to_plot,
+          sv_beds = site_bench_di_sv_to_plot,
+          ppv_by_af_tsvs = select_all(select_first([SumSiteBenchPpvByAf.merged_distrib])[site_bench_di]),
+          sens_by_af_tsvs = select_all(select_first([SumSiteBenchSensByAf.merged_distrib])[site_bench_di]),
+          output_prefix = output_prefix,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
+
+
   ##################
   ### OUTPUT CLEANUP
   ##################
@@ -204,8 +382,9 @@ workflow PlotVcfQcMetrics {
   # TODO: implement this
 
   output {
-    # For now, just outputting site metrics tarball
+    # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
+    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
 
@@ -324,5 +503,128 @@ task PlotSiteMetrics {
     preemptible: 2
     max_retries: 1
   }
-
 }
+
+
+task PlotSiteBenchmarking {
+  input {
+    String ref_dataset_name
+    Array[String] eval_interval_names
+
+    Array[File]? snv_beds
+    Array[File]? indel_beds
+    Array[File]? sv_beds
+    Array[File]? ppv_by_af_tsvs
+    Array[File]? sens_by_af_tsvs
+
+    String output_prefix
+
+    Float common_af_cutoff
+
+    Float mem_gb = 7.5
+    Int n_cpu = 4
+    Int? disk_gb
+
+    String g2c_analysis_docker
+  }
+
+  Array[File?] loc_inputs = [snv_beds, indel_beds, sv_beds]
+  Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
+
+  # Note that this outdir string is used as both a directory name and a file prefix
+  String outdir = sub(output_prefix + "." + ref_dataset_name + "." + "site_benchmarking", "[ ]+", "_")
+
+  Int n_sets = length(eval_interval_names)
+
+  command <<<
+    set -euo pipefail
+
+    mkdir ~{outdir}
+
+    # Write list of localized SNV beds
+    if [ ~{defined(snv_beds)} ]; then
+      cat ~{write_lines(select_first([snv_beds]))} > snv_beds.list
+    else
+      seq 1 ~{n_sets} | awk '{ print "." }' > snv_beds.list
+    fi
+
+    # Write list of localized indel beds
+    if [ ~{defined(indel_beds)} ]; then
+      cat ~{write_lines(select_first([indel_beds]))} > indel_beds.list
+    else
+      seq 1 ~{n_sets} | awk '{ print "." }' > indel_beds.list
+    fi
+
+    # Write list of localized SV beds
+    if [ ~{defined(sv_beds)} ]; then
+      cat ~{write_lines(select_first([sv_beds]))} > sv_beds.list
+    else
+      seq 1 ~{n_sets} | awk '{ print "." }' > sv_beds.list
+    fi
+
+    # Make input .tsv for pointwise plotting
+    paste \
+      ~{write_lines(eval_interval_names)} \
+      snv_beds.list \
+      indel_beds.list \
+      sv_beds.list \
+    > pointwise.in.tsv
+    echo "Pointwise benchmarking inputs parsed as follows:"
+    cat pointwise.in.tsv
+
+    # Perform pointwise plotting once for each eval interval set
+    while read set_name snv_bed indel_bed sv_bed; do
+      cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_pointwise_site_benchmarking.R"
+      if [ $snv_bed != "." ]; then
+        cmd="$cmd --snvs $snv_bed"
+      fi
+      if [ $indel_bed != "." ]; then
+        cmd="$cmd --indels $indel_bed"
+      fi
+      if [ $sv_bed != "." ]; then
+        cmd="$cmd --svs $sv_bed"
+      fi
+      cmd="$cmd --combine --out-prefix ~{outdir}/~{outdir}"
+      echo -e "Now performing pointwise site benchmarking as follows:\n$cmd"
+      eval "$cmd"
+    done < pointwise.in.tsv
+
+    # Plot site summary metrics like PPV and sensitivity
+    cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_benchmarking_metrics.R"
+    if [ ~{defined(ppv_by_af_tsvs)} == "true" ]; then
+      while read tsv; do
+        cmd="$cmd --ppv-by-af $tsv"
+      done < ~{write_lines(select_first([ppv_by_af_tsvs]))}
+    fi
+    if [ ~{defined(sens_by_af_tsvs)} == "true" ]; then
+      while read tsv; do
+        cmd="$cmd --sens-by-af $tsv"
+      done < ~{write_lines(select_first([sens_by_af_tsvs]))}
+    fi
+    while read sname; do
+      cmd="$cmd --set-name $sname"
+    done < ~{write_lines(eval_interval_names)}
+    cmd="$cmd --ref-title ~{ref_dataset_name} --common-af ~{common_af_cutoff}"
+    cmd="$cmd --out-prefix ~{outdir}/~{outdir}"
+    echo -e "Now performing site benchmarking metric visualization as follows:\n$cmd"
+    eval "$cmd"
+
+    # Compress outputs
+    tar -czvf "~{outdir}.tar.gz" \
+      ~{outdir}/
+  >>>
+
+  output {
+    File site_benchmarking_plots_tarball = "~{outdir}.tar.gz"
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 2
+    max_retries: 1
+  }
+}
+
