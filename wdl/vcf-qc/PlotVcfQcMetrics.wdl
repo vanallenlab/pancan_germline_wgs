@@ -40,7 +40,8 @@ workflow PlotVcfQcMetrics {
     Array[Array[Array[File]]]? site_benchmark_common_sv_ppv_beds
     Array[Array[Array[File]]]? site_benchmark_ppv_by_freqs
     Array[Array[Array[File]]]? site_benchmark_sensitivity_by_freqs
-    Array[String]? site_benchmark_dataset_names
+    Array[String]? site_benchmark_dataset_prefixes
+    Array[String]? site_benchmark_dataset_titles
     Array[String]? site_benchmark_interval_names
 
     Float common_af_cutoff = 0.001
@@ -56,9 +57,10 @@ workflow PlotVcfQcMetrics {
                                      || defined(site_benchmark_common_sv_ppv_beds) 
                                      || defined(site_benchmark_ppv_by_freqs)
                                      || defined(site_benchmark_sensitivity_by_freqs)) 
-                                    && defined(site_benchmark_dataset_names) 
+                                    && defined(site_benchmark_dataset_prefixes) 
+                                    && defined(site_benchmark_dataset_titles) 
                                     && defined(site_benchmark_interval_names))
-  Int n_site_benchmark_datasets = length(select_all([site_benchmark_dataset_names]))
+  Int n_site_benchmark_datasets = length(select_all([site_benchmark_dataset_prefixes]))
   Int n_site_benchmark_intervals = length(select_all([site_benchmark_interval_names]))
 
 
@@ -196,7 +198,7 @@ workflow PlotVcfQcMetrics {
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
 
-      String bd_name = flatten(select_all([site_benchmark_dataset_names]))[site_bench_di]
+      String bd_name = flatten(select_all([site_benchmark_dataset_prefixes]))[site_bench_di]
       String sb_prefix = output_prefix + "." + bd_name
 
       scatter ( site_bench_ii in range(n_site_benchmark_intervals) ) {
@@ -338,7 +340,7 @@ workflow PlotVcfQcMetrics {
       common_indels_bed = common_indels_bed,
       common_svs_bed = common_svs_bed,
       output_prefix = output_prefix,
-      ref_title = ref_cohort_prefix,
+      ref_title = ref_cohort_plot_title,
       g2c_analysis_docker = g2c_analysis_docker
   }
 
@@ -346,7 +348,8 @@ workflow PlotVcfQcMetrics {
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
 
-      String plot_bd_name = select_first([site_benchmark_dataset_names])[site_bench_di]
+      String plot_bd_prefix = select_first([site_benchmark_dataset_prefixes])[site_bench_di]
+      String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
 
       # Concatenate interval set-specific and union benchmarking BEDs for visualization
       Array[String] site_bench_di_names = [select_first([site_benchmark_interval_names])[site_bench_di], "all"]
@@ -359,7 +362,8 @@ workflow PlotVcfQcMetrics {
 
       call PlotSiteBenchmarking {
         input:
-          ref_dataset_name = plot_bd_name,
+          ref_dataset_prefix = plot_bd_prefix,
+          ref_dataset_title = plot_bd_title,
           eval_interval_names = site_bench_di_names,
           snv_beds = site_bench_di_snv_to_plot,
           indel_beds = site_bench_di_indel_to_plot,
@@ -427,7 +431,7 @@ task PlotSiteMetrics {
   String ref_af_bname = if has_ref_af then basename(select_first([ref_af_distrib])) else ""
   String ref_af_cmd = if has_ref_af then "--ref-af-distrib ~{ref_af_bname}" else ""
 
-  String ref_title_cmd = if defined(ref_title) then "--ref-title ~{ref_title}" else ""
+  String ref_title_cmd = if defined(ref_title) then "--ref-title \"~{ref_title}\"" else ""
 
   Boolean has_all_svs = defined(all_svs_bed)
   String all_sv_bname = if has_all_svs then basename(select_first([all_svs_bed])) else ""
@@ -464,7 +468,7 @@ task PlotSiteMetrics {
       --joint-distrib ~{joint_distrib} \
       ~{ref_size_cmd} \
       ~{ref_af_cmd} \
-      --ref-title "~{ref_title}" \
+      ~{ref_title_cmd} \
       ~{summary_sv_cmd} \
       --common-af ~{common_af_cutoff} \
       --out-prefix site_metrics/~{output_prefix}
@@ -511,7 +515,8 @@ task PlotSiteMetrics {
 
 task PlotSiteBenchmarking {
   input {
-    String ref_dataset_name
+    String ref_dataset_prefix
+    String ref_dataset_title
     Array[String] eval_interval_names
 
     Array[File]? snv_beds
@@ -535,7 +540,7 @@ task PlotSiteBenchmarking {
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
 
   # Note that this outdir string is used as both a directory name and a file prefix
-  String outdir = sub(output_prefix + "." + ref_dataset_name + "." + "site_benchmarking", "[ ]+", "_")
+  String outdir = sub(output_prefix + "." + ref_dataset_prefix + "." + "site_benchmarking", "[ ]+", "_")
 
   Int n_sets = length(eval_interval_names)
 
@@ -607,7 +612,7 @@ task PlotSiteBenchmarking {
     while read sname; do
       cmd="$cmd --set-name $sname"
     done < ~{write_lines(eval_interval_names)}
-    cmd="$cmd --ref-title ~{ref_dataset_name} --common-af ~{common_af_cutoff}"
+    cmd="$cmd --ref-title \"~{ref_dataset_title}\" --common-af ~{common_af_cutoff}"
     cmd="$cmd --out-prefix ~{outdir}/~{outdir}"
     echo -e "Now performing site benchmarking metric visualization as follows:\n$cmd"
     eval "$cmd"

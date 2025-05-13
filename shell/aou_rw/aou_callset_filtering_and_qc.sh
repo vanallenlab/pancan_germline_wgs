@@ -214,14 +214,22 @@ if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
 # Build input arrays
 for key in size_distrib af_distrib size_vs_af_distrib \
-              all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
+           all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do  
   if [ -e $staging_dir/$key.uris.list ]; then
     rm $staging_dir/$key.uris.list
   fi
 done
+for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
+           site_benchmark_common_snv_ppv_beds \
+           site_benchmark_common_indel_ppv_beds \
+           site_benchmark_common_sv_ppv_beds; do
+  for subset in giab_easy giab_hard; do
+    rm $staging_dir/$key.$subset.uris.list
+  done
+done
 for suffix in af_distribution size_distribution; do
   if [ -e $staging_dir/gnomAD_$suffix.list ]; then
-    rm $staging_dir/gnomAD_$suffix.list
+    rm $staging_dir/gnomAD_$suffix.uris.list
   fi
 done
 for k in $( seq 1 22 ) X Y; do
@@ -233,13 +241,20 @@ for k in $( seq 1 22 ) X Y; do
     $staging_dir/
   for key in size_distrib af_distrib size_vs_af_distrib \
              all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
-    jq .$key $staging_dir/$json_fname | fgrep -xv "null" | tr -d '"' >> $staging_dir/$key.uris.list
+    jq .\"CollectVcfQcMetrics.$key\" $staging_dir/$json_fname \
+    | fgrep -xv "null" | tr -d '"' \
+    >> $staging_dir/$key.uris.list
   done
   for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
              site_benchmark_common_snv_ppv_beds \
              site_benchmark_common_indel_ppv_beds \
              site_benchmark_common_sv_ppv_beds; do
-    # TODO: figure this out
+    for subset in giab_easy giab_hard; do
+      jq .\"CollectVcfQcMetrics.$key\" $staging_dir/$json_fname \
+      | fgrep -xv "null" | tr -d '"[]' | sed 's/,$/\n/g' \
+      | sed '/^$/d' | awk '{ print $1 }' | fgrep $subset \
+      >> $staging_dir/$key.$subset.uris.list
+    done
   done
 
   # Clear local copy of output tracker json
@@ -247,8 +262,8 @@ for k in $( seq 1 22 ) X Y; do
 
   # Add precomputed gnomAD v4.1 reference distributions to file lists
   for suffix in af_distribution size_distribution; do
-    echo "gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/chr19/gnomad.v4.1.chr19.$suffix.merged.tsv.gz" \
-    >> $staging_dir/gnomAD_$suffix.list
+    echo "gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/chr$k/gnomad.v4.1.chr$k.$suffix.merged.tsv.gz" \
+    >> $staging_dir/gnomAD_$suffix.uris.list
   done
 done
 
@@ -264,17 +279,23 @@ cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
   "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:1bec451",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
-  "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.list ),
+  "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.uris.list ),
+  "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_cohort_prefix": "gnomAD_v4.1",
   "PlotVcfQcMetrics.ref_cohort_plot_title": "gnomAD v4.1",
-  "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.list ),
-  "PlotVcfQcMetrics.site_benchmark_common_indel_ppv_beds": "Array[Array[Array[File]]]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_common_snv_ppv_beds": "Array[Array[Array[File]]]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_common_sv_ppv_beds": "Array[Array[Array[File]]]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_dataset_names": "Array[String]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_interval_names": "Array[String]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_ppv_by_freqs": "Array[Array[Array[File]]]? (optional)",
-  "PlotVcfQcMetrics.site_benchmark_sensitivity_by_freqs": "Array[Array[Array[File]]]? (optional)",
+  "PlotVcfQcMetrics.site_benchmark_common_snv_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_snv_ppv_beds.giab_easy.uris.list ),
+                                                            $( collapse_txt $staging_dir/site_benchmark_common_snv_ppv_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_common_indel_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_indel_ppv_beds.giab_easy.uris.list ),
+                                                              $( collapse_txt $staging_dir/site_benchmark_common_indel_ppv_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_common_sv_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_sv_ppv_beds.giab_easy.uris.list ),
+                                                           $( collapse_txt $staging_dir/site_benchmark_common_sv_ppv_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_ppv_by_freqs": [[ $( collapse_txt $staging_dir/site_benchmark_ppv_by_freqs.giab_easy.uris.list ),
+                                                     $( collapse_txt $staging_dir/site_benchmark_ppv_by_freqs.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_sensitivity_by_freqs": [[ $( collapse_txt $staging_dir/site_benchmark_sensitivity_by_freqs.giab_easy.uris.list ),
+                                                             $( collapse_txt $staging_dir/site_benchmark_sensitivity_by_freqs.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_dataset_prefixes": ["gnomad_v4.1"],
+  "PlotVcfQcMetrics.site_benchmark_dataset_titles": ["gnomAD v4.1"],
+  "PlotVcfQcMetrics.site_benchmark_interval_names": ["Easy", "Hard"],
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
   "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )
 }
