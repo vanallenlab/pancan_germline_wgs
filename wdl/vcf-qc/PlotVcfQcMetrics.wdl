@@ -352,7 +352,7 @@ workflow PlotVcfQcMetrics {
       String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
 
       # Concatenate interval set-specific and union benchmarking BEDs for visualization
-      Array[String] site_bench_di_names = flatten([select_first([site_benchmark_interval_names]), ["all"]])
+      Array[String] site_bench_di_names = select_first([site_benchmark_interval_names])
       Array[File] site_bench_di_snv_to_plot = select_all(flatten([select_first([site_bench_snvs_merged])[site_bench_di], 
                                                                   [select_first([site_bench_snvs_merged_union])[site_bench_di]]]))
       Array[File] site_bench_di_indel_to_plot = select_all(flatten([select_first([site_bench_indels_merged])[site_bench_di], 
@@ -528,6 +528,7 @@ task PlotSiteBenchmarking {
     String ref_dataset_prefix
     String ref_dataset_title
     Array[String] eval_interval_names
+    Boolean bed_arrays_include_union = true
 
     Array[File]? snv_beds
     Array[File]? indel_beds
@@ -552,7 +553,8 @@ task PlotSiteBenchmarking {
   # Note that this outdir string is used as both a directory name and a file prefix
   String outdir = sub(output_prefix + "." + ref_dataset_prefix + "." + "site_benchmarking", "[ ]+", "_")
 
-  Int n_sets = length(eval_interval_names)
+  Array[String] eval_interval_names_plus_union = if bed_arrays_include_union then flatten([eval_interval_names, ["all"]]) else eval_interval_names
+  Int n_sets = length(eval_interval_names_plus_union)
 
   command <<<
     set -euo pipefail
@@ -582,7 +584,7 @@ task PlotSiteBenchmarking {
 
     # Make input .tsv for pointwise plotting
     paste \
-      ~{write_lines(eval_interval_names)} \
+      ~{write_lines(eval_interval_names_plus_union)} \
       snv_beds.list \
       indel_beds.list \
       sv_beds.list \

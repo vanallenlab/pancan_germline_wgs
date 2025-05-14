@@ -251,7 +251,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
   xlims <- c(-1, 1) * (max(breaks) + 0.1 + (0.5*snv.width) + snv.gap + indel.gap)
   xlims[1] <- xlims[1]-0.1
   if(add.ref){
-    ylims <- c(0, log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
+    ylims <- c(0, 1.05*log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
   }else{
     ylims <- c(0, log10(max(df[, -c(1:2)])))
   }
@@ -270,7 +270,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
       snv.ref.color <-"white"
     }
     segments(x0=-0.5*snv.width, x1=0.5*snv.width, y0=ref.snv.k, y1=ref.snv.k,
-             lty=ref.lty, col=snv.ref.color)
+             lty=ref.lty, col=snv.ref.color, xpd=T)
   }
 
   # Add indel polygons
@@ -304,7 +304,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              x1=ref.ins.xy$x[-1],
              y0=ref.ins.xy$y[-length(ref.ins.xy$y)],
              y1=ref.ins.xy$y[-length(ref.ins.xy$y)],
-             lty=ref.lty, col=ref.ins.col, lend="butt")
+             lty=ref.lty, col=ref.ins.col, lend="butt", xpd=T)
 
     ref.del.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
                        "y"=ref.del.k[ref.indel.idx])
@@ -321,7 +321,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              x1=-ref.del.xy$x[-1],
              y0=ref.del.xy$y[-length(ref.del.xy$y)],
              y1=ref.del.xy$y[-length(ref.del.xy$y)],
-             lty=ref.lty, col=ref.del.col, lend="butt")
+             lty=ref.lty, col=ref.del.col, lend="butt", xpd=T)
   }
 
   # Add indel axes
@@ -370,7 +370,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              x1=ref.gain.xy$x[-1],
              y0=ref.gain.xy$y[-length(ref.gain.xy$y)],
              y1=ref.gain.xy$y[-length(ref.gain.xy$y)],
-             lty=ref.lty, col=ref.gain.col, lend="butt")
+             lty=ref.lty, col=ref.gain.col, lend="butt", xpd=T)
 
     ref.loss.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
                         "y"=ref.LOSS.k[ref.sv.idx])
@@ -387,7 +387,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              x1=-ref.loss.xy$x[-1],
              y0=ref.loss.xy$y[-length(ref.loss.xy$y)],
              y1=ref.loss.xy$y[-length(ref.loss.xy$y)],
-             lty=ref.lty, col=ref.loss.col, lend="butt")
+             lty=ref.lty, col=ref.loss.col, lend="butt", xpd=T)
   }
 
   # Add SV axes
@@ -466,11 +466,11 @@ sv.size.ridgeplot <- function(sv.sizes){
   ridgeplot(sv.sizes, breaks=seq(log10(10), log10(3000000), by=0.2),
             xlims=log10(c(10, 5000000)), x.axis.side=NA,
             names=var.subclass.abbrevs[names(sv.sizes)],
-            bw.adj=sv.dens.bw[names(sv.sizes)], fill=sv.colors[names(sv.sizes)],
+            fill=sv.colors[names(sv.sizes)],
             fancy.light.fill=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.2, b=0.2),
-            fancy.quartile.color=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.25, b=0.3),
+            fancy.quartile.color=adjust.color.hsb(sv.colors[names(sv.sizes)], s=-0.4, b=0.4),
             border=adjust.color.hsb(sv.colors[names(sv.sizes)], b=-0.2),
-            border.lwd=1.5, fancy.quartile.lwd=1, fancy.quartile.lend="square",
+            border.lwd=1.5, fancy.quartile.lwd=c(NA, 1), fancy.quartile.lend="square",
             hill.overlap=0.25, parmar=c(2, 2, 0.1, 0.1))
   axis(1, at=log10(logscale.minor), tck=-0.01, labels=NA, lwd=0.75)
   clean.axis(1, at=log10(logscale.major.bp),
@@ -668,13 +668,13 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("size_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_distribution.merged.tsv.gz",
-#              "af_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.af_distribution.merged.tsv.gz",
-#              "joint_distrib" = "~/Downloads/summary_plot_dbg/dfci-g2c.v1.gatksv.initial_qc.size_vs_af_distribution.merged.tsv.gz",
-#              "sv_sites" = "~/scratch/YL.sv.site_metrics.dev.sv.sites.bed.gz",
+# args <- list("size_distrib" = "~/scratch/site_bench_inputs_v2_may14/dfci-g2c.v1.initial_qc.size_distribution.merged.tsv.gz",
+#              "af_distrib" = "~/scratch/site_bench_inputs_v2_may14/dfci-g2c.v1.initial_qc.af_distribution.merged.tsv.gz",
+#              "joint_distrib" = "~/scratch/site_bench_inputs_v2_may14/dfci-g2c.v1.initial_qc.size_vs_af_distribution.merged.tsv.gz",
+#              "sv_sites" = "~/scratch/site_bench_inputs_v2_may14/dfci-g2c.v1.initial_qc.all_svs.bed.gz",
 #              "common_af" = 0.001,
-#              "ref_size_distrib" = "~/scratch/gnomad.v4.1.chr22.size_distribution.merged.tsv.gz",
-#              "ref_af_distrib" = "~/scratch/gnomad.v4.1.chr22.af_distribution.merged.tsv.gz",
+#              "ref_size_distrib" = "~/scratch/site_bench_inputs_v2_may14/gnomAD_v4.1.size_distribution.merged.tsv.gz",
+#              "ref_af_distrib" = "~/scratch/site_bench_inputs_v2_may14/gnomAD_v4.1.af_distribution.merged.tsv.gz",
 #              "ref_title" = "gnomAD v4.1",
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
