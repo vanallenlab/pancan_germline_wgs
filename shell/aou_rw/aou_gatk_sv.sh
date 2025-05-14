@@ -324,7 +324,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/09/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/MergeBatchSites/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/MergeBatchSites/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -355,7 +355,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/11/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/RegenotypeCNVs/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/RegenotypeCNVs/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -393,7 +393,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/13/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/ResolveComplexVariants/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/ResolveComplexVariants/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -460,7 +460,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/14/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/GenotypeComplexVariants/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/GenotypeComplexVariants/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -484,7 +484,7 @@ monitor_workflow \
 # CleanVcf is finished by checking if the concatenation task is present in the
 # execution bucket, in which case we can kill the job and relocalize all of the
 # chromosome-sharded outputs
-cvcf_exec_base=$WORKSPACE_BUCKET/cromwell/execution/CleanVcf/$( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
+cvcf_exec_base=$WORKSPACE_BUCKET/cromwell-execution/CleanVcf/$( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
 if [ $( gsutil ls $cvcf_exec_base/call-ConcatCleanedVcfs | wc -l ) -gt 0 ]; then
   for k in $( seq 0 23 ); do
     contig_wid=$( basename $( gsutil ls $cvcf_exec_base/call-CleanVcfChromosome/shard-$k/CleanVcfChromosome/ ) )
@@ -496,7 +496,7 @@ if [ $( gsutil ls $cvcf_exec_base/call-ConcatCleanedVcfs | wc -l ) -gt 0 ]; then
 fi
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/CleanVcf/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/CleanVcf/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -722,7 +722,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/17/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/JoinRawCalls/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/JoinRawCalls/** >> uris_to_delete.list
 cleanup_garbage
 
 

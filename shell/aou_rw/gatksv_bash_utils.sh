@@ -415,7 +415,7 @@ EOF
       if [ $n_prev_subs -gt 0 ]; then
         last_sub_id=$( tail -n1 cromshell/job_ids/$BATCH.$sub_name.job_ids.list )
         check_cromwell_return_codes \
-          $WORKSPACE_BUCKET/cromwell/execution/$module_name/$last_sub_id \
+          $WORKSPACE_BUCKET/cromwell-execution/$module_name/$last_sub_id \
         > $sub_dir/$BATCH.$last_sub_id.fail_rcs.list
   
         # gCNV case mode

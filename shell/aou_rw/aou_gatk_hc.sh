@@ -255,7 +255,7 @@ wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.li
 
 # Stage good shards
 gsutil -m cp \
-  $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
+  $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
 
 # Re-shard bad intervals and copy them to temporary bucket
@@ -266,7 +266,7 @@ gsutil -m cp \
 # Note that we manually re-shard intervals here due to GATK WARP interval sharding weirdness
 for shard in 256 262 269; do
   gsutil -m cat \
-    $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/call-ImportGVCFs/shard-$shard/**ImportGVCFs-$shard.log \
+    $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/call-ImportGVCFs/shard-$shard/**ImportGVCFs-$shard.log \
   | fgrep Localizing | fgrep interval_list | sed 's/\ /\n/g' | fgrep "gs://" \
   | sort | uniq
 done > $staging_dir/$contig.failed_shards.interval_uris.list
@@ -286,7 +286,7 @@ gsutil cp \
 
 # Clear execution & output for old shards
 gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list \
-                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell*/GnarlyJointGenotypingPart1/" \
                   '{ print bucket_prefix$1"/**" }' ) \
 > uris_to_delete.list
 cleanup_garbage
@@ -323,12 +323,12 @@ cromshell --no_turtle -t 120 -mc submit \
 # Once patches are complete, manually stage output 
 patch_wid=$( tail -n1 cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list )
 gsutil -m cp \
-  $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$patch_wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
+  $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$patch_wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
 
 # Clear Cromwell execution & output buckets for patch jobs
 gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
-                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell*/GnarlyJointGenotypingPart1/" \
                   '{ print bucket_prefix$1"/**" }' ) \
 > uris_to_delete.list
 cleanup_garbage

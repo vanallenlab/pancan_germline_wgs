@@ -109,10 +109,16 @@ def collect_workflow_trash(workflow_ids, bucket, wdl_name, dumpster_path):
     """
 
     # Write gsutil-compliant search strings for identifying files to delete
-    ex_fmt = '{}/cromwell/execution/{}/{}/**'
-    ex_uris = [ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
-    out_fmt = '{}/cromwell/outputs/{}/{}/**'
-    out_uris = [out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    old_ex_fmt = '{}/cromwell/execution/{}/{}/**'
+    old_ex_uris = [old_ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    new_ex_fmt = '{}/cromwell-execution/{}/{}/**'
+    new_ex_uris = [new_ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    ex_uris = old_ex_uris + new_ex_uris
+    old_out_fmt = '{}/cromwell/outputs/{}/{}/**'
+    old_out_uris = [old_out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    new_out_fmt = '{}/cromwell-outputs/{}/{}/**'
+    new_out_uris = [new_out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    out_uris = old_out_uris + new_out_uris
     all_uris = ex_uris + out_uris
 
     # Find list of all files present in execution or output buckets

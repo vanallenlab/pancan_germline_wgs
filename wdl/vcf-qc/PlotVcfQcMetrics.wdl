@@ -60,8 +60,8 @@ workflow PlotVcfQcMetrics {
                                     && defined(site_benchmark_dataset_prefixes) 
                                     && defined(site_benchmark_dataset_titles) 
                                     && defined(site_benchmark_interval_names))
-  Int n_site_benchmark_datasets = length(select_all([site_benchmark_dataset_prefixes]))
-  Int n_site_benchmark_intervals = length(select_all([site_benchmark_interval_names]))
+  Int n_site_benchmark_datasets = length(select_first([site_benchmark_dataset_prefixes]))
+  Int n_site_benchmark_intervals = length(select_first([site_benchmark_interval_names]))
 
 
   ######################
@@ -353,12 +353,14 @@ workflow PlotVcfQcMetrics {
 
       # Concatenate interval set-specific and union benchmarking BEDs for visualization
       Array[String] site_bench_di_names = [select_first([site_benchmark_interval_names])[site_bench_di], "all"]
-      Array[File] site_bench_di_snv_to_plot = select_all([select_first([site_bench_snvs_merged])[site_bench_di], 
-                                                          select_first([site_bench_snvs_merged_union])[site_bench_di]])
-      Array[File] site_bench_di_indel_to_plot = select_all([select_first([site_bench_indels_merged])[site_bench_di], 
-                                                            select_first([site_bench_indels_merged_union])[site_bench_di]])
-      Array[File] site_bench_di_sv_to_plot = select_all([select_first([site_bench_svs_merged])[site_bench_di], 
-                                                         select_first([site_bench_svs_merged_union])[site_bench_di]])
+      Array[File] site_bench_di_snv_to_plot = select_all(flatten([select_first([site_bench_snvs_merged])[site_bench_di], 
+                                                                  [select_first([site_bench_snvs_merged_union])[site_bench_di]]]))
+      Array[File] site_bench_di_indel_to_plot = select_all(flatten([select_first([site_bench_indels_merged])[site_bench_di], 
+                                                                    [select_first([site_bench_indels_merged_union])[site_bench_di]]]))
+      Array[File] site_bench_di_sv_to_plot = select_all(flatten([select_first([site_bench_svs_merged])[site_bench_di], 
+                                                                 [select_first([site_bench_svs_merged_union])[site_bench_di]]]))
+      Array[File] site_bench_di_ppv_by_af = select_all(select_first([SumSiteBenchPpvByAf.merged_distrib])[site_bench_di])
+      Array[File] site_bench_di_sens_by_af = select_all(select_first([SumSiteBenchSensByAf.merged_distrib])[site_bench_di])
 
       call PlotSiteBenchmarking {
         input:
@@ -368,8 +370,8 @@ workflow PlotVcfQcMetrics {
           snv_beds = site_bench_di_snv_to_plot,
           indel_beds = site_bench_di_indel_to_plot,
           sv_beds = site_bench_di_sv_to_plot,
-          ppv_by_af_tsvs = select_all(select_first([SumSiteBenchPpvByAf.merged_distrib])[site_bench_di]),
-          sens_by_af_tsvs = select_all(select_first([SumSiteBenchSensByAf.merged_distrib])[site_bench_di]),
+          ppv_by_af_tsvs = site_bench_di_ppv_by_af,
+          sens_by_af_tsvs = site_bench_di_sens_by_af,
           output_prefix = output_prefix,
           common_af_cutoff = common_af_cutoff,
           g2c_analysis_docker = g2c_analysis_docker
@@ -461,6 +463,14 @@ task PlotSiteMetrics {
       ln -s ~{default="" all_svs_bed} ~{all_sv_bname}
     fi
 
+    # Symlink ref distribs to working directory
+    if [ ~{has_ref_size} ]; then
+      ln -s ~{default="" ref_size_distrib} ~{ref_size_bname}
+    fi
+    if [ ~{has_ref_af} ]; then
+      ln -s ~{default="" ref_af_distrib} ~{ref_af_bname}
+    fi
+
     # Plot site summary metrics
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_summary_metrics.R \
       --size-distrib ~{size_distrib} \
@@ -536,8 +546,8 @@ task PlotSiteBenchmarking {
     String g2c_analysis_docker
   }
 
-  Array[File?] loc_inputs = [snv_beds, indel_beds, sv_beds]
-  Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
+  Array[File] loc_inputs = flatten(select_all([snv_beds, indel_beds, sv_beds]))
+  Int default_disk_gb = ceil(2 * size(loc_inputs, "GB")) + 20
 
   # Note that this outdir string is used as both a directory name and a file prefix
   String outdir = sub(output_prefix + "." + ref_dataset_prefix + "." + "site_benchmarking", "[ ]+", "_")
