@@ -352,7 +352,7 @@ workflow PlotVcfQcMetrics {
       String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
 
       # Concatenate interval set-specific and union benchmarking BEDs for visualization
-      Array[String] site_bench_di_names = [select_first([site_benchmark_interval_names])[site_bench_di], "all"]
+      Array[String] site_bench_di_names = flatten([select_first([site_benchmark_interval_names]), ["all"]])
       Array[File] site_bench_di_snv_to_plot = select_all(flatten([select_first([site_bench_snvs_merged])[site_bench_di], 
                                                                   [select_first([site_bench_snvs_merged_union])[site_bench_di]]]))
       Array[File] site_bench_di_indel_to_plot = select_all(flatten([select_first([site_bench_indels_merged])[site_bench_di], 
@@ -602,7 +602,8 @@ task PlotSiteBenchmarking {
       if [ $sv_bed != "." ]; then
         cmd="$cmd --svs $sv_bed"
       fi
-      cmd="$cmd --combine --out-prefix ~{outdir}/~{outdir}"
+      cmd="$cmd --common-af ~{common_af_cutoff} --ref-title \"~{ref_dataset_title}\""
+      cmd="$cmd --combine --out-prefix ~{outdir}/~{outdir}.$set_name"
       echo -e "Now performing pointwise site benchmarking as follows:\n$cmd"
       eval "$cmd"
     done < pointwise.in.tsv

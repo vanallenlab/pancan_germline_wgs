@@ -170,8 +170,8 @@ parser$add_argument("--combine", action="store_true", default=FALSE,
                     help="Also generate a combined set of plots for all variant types")
 parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
                     help="Allele frequency threshold for common variants")
-parser$add_argument("--ref-prefix", metavar="string", type="character",
-                    help="Prefix/name of reference cohort (optional)")
+parser$add_argument("--ref-title", metavar="string", type="character",
+                    help="Name of reference cohort (optional)")
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     help="String or path to use as prefix for output plots",
                     default="./vcf_qc")
@@ -183,7 +183,7 @@ args <- parser$parse_args()
 #              "svs" = "~/scratch/site_benchmarking_dev/giab_easy.dfci-g2c.v1.gatkhc.initial_qc.chr19_vs_gnomad_v4.common_sites.svs.bed.gz",
 #              "combine" = TRUE,
 #              "common_af" = 0.001,
-#              "ref_prefix" = "gnomAD v4.1",
+#              "ref_title" = "gnomAD v4.1",
 #              "out_prefix" = "~/scratch/qc.test")
 
 # Ensure at least one of --snvs, --indels, or --svs is present
@@ -199,7 +199,7 @@ if(!is.null(args$snvs)){
   # Plot SNV metrics
   snv.ss <- pointwise.plots(snv.df, args$out_prefix, fname.suffix="snv",
                             title="Common SNVs", common.af=args$common_af,
-                            ref.prefix=args$ref_prefix)
+                            ref.prefix=args$ref_title)
 }else{
   snv.df <- NULL
   snv.ss <- NULL
@@ -213,7 +213,7 @@ if(!is.null(args$indels)){
   # Plot indel metrics
   indel.ss <- pointwise.plots(indel.df, args$out_prefix, fname.suffix="indel",
                               title="Common indels", common.af=args$common_af,
-                              ref.prefix=args$ref_prefix)
+                              ref.prefix=args$ref_title)
 
 }else{
   indel.df <- NULL
@@ -228,7 +228,7 @@ if(!is.null(args$svs)){
   # Plot SV metrics
   sv.ss <- pointwise.plots(sv.df, args$out_prefix, fname.suffix="sv",
                            title="Common SVs", common.af=args$common_af,
-                           ref.prefix=args$ref_prefix)
+                           ref.prefix=args$ref_title)
 }else{
   sv.df <- NULL
   sv.ss <- NULL
@@ -242,7 +242,7 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
   # Plot all metrics
   all.ss <- pointwise.plots(all.df, args$out_prefix, fname.suffix="all",
                             title="All common variants", common.af=args$common_af,
-                            ref.prefix=args$ref_prefix)
+                            ref.prefix=args$ref_title)
 }else{
   all.ss <- NULL
 }

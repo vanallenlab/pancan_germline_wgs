@@ -34,7 +34,9 @@ RUN apt-get clean && \
       less \
       curl \
       wget \
-      git
+      git \
+      ttf-mscorefonts-installer && \
+    fc-cache -f -v
 
 # Clone GATK-SV repo, check out specified hash, and only keep svtk
 ARG GATKSV_TAG=v1.0.1

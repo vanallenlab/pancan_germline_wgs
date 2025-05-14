@@ -375,10 +375,10 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("sens_by_af" = c("~/scratch/site_benchmarking_dev/giab_easy.gnomad_v4_vs_dfci-g2c.v1.gatkhc.initial_qc.chr19.concordance_by_af.merged.tsv.gz",
-#                               "~/scratch/site_benchmarking_dev/giab_hard.gnomad_v4_vs_dfci-g2c.v1.gatkhc.initial_qc.chr19.concordance_by_af.merged.tsv.gz"),
-#              "ppv_by_af" = c("~/scratch/site_benchmarking_dev/giab_easy.dfci-g2c.v1.gatkhc.initial_qc.chr19_vs_gnomad_v4.concordance_by_af.merged.tsv.gz",
-#                               "~/scratch/site_benchmarking_dev/giab_hard.dfci-g2c.v1.gatkhc.initial_qc.chr19_vs_gnomad_v4.concordance_by_af.merged.tsv.gz"),
+# args <- list("sens_by_af" = c("~/scratch/site_bench_metric_inputs/dfci-g2c.v1.initial_qc.gnomad_v4.1.Easy.sensitivity_by_freq.merged.tsv.gz",
+#                               "~/scratch/site_bench_metric_inputs/dfci-g2c.v1.initial_qc.gnomad_v4.1.Hard.sensitivity_by_freq.merged.tsv.gz"),
+#              "ppv_by_af" = c("~/scratch/site_bench_metric_inputs/dfci-g2c.v1.initial_qc.gnomad_v4.1.Easy.ppv_by_freq.merged.tsv.gz",
+#                               "~/scratch/site_bench_metric_inputs/dfci-g2c.v1.initial_qc.gnomad_v4.1.Hard.ppv_by_freq.merged.tsv.gz"),
 #              "set_name" = c("Easy", "Hard"),
 #              "ref_title" = "gnomAD v4.1",
 #              "common.af" = 0.001,
