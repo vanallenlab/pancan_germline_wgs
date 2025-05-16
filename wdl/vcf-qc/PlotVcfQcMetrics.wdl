@@ -393,7 +393,7 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
 
@@ -456,7 +456,7 @@ task PlotSiteMetrics {
   command <<<
     set -eu -o pipefail
 
-    mkdir site_metrics
+    mkdir ~{output_prefix}.site_metrics
 
     # Symlink full SV BED to working directory
     if [ ~{has_all_svs} ]; then
@@ -481,7 +481,7 @@ task PlotSiteMetrics {
       ~{ref_title_cmd} \
       ~{summary_sv_cmd} \
       --common-af ~{common_af_cutoff} \
-      --out-prefix site_metrics/~{output_prefix}
+      --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
 
     # Symlink common variant BEDs to working directory
     if [ ~{has_common_snvs} ]; then
@@ -501,15 +501,15 @@ task PlotSiteMetrics {
         ~{pw_indel_cmd} \
         ~{pw_sv_cmd} \
         --combine \
-        --out-prefix site_metrics/~{output_prefix}
+        --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
     fi
 
     # Compress outputs
-    tar -czvf site_metrics.tar.gz site_metrics/
+    tar -czvf ~{output_prefix}.site_metrics.tar.gz ~{output_prefix}.site_metrics/
   >>>
 
   output {
-    File site_metric_plots_tarball = "site_metrics.tar.gz"
+    File site_metric_plots_tarball = "~{output_prefix}.site_metrics.tar.gz"
   }
 
   runtime {

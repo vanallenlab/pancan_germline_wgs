@@ -118,6 +118,17 @@ gsutil cp \
   $MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/
 
 
+###################################################
+# Identify candidate twins / technical replicates #
+###################################################
+
+# Reaffirm staging directory
+staging_dir=staging/fam_curation
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+
+
+
 ##############################
 # Collect initial QC metrics #
 ##############################
@@ -277,7 +288,7 @@ cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:b84bd23",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:b9557dc",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
   "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.uris.list ),
@@ -313,7 +324,7 @@ cromshell --no_turtle -t 120 -mc submit \
 # Monitor QC visualization workflow
 monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list )
 
-# Once patches are complete, stage output
+# Once workflow is complete, stage output
 cromshell -t 120 list-outputs \
   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list ) \
 | awk '{ print $2 }' \

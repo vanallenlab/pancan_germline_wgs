@@ -421,12 +421,12 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              title="Variant count", title.line=0.85)
 
   # Add legend
-  text(x=0.5*snv.width, y=0.95*snv.k, labels="SNVs", font=3, pos=2,
+  text(x=0.5*snv.width, y=0.95*snv.k, labels="SNVs", pos=2,
        col=var.class.colors["snv"], xpd=T)
   text(x=-snv.gap-snv.width, y=max(del.xy$y),
-       labels="Indels", font=3, pos=2, col=var.class.colors["indel"], xpd=T)
+       labels="Indels", pos=2, col=var.class.colors["indel"], xpd=T)
   text(x=-log10(50)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
-       labels="SVs", font=3, pos=2, col=var.class.colors["sv"], xpd=T)
+       labels="SVs", pos=2, col=var.class.colors["sv"], xpd=T)
   if(add.ref){
     if(!is.null(ref.title)){
       ref.legend <- paste("Hashes from\n", ref.title)
@@ -572,7 +572,7 @@ plot.af.distribs <- function(af.df, breaks, ref.af.df=NULL, colors=NULL,
                  sep.wex=0, min.label.spacing=0.1*diff(par("usr")[3:4]),
                  lower.limit=par("usr")[3]+0.025*(diff(par("usr")[3:4])),
                  upper.limit=par("usr")[4]-0.025*(diff(par("usr")[3:4])),
-                 colors=NA, label.colors=colors, label.font=3)
+                 colors=NA, label.colors=colors)
   }
 }
 
