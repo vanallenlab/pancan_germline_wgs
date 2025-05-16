@@ -242,6 +242,7 @@ def main():
              formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('--metadata', required=True, help='sample metadata .tsv')
+    parser.add_argument('--phenotype-data', required=True, help='data describing phenotypes')
     parser.add_argument('--sample-list', required=True, help='list of samples to keep compared to larger G2C study')
     parser.add_argument('--cancer-subtype', required=True, help='cancer subtype being analyzed')
     parser.add_argument('--pca', required = True, help='.eigenvec file')
@@ -256,6 +257,7 @@ def main():
     parser.add_argument('--exclude-samples',required=False, help='Samples to Exclude')
     parser.add_argument('--log-file', required=False, help='Path to log file')
     parser.add_argument('--cohorts',required=True, help='Comma delimited string denoting which cohorts to include')
+    parser.add_argument('--use-original-dx', required=True, default=False, help='Option to use original_dx to get more niche subtypes.')
     args = parser.parse_args()
 
     # Make the log file
@@ -264,9 +266,11 @@ def main():
 
     with open(args.log_file, "w") as f:
         f.write("Size\tNum_Filtered\tPercent_Filtered\tExclusion_Criteria\n")
+        
 
     # Load sample metadata
     meta = pd.read_csv(args.metadata, sep='\t',index_col=False)
+    phenotype_data = pd.read_csv(args.phenotype_data,sep='\t',index_col=False)
     pca = pd.read_csv(args.pca,sep='\t',index_col=False)
     
     # Load list of samples to keep
@@ -281,6 +285,9 @@ def main():
 
     # Filter to just cases in our study as well as cases in the specific subtype
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
+
+    # Merge the metadata with phenotype data
+    meta = meta.merge(phenotype_data, left_on = "original_id", right_on = "Sample")
     sample_size1 = len(meta)
 
     with open(args.log_file, "a") as f:
@@ -294,8 +301,12 @@ def main():
         f.write(f"{sample_size2}\t{(sample_size1 - sample_size2)}\t{round(((sample_size1 - sample_size2)/sample_size1),3) * 100}\tRemove samples with unknown cancer status.\n")
 
 
+    # Filter to Cancer Subtypes of Interest
     if args.cancer_subtype != "pancancer":
-      meta =meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
+        if not args.use_original_dx:
+            meta =meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
+        else:
+            meta =meta[(meta['cancer'] == "control") | (meta['original_dx'].str.contains(args.cancer_subtype))]
 
     # Remove samples with irrelevant cancer diagnosis for this study
     sample_size3 = len(meta)
@@ -357,7 +368,8 @@ def main():
 
         # Count per cancer
         f.write("Counts by cancer:\n")
-        f.write(meta['cancer'].value_counts().to_string())
+        f.write(f"{args.cancer_subtype}\t{(meta['cancer'] != 'control').sum()}")
+        f.write(f"Controls\t{(meta['cancer'] == 'control').sum()}\n")
         f.write("\n\n")
 
         # Count per sex_karyotype
@@ -365,16 +377,27 @@ def main():
         f.write(meta['sex_karyotype'].value_counts().to_string())
         f.write("\n\n")
 
-        # Mean age and BMI stratified by cancer type
+        # Mean age for case and control
         f.write("Mean age by cancer type:\n")
-        means = meta.groupby('cancer')[['age']].mean().round(2)
-        f.write(means.to_string())
+        mean_case_age = round(meta[meta['cancer'] != "control"]['age'].mean(),2)
+        mean_control_age = round(meta[meta['cancer'] == "control"]['age'].mean(),2)
+        f.write(f"Mean Case Age\t{mean_case_age}\n")
+        f.write(f"Mean Control Age\t{mean_control_age}\n")
         f.write("\n\n")
 
         # intake_qc_pop count per cancer
         f.write("Counts of intake_qc_pop per cancer:\n")
-        intake_counts = meta.groupby('cancer')['intake_qc_pop'].value_counts().unstack(fill_value=0)
-        f.write(intake_counts.to_string())
+        case_cohort = meta[meta['cancer'] != "control"]
+        control_cohort = meta[meta['cancer'] == "control"]
+        case_intake_qc_pop = case_cohort['intake_qc_pop'].value_counts().to_string()
+        control_intake_qc_pop = control_cohort['intake_qc_pop'].value_counts().to_string()
+        f.write("Cases:\n")
+        f.write(case_intake_qc_pop + "\n\n")
+        f.write("Controls:\n")
+        f.write(control_intake_qc_pop + "\n\n")
+
+        # All cancer types included in this diagnoses are listed below
+        f.write(meta['cancer'].value_counts().to_string())
         f.write("\n\n")
 
         f.write("==========================\n\n")
