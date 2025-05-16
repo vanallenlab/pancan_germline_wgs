@@ -20,7 +20,7 @@ workflow InferTwins {
 
     Float min_af = 0.01
     Float min_hwe_p = 0.00000005
-    Float min_missing = 0.99
+    Float max_missing = 0.1
     Boolean only_snvs = false
     Boolean only_biallelic = true
     # Float min_kin = 0.4
@@ -38,7 +38,7 @@ workflow InferTwins {
         vcf_idx = vcf_info.right,
         min_af = min_af,
         min_hwe_p = min_hwe_p,
-        min_missing = min_missing,
+        max_missing = max_missing,
         only_snvs = only_snvs,
         only_biallelic = only_biallelic,
         docker = bcftools_docker
@@ -66,7 +66,7 @@ task PrepVcf {
 
     Float min_af
     Float min_hwe_p
-    Float min_missing
+    Float max_missing
     Boolean only_snvs
     Boolean only_biallelic
 
@@ -76,23 +76,21 @@ task PrepVcf {
     String docker
   }
 
-  String include_cmd = "--include \"FILTER = 'PASS' " + 
-                       "& INFO/AF >= ~{min_af} " + 
-                       "& INFO/HWE >= ~{min_hwe_p} " + 
-                       "& INFO/F_MISSING >= ~{min_missing}\""
   String snv_cmd = if only_snvs then "--types snps" else ""
   String biallelic_cmd = if only_biallelic then "-m2 -M2" else ""
 
   String outfile = basename(vcf, ".vcf.gz") + ".filtered.vcf.gz"
 
-  Int default_disk_gb = ceil(3 * size([vcf], "GB")) + 10
+  Int default_disk_gb = ceil(2.5 * size([vcf], "GB")) + 10
 
   command <<<
     set -eu -o pipefail
 
-    bcftools +fill-tags ~{vcf} -- -t AF,HWE,F_MISSING \
+    bcftools +fill-tags ~{vcf} -- -t AC,AN,AF,HWE,F_MISSING \
     | bcftools view \
-      ~{include_cmd} \
+      --apply-filters "PASS,." \
+      --min-af ~{min_af} \
+      --include "INFO/HWE >= ~{min_hwe_p} & INFO/F_MISSING <= ~{max_missing}" \
       ~{snv_cmd} \
       ~{biallelic_cmd} \
       -Oz -o ~{outfile}

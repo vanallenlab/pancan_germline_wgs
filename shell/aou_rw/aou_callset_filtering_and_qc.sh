@@ -122,9 +122,71 @@ gsutil cp \
 # Identify candidate twins / technical replicates #
 ###################################################
 
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
 # Reaffirm staging directory
 staging_dir=staging/fam_curation
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Build list of all autosomal GATK-HC VCFs
+for suf in vcfs tbis; do
+  flist=$staging_dir/gatkhc.$suf.uris.list
+  if [ -e $flist ]; then rm $flist; fi
+done
+for k in $( seq 1 22 ); do
+  contig="chr$k"
+
+  json_fname="PosthocCleanupPart2.$contig.outputs.json"
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2/$contig/$json_fname \
+    $staging_dir/
+  
+  jq .filtered_vcfs $staging_dir/$json_fname \
+  | sed 's/,/\n/g' | tr -d '[]"' | sed '/^$/d' | awk '{ print $1 }' \
+  >> $staging_dir/gatkhc.vcfs.uris.list
+  
+  
+  jq .filtered_vcf_idxs $staging_dir/$json_fname \
+  | sed 's/,/\n/g' | tr -d '[]"' | sed '/^$/d' | awk '{ print $1 }' \
+  >> $staging_dir/gatkhc.tbis.uris.list
+done
+
+# Write input .json for short variant QC metric collection
+cat << EOF | python -m json.tool > cromshell/inputs/InferTwins.inputs.json
+{
+  "InferTwins.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "InferTwins.only_snvs": true,
+  "InferTwins.out_prefix": "dfci-g2c.v1",
+  "InferTwins.vcfs": $( collapse_txt $staging_dir/gatkhc.vcfs.uris.list ),
+  "InferTwins.vcf_idxs": $( collapse_txt $staging_dir/gatkhc.tbis.uris.list )
+}
+EOF
+
+# Submit twin inference workflow
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip g2c.dependencies.zip \
+  code/wdl/pancan_germline_wgs/InferTwins.wdl \
+  cromshell/inputs/InferTwins.inputs.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list
+
+# Monitor QC visualization workflow
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list )
+
+# # Once workflow is complete, stage output
+# cromshell -t 120 list-outputs \
+#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list ) \
+# | awk '{ print $2 }' \
+# | gsutil -m cp -I \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/PlotQc/
+
+# # Clear Cromwell execution & output buckets for patch jobs
+# gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
+#                 | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+#                   '{ print bucket_prefix$1"/**" }' ) \
+# > uris_to_delete.list
+# cleanup_garbage
 
 
 
@@ -279,7 +341,7 @@ for k in $( seq 1 22 ) X Y; do
 done
 
 # Write input .json for short variant QC metric collection
-cat << EOF > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
+cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
 {
   "PlotVcfQcMetrics.af_distribution_tsvs": $( collapse_txt $staging_dir/af_distrib.uris.list ),
   "PlotVcfQcMetrics.all_sv_beds": $( collapse_txt $staging_dir/all_svs_bed.uris.list ),

@@ -64,7 +64,9 @@ collapse_txt() {
     echo "Must pass a single text file as input"
     return
   fi
-  awk -v ORS='",' '{ print "\""$1 }' $1 | sed 's/,$//g' | awk '{ print "["$1"]" }'
+  echo "["
+  awk -v ORS='",' '{ print "\""$1 }' $1 | sed 's/,$//g' | sed 's/,/,\n/g'
+  echo "]"
 }
 
 
