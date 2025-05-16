@@ -23,10 +23,10 @@ workflow InferTwins {
     Float max_missing = 0.1
     Boolean only_snvs = false
     Boolean only_biallelic = true
-    # Float min_kin = 0.4
+    Float min_kin = 0.4
 
     String bcftools_docker
-    # String hail_docker
+    String plink2_docker
   }
 
   Array[Pair[File, File]] vcf_infos = zip(vcfs, vcf_idxs)
@@ -53,9 +53,19 @@ workflow InferTwins {
       bcftools_docker = bcftools_docker
   }
 
-  # TODO: infer relatedness using hail
+  # Infer relatives with KING
+  call InferRelatives {
+    input:
+      vcf = ConcatVcfs.merged_vcf,
+      vcf_idx = ConcatVcfs.merged_vcf_idx,
+      out_prefix = out_prefix,
+      min_kin = min_kin,
+      docker = plink2_docker
+  }
 
-  output {}
+  output {
+    File king_metrics = InferRelatives.king_metrics
+  }
 }
 
 
@@ -71,8 +81,8 @@ task PrepVcf {
     Boolean only_biallelic
 
     Int? disk_gb
-    Float mem_gb = 2.0
-    Int n_cpu = 1
+    Float mem_gb = 4.0
+    Int n_cpu = 2
     String docker
   }
 
@@ -113,3 +123,50 @@ task PrepVcf {
   }
 }
 
+
+task InferRelatives {
+  input {
+    File vcf
+    File vcf_idx
+    String out_prefix
+
+    Float min_kin
+
+    Float mem_gb = 32.0
+    Int n_cpu = 16
+    Int? disk_gb
+    String docker
+  }
+
+  Int default_disk_gb = ceil((5 * size(vcf, "GB"))) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # Convert VCF to PLINK format
+    plink2 --vcf ~{vcf} --make-bed --out ~{out_prefix}
+
+    # Run KING
+    plink2 \
+      --bfile ~{out_prefix} \
+      --make-king-table counts \
+      --king-table-filter 0.4 \
+      --out ~{out_prefix}
+
+    # Compress KING table
+    gzip -f ~{out_prefix}.kin0
+  >>>
+
+  output {
+    File king_metrics = "~{out_prefix}.kin0.gz"
+  }
+
+  runtime {
+    docker: docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 2
+    max_retries: 1
+  }  
+}
