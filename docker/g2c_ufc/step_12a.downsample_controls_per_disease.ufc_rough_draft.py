@@ -304,7 +304,7 @@ def main():
 
     # Filter to Cancer Subtypes of Interest
     print("Args Variables")
-    print(var(args))
+    print(vars(args))
     if args.cancer_subtype != "pancancer":
         if not args.use_original_dx:
             meta =meta[meta['cancer'].str.contains(f"control|{args.cancer_subtype}")]
