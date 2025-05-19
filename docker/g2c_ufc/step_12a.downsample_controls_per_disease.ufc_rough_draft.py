@@ -270,6 +270,8 @@ def main():
 
     # Load sample metadata
     meta = pd.read_csv(args.metadata, sep='\t',index_col=False)
+    print("These are the columns of meta")
+    print(meta.columns)
     phenotype_data = pd.read_csv(args.phenotype_data,sep='\t',index_col=False)
     pca = pd.read_csv(args.pca,sep='\t',index_col=False)
     
