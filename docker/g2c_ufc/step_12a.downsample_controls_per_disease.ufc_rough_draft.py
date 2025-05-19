@@ -287,7 +287,7 @@ def main():
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
 
     # Merge the metadata with phenotype data
-    phenotype_data = phenotype_data.drop(columns=['cancer'], errors='ignore')
+    phenotype_data = phenotype_data.drop(columns=['cancer','age'], errors='ignore')
     meta = meta.merge(phenotype_data, left_on = "original_id", right_on = "Sample")
     sample_size1 = len(meta)
 
