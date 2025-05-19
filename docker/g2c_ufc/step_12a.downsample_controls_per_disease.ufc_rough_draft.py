@@ -270,8 +270,6 @@ def main():
 
     # Load sample metadata
     meta = pd.read_csv(args.metadata, sep='\t',index_col=False)
-    print("These are the columns of meta")
-    print(meta.columns)
     phenotype_data = pd.read_csv(args.phenotype_data,sep='\t',index_col=False)
     pca = pd.read_csv(args.pca,sep='\t',index_col=False)
     
@@ -289,6 +287,7 @@ def main():
     meta = meta[meta['original_id'].astype(str).str.strip().isin(samples)]
 
     # Merge the metadata with phenotype data
+    phenotype_data = phenotype_data.drop(columns=['cancer'], errors='ignore')
     meta = meta.merge(phenotype_data, left_on = "original_id", right_on = "Sample")
     sample_size1 = len(meta)
 
