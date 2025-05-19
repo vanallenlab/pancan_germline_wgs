@@ -369,7 +369,7 @@ def main():
 
         # Count per cancer
         f.write("Counts by cancer:\n")
-        f.write(f"{args.cancer_subtype}\t{(meta['cancer'] != 'control').sum()}")
+        f.write(f"{args.cancer_subtype}\t{(meta['cancer'] != 'control').sum()}\n")
         f.write(f"Controls\t{(meta['cancer'] == 'control').sum()}\n")
         f.write("\n\n")
 
