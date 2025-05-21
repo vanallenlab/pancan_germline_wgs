@@ -28,6 +28,10 @@ workflow CollectVcfQcMetrics {
                                                 # (any tabix-compliant interval definitions should work)
     Int n_records_per_shard = 25000             # Number of records per shard. This will only be used as a backup if 
                                                 # scatter_intervals_list is not provided and shard_vcf is true
+    String? extra_vcf_preprocessing_commands    # Optional string of extra shell commands to execute when preprocessing
+                                                # input vcfs. This will automatically be prefixed by a pipe so should
+                                                # be supplied as a chain of bash commands that could be inserted into
+                                                # an existing bash command as reading from stdin and writing to stdout
 
     Float common_af_cutoff = 0.001              # Minimum AF for a variant to be included in common variant subsets
 
@@ -170,6 +174,7 @@ workflow CollectVcfQcMetrics {
           target_samples = ChooseTargetSamples.target_samples,
           trio_samples = CleanFam.trio_samples_list,
           has_mcnvs = McnvCheck.has_mcnvs,
+          extra_commands = extra_vcf_preprocessing_commands,
           out_prefix = basename(vcf, ".vcf.gz"),
           docker = g2c_analysis_docker
       }
@@ -530,6 +535,7 @@ task PreprocessVcf {
     File? trio_samples
     File? benchmarking_samples
     Boolean has_mcnvs = false
+    String? extra_commands
     
     String out_prefix
     
@@ -546,6 +552,8 @@ task PreprocessVcf {
 
   String mcnv_anno = if has_mcnvs then "| /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - -" else ""
 
+  String extra_cmd = if defined(extra_commands) then "| " + extra_commands else ""
+
   Int default_disk_gb = ceil(3 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
 
@@ -557,6 +565,7 @@ task PreprocessVcf {
 
     # Preprocess VCF
     bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
+    ~{extra_cmd} \
     ~{mcnv_anno} \
     | bcftools view \
       --samples-file all.samples.list \

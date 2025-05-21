@@ -29,7 +29,7 @@ from sys import stdin
 var_classes = 'snv indel sv'.split()
 var_subclasses = {'snv' : 'ti tv'.split(),
                   'indel' : 'ins del'.split(),
-                  'sv' : 'DEL DUP CNV INS INV CPX CTX'.split()}
+                  'sv' : 'DEL DUP CNV INS INV CPX CTX BND'.split()}
 
 
 def make_size_bins(bins_per_log10, max_size):
