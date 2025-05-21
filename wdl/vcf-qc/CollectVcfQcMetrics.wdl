@@ -305,17 +305,37 @@ workflow CollectVcfQcMetrics {
   Int n_site_benchmark_datasets = length(site_benchmark_dataset_names)
 
   if ( n_site_benchmark_datasets > 0 ) {
+
+    call MakeEmptyBenchBed {
+      input:
+        docker = bcftools_docker
+    }
+
     scatter ( site_bench_idx in range(n_site_benchmark_datasets) ) {
+
+      File sb_target_snv_bed = if length(snv_site_benchmark_beds) > site_bench_idx 
+                               then select_all(snv_site_benchmark_beds)[site_bench_idx] 
+                               else MakeEmptyBenchBed.empty_bed
+      File sb_target_indel_bed = if length(indel_site_benchmark_beds) > site_bench_idx
+                                 then select_all(indel_site_benchmark_beds)[site_bench_idx]
+                                 else MakeEmptyBenchBed.empty_bed
+      File sb_target_sv_bed = if length(sv_site_benchmark_beds) > site_bench_idx
+                              then select_all(sv_site_benchmark_beds)[site_bench_idx]
+                              else MakeEmptyBenchBed.empty_bed
+      String sb_target_prefix = if defined(site_benchmark_dataset_names) 
+                                then select_all(site_benchmark_dataset_names)[site_bench_idx] 
+                                else ""
+
       call BenchSites.BenchmarkSites {
         input:
           source_snv_bed = CollapseAllSnvs.merged_file,
           source_indel_bed = CollapseAllIndels.merged_file,
           source_sv_bed = CollapseAllSvs.merged_file,
           source_prefix = output_prefix,
-          target_snv_bed = select_all(snv_site_benchmark_beds)[site_bench_idx],
-          target_indel_bed = select_all(indel_site_benchmark_beds)[site_bench_idx],
-          target_sv_bed = select_all(sv_site_benchmark_beds)[site_bench_idx],
-          target_prefix = select_all(site_benchmark_dataset_names)[site_bench_idx],
+          target_snv_bed = sb_target_snv_bed,
+          target_indel_bed = sb_target_indel_bed,
+          target_sv_bed = sb_target_sv_bed,
+          target_prefix = sb_target_prefix,
           eval_interval_beds = select_first([benchmark_interval_beds]),
           eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
           genome_file = select_first([genome_file]),
@@ -570,6 +590,33 @@ task PreprocessVcf {
     memory: "~{mem_gb} GB"
     cpu: n_cpu
     disks: "local-disk ~{hdd_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Make an empty benchmark bed to backfill for missing values in optional arrays
+task MakeEmptyBenchBed {
+  input {
+    String docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    echo -e "#chrom\tstart\tend\tvid\tclass\tsubclass\tsize\tac\taf\tfreq_het\tfreq_hom\thwe" \
+    | bgzip -c > dummy.bed.gz
+  >>>
+
+  output {
+    File empty_bed = "dummy.bed.gz"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.5 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
     preemptible: 3
   }
 }

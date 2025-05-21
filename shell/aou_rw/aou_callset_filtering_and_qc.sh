@@ -154,9 +154,17 @@ done
 # Write input .json for short variant QC metric collection
 cat << EOF | python -m json.tool > cromshell/inputs/InferTwins.inputs.json
 {
+  "InferTwins.ConcatVcfs.bcftools_concat_options": "--allow-overlaps",
+  "InferTwins.ConcatVcfs.cpu_cores": 4,
+  "InferTwins.ConcatVcfs.disk_gb": 1000,
+  "InferTwins.ConcatVcfs.mem_gb": 16,
+  "InferTwins.PrepVcf.mem_gb": 8.0,
+  "InferTwins.PrepVcf.n_cpu": 4,
   "InferTwins.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "InferTwins.min_kin": 0.45,
   "InferTwins.only_snvs": true,
   "InferTwins.out_prefix": "dfci-g2c.v1",
+  "InferTwins.plink2_docker": "vanallenlab/g2c_pipeline:plink2",
   "InferTwins.vcfs": $( collapse_txt $staging_dir/gatkhc.vcfs.uris.list ),
   "InferTwins.vcf_idxs": $( collapse_txt $staging_dir/gatkhc.tbis.uris.list )
 }
@@ -174,21 +182,19 @@ cromshell --no_turtle -t 120 -mc submit \
 # Monitor QC visualization workflow
 monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list )
 
-# # Once workflow is complete, stage output
-# cromshell -t 120 list-outputs \
-#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list ) \
-# | awk '{ print $2 }' \
-# | gsutil -m cp -I \
-#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/PlotQc/
+# Once workflow is complete, stage output
+cromshell -t 120 list-outputs \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list ) \
+| awk '{ print $2 }' \
+| gsutil -m cp -I \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/
 
-# # Clear Cromwell execution & output buckets for patch jobs
-# gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
-#                 | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
-#                   '{ print bucket_prefix$1"/**" }' ) \
-# > uris_to_delete.list
-# cleanup_garbage
-
-
+# Clear Cromwell execution & output buckets
+gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list \
+                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell-*/InferTwins/" \
+                  '{ print bucket_prefix$1"/**" }' ) \
+> uris_to_delete.list
+cleanup_garbage
 
 
 ##############################
@@ -231,7 +237,7 @@ add_contig_vcfs_to_chromshard_overrides_json \
   filtered_vcfs \
   filtered_vcf_idxs
 
-# Write template input .json for short variant QC metric collection
+# Write template input .json for QC metric collection
 cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
@@ -242,15 +248,15 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d8cdae4",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
-  "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 1000,
-  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.gatkhc.initial_qc.\$CONTIG",
+  "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc.\$CONTIG",
   "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 7.5,
   "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
   "CollectVcfQcMetrics.shard_vcf": false,
   "CollectVcfQcMetrics.site_benchmark_dataset_names": ["gnomad_v4"],
   "CollectVcfQcMetrics.snv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.snv.sites.bed.gz"],
+  "CollectVcfQcMetrics.indel_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.indel.sites.bed.gz"],
   "CollectVcfQcMetrics.sv_site_benchmark_beds": ["gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/\$CONTIG/gnomad.v4.1.\$CONTIG.sv.sites.bed.gz"],
   "CollectVcfQcMetrics.trios_fam_file": "$MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam",
   "CollectVcfQcMetrics.vcfs": \$CONTIG_VCFS,
