@@ -116,6 +116,9 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
     outputs_dict = {}
     for key, src_vals in json.loads(crom_query_res).items():
 
+        if src_vals is None:
+            continue
+
         if isinstance(src_vals, str):
             src_vals = [src_vals]
         elif isinstance(src_vals, list):

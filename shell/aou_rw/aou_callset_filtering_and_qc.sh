@@ -294,22 +294,21 @@ if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 # Build input arrays
 for key in size_distrib af_distrib size_vs_af_distrib \
            all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do  
-  if [ -e $staging_dir/$key.uris.list ]; then
-    rm $staging_dir/$key.uris.list
-  fi
+  fname=$staging_dir/$key.uris.list
+  if [ -e $fname ]; then rm $fname; fi
 done
 for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
            site_benchmark_common_snv_ppv_beds \
            site_benchmark_common_indel_ppv_beds \
            site_benchmark_common_sv_ppv_beds; do
   for subset in giab_easy giab_hard; do
-    rm $staging_dir/$key.$subset.uris.list
+    fname=$staging_dir/$key.$subset.uris.list
+    if [ -e $fname ]; then rm $fname; fi
   done
 done
 for suffix in af_distribution size_distribution; do
-  if [ -e $staging_dir/gnomAD_$suffix.list ]; then
-    rm $staging_dir/gnomAD_$suffix.uris.list
-  fi
+  fname=$staging_dir/gnomAD_$suffix.list
+  if [ -e $fname ]; then rm $fname; fi
 done
 for k in $( seq 1 22 ) X Y; do
   

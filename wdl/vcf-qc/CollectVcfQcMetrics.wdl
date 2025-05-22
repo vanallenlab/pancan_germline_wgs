@@ -311,7 +311,7 @@ workflow CollectVcfQcMetrics {
 
   if ( n_site_benchmark_datasets > 0 ) {
 
-    call MakeEmptyBenchBed {
+    call QcTasks.MakeEmptyBenchBed {
       input:
         docker = bcftools_docker
     }
@@ -599,33 +599,6 @@ task PreprocessVcf {
     memory: "~{mem_gb} GB"
     cpu: n_cpu
     disks: "local-disk ~{hdd_gb} HDD"
-    preemptible: 3
-  }
-}
-
-
-# Make an empty benchmark bed to backfill for missing values in optional arrays
-task MakeEmptyBenchBed {
-  input {
-    String docker
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    echo -e "#chrom\tstart\tend\tvid\tclass\tsubclass\tsize\tac\taf\tfreq_het\tfreq_hom\thwe" \
-    | bgzip -c > dummy.bed.gz
-  >>>
-
-  output {
-    File empty_bed = "dummy.bed.gz"
-  }
-
-  runtime {
-    docker: docker
-    memory: "1.5 GB"
-    cpu: 1
-    disks: "local-disk 20 HDD"
     preemptible: 3
   }
 }

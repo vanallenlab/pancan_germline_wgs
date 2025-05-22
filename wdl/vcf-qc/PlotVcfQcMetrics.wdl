@@ -131,71 +131,85 @@ workflow PlotVcfQcMetrics {
   }
 
   # If necessary, collapse all SV BEDs
-  if ( length(select_first(select_all([all_sv_beds]))) > 1 ) {
-    call Utils.ConcatTextFiles as CollapseAllSvs {
-      input:
-        shards = select_first([all_sv_beds]),
-        concat_command = "zcat",
-        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-        compression_command = "bgzip -c",
-        input_has_header = true,
-        output_filename = output_prefix + ".all_svs.bed.gz",
-        docker = bcftools_docker
+  if ( defined(all_sv_beds) ) {
+    if ( length(select_first(select_all([all_sv_beds]))) > 1 ) {
+      call Utils.ConcatTextFiles as CollapseAllSvs {
+        input:
+          shards = select_first([all_sv_beds]),
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".all_svs.bed.gz",
+          docker = bcftools_docker
       }
+    }
+    File all_svs_bed = select_first(select_all([CollapseAllSvs.merged_file, 
+                                                select_first([all_sv_beds])[0]]))
   }
-  File? all_svs_bed = select_first(select_all([CollapseAllSvs.merged_file, 
-                                               select_first([all_sv_beds])[0]]))
 
   # If necessary, collapse common SNV BEDs
-  if ( length(select_first(select_all([common_snv_beds]))) > 1 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvs {
-      input:
-        shards = select_first([common_snv_beds]),
-        concat_command = "zcat",
-        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-        compression_command = "bgzip -c",
-        input_has_header = true,
-        output_filename = output_prefix + ".common_snvs.bed.gz",
-        docker = bcftools_docker
-      }
+  if ( defined(common_snv_beds) ) {
+    if ( length(select_first(select_all([common_snv_beds]))) > 1 ) {
+      call Utils.ConcatTextFiles as CollapseCommonSnvs {
+        input:
+          shards = select_first([common_snv_beds]),
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".common_snvs.bed.gz",
+          docker = bcftools_docker
+        }
+    }
+    File common_snvs_bed = select_first(select_all([CollapseCommonSnvs.merged_file, 
+                                                    select_first([common_snv_beds])[0]]))
   }
-  File? common_snvs_bed = select_first(select_all([CollapseCommonSnvs.merged_file, 
-                                                   select_first([common_snv_beds])[0]]))
 
   # If necessary, collapse common indel BEDs
-  if ( length(select_first(select_all([common_indel_beds]))) > 1 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndels {
-      input:
-        shards = select_first([common_indel_beds]),
-        concat_command = "zcat",
-        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-        compression_command = "bgzip -c",
-        input_has_header = true,
-        output_filename = output_prefix + ".common_indels.bed.gz",
-        docker = bcftools_docker
-      }
+  if ( defined(common_indel_beds) ) {
+    if ( length(select_first(select_all([common_indel_beds]))) > 1 ) {
+      call Utils.ConcatTextFiles as CollapseCommonIndels {
+        input:
+          shards = select_first([common_indel_beds]),
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".common_indels.bed.gz",
+          docker = bcftools_docker
+        }
+    }
+    File common_indels_bed = select_first(select_all([CollapseCommonIndels.merged_file, 
+                                                      select_first([common_indel_beds])[0]]))
   }
-  File? common_indels_bed = select_first(select_all([CollapseCommonIndels.merged_file, 
-                                                     select_first([common_indel_beds])[0]]))
 
   # If necessary, collapse common SV BEDs
-  if ( length(select_first(select_all([common_sv_beds]))) > 1 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvs {
-      input:
-        shards = select_first([common_sv_beds]),
-        concat_command = "zcat",
-        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-        compression_command = "bgzip -c",
-        input_has_header = true,
-        output_filename = output_prefix + ".common_svs.bed.gz",
-        docker = bcftools_docker
-      }
+  if ( defined(common_sv_beds) ) {
+    if ( length(select_first(select_all([common_sv_beds]))) > 1 ) {
+      call Utils.ConcatTextFiles as CollapseCommonSvs {
+        input:
+          shards = select_first([common_sv_beds]),
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".common_svs.bed.gz",
+          docker = bcftools_docker
+        }
+    }
+    File common_svs_bed = select_first(select_all([CollapseCommonSvs.merged_file, 
+                                                   select_first([common_sv_beds])[0]]))
   }
-  File? common_svs_bed = select_first(select_all([CollapseCommonSvs.merged_file, 
-                                                  select_first([common_sv_beds])[0]]))
 
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
+
+    call QcTasks.MakeEmptyBenchBed {
+      input:
+        docker = bcftools_docker
+    }
+
     scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
 
       String bd_name = flatten(select_all([site_benchmark_dataset_prefixes]))[site_bench_di]
@@ -208,44 +222,65 @@ workflow PlotVcfQcMetrics {
         
         # Collapse site benchmarking SNV BEDs
         if (defined(site_benchmark_common_snv_ppv_beds)) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchSnvs {
-            input:
-              shards = flatten(select_all([site_benchmark_common_snv_ppv_beds]))[site_bench_di][site_bench_ii],
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sbi_prefix + ".common_snvs.bed.gz",
-              docker = bcftools_docker
+          Array[File] sb_common_snv_preflat = if defined(site_benchmark_common_snv_ppv_beds) 
+                                              then flatten(select_all([site_benchmark_common_snv_ppv_beds]))[site_bench_di][site_bench_ii]
+                                              else [MakeEmptyBenchBed.empty_bed]
+          if ( length(sb_common_snv_preflat) > 1 ) {
+            call Utils.ConcatTextFiles as CollapseSiteBenchSnvs {
+              input:
+                shards = sb_common_snv_preflat,
+                concat_command = "zcat",
+                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+                compression_command = "bgzip -c",
+                input_has_header = true,
+                output_filename = sbi_prefix + ".common_snvs.bed.gz",
+                docker = bcftools_docker
+            }
           }
+          File sb_common_snv_flat = select_first([CollapseSiteBenchSnvs.merged_file,
+                                                  sb_common_snv_preflat[0]])
         }
         
         # Collapse site benchmarking indel BEDs
         if (defined(site_benchmark_common_indel_ppv_beds)) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchIndels {
-            input:
-              shards = flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii],
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sbi_prefix + ".common_indels.bed.gz",
-              docker = bcftools_docker
+          Array[File] sb_common_indel_preflat = if defined(site_benchmark_common_indel_ppv_beds) 
+                                              then flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii]
+                                              else [MakeEmptyBenchBed.empty_bed]
+          if ( length(sb_common_indel_preflat) > 1 ) {
+            call Utils.ConcatTextFiles as CollapseSiteBenchIndels {
+              input:
+                shards = flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii],
+                concat_command = "zcat",
+                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+                compression_command = "bgzip -c",
+                input_has_header = true,
+                output_filename = sbi_prefix + ".common_indels.bed.gz",
+                docker = bcftools_docker
+            }
           }
+          File sb_common_indel_flat = select_first([CollapseSiteBenchIndels.merged_file,
+                                                    sb_common_indel_preflat[0]])
         }
         
         # Collapse site benchmarking SV BEDs
         if (defined(site_benchmark_common_sv_ppv_beds)) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchSvs {
-            input:
-              shards = flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii],
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sbi_prefix + ".common_svs.bed.gz",
-              docker = bcftools_docker
+          Array[File] sb_common_sv_preflat = if defined(site_benchmark_common_sv_ppv_beds) 
+                                              then flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii]
+                                              else [MakeEmptyBenchBed.empty_bed]
+          if ( length(sb_common_sv_preflat) > 1 ) {
+            call Utils.ConcatTextFiles as CollapseSiteBenchSvs {
+              input:
+                shards = flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii],
+                concat_command = "zcat",
+                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+                compression_command = "bgzip -c",
+                input_has_header = true,
+                output_filename = sbi_prefix + ".common_svs.bed.gz",
+                docker = bcftools_docker
+            }
           }
+          File sb_common_sv_flat = select_first([CollapseSiteBenchSvs.merged_file,
+                                                    sb_common_sv_preflat[0]])
         }
 
         # Collapse compressed PPV tsvs
@@ -272,54 +307,76 @@ workflow PlotVcfQcMetrics {
       }
 
       # For each benchmarking dataset, further collapse SNVs across interval sets
-      if (defined(site_benchmark_common_snv_ppv_beds)) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
+      if ( defined(sb_common_snv_flat) ) {
+        Array[File] sb_common_snv_flat_array = if defined(sb_common_snv_flat)
+                                               then select_all(sb_common_snv_flat)
+                                               else [MakeEmptyBenchBed.empty_bed]
+        if ( length(sb_common_snv_flat_array) > 1 ) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
             input:
-              shards = select_all(CollapseSiteBenchSnvs.merged_file),
+              shards = sb_common_snv_flat_array,
               concat_command = "zcat",
               sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
               compression_command = "bgzip -c",
               input_has_header = true,
               output_filename = sb_prefix + ".merged.common_snvs.bed.gz",
               docker = bcftools_docker
+          }
         }
+        File sb_common_snv_flat_union = select_first([CollapseSiteBenchSnvsUnion.merged_file,
+                                                      sb_common_snv_flat_array[0]])
       }
 
       # For each benchmarking dataset, further collapse indels across interval sets
-      if (defined(site_benchmark_common_snv_ppv_beds)) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
-            input:
-              shards = select_all(CollapseSiteBenchIndels.merged_file),
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sb_prefix + ".merged.common_indels.bed.gz",
-              docker = bcftools_docker
+      if ( defined(sb_common_indel_flat) ) {
+        Array[File] sb_common_indel_flat_array = if defined(sb_common_indel_flat)
+                                                 then select_all(sb_common_indel_flat)
+                                                 else [MakeEmptyBenchBed.empty_bed]
+        if ( length(sb_common_indel_flat_array) > 1 ) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
+              input:
+                shards = sb_common_indel_flat_array,
+                concat_command = "zcat",
+                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+                compression_command = "bgzip -c",
+                input_has_header = true,
+                output_filename = sb_prefix + ".merged.common_indels.bed.gz",
+                docker = bcftools_docker
+          }
         }
+        File sb_common_indel_flat_union = select_first([CollapseSiteBenchIndelsUnion.merged_file,
+                                                        sb_common_indel_flat_array[0]])
       }
 
       # For each benchmarking dataset, further collapse SVs across interval sets
-      if (defined(site_benchmark_common_snv_ppv_beds)) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchSvsUnion {
-            input:
-              shards = select_all(CollapseSiteBenchSvs.merged_file),
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sb_prefix + ".merged.common_svs.bed.gz",
-              docker = bcftools_docker
+      if ( defined(sb_common_sv_flat) ) {
+        Array[File] sb_common_sv_flat_array = if defined(sb_common_sv_flat)
+                                              then select_all(sb_common_sv_flat)
+                                              else [MakeEmptyBenchBed.empty_bed]
+        if ( length(sb_common_sv_flat_array) > 1 ) {
+          call Utils.ConcatTextFiles as CollapseSiteBenchSvsUnion {
+              input:
+                shards = sb_common_sv_flat_array,
+                concat_command = "zcat",
+                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+                compression_command = "bgzip -c",
+                input_has_header = true,
+                output_filename = sb_prefix + ".merged.common_svs.bed.gz",
+                docker = bcftools_docker
+          }
         }
+        File sb_common_sv_flat_union = select_first([CollapseSiteBenchSvsUnion.merged_file,
+                                                     sb_common_sv_flat_array[0]])
+
       }
     }
   }
-  Array[Array[File?]]? site_bench_snvs_merged = CollapseSiteBenchSnvs.merged_file
-  Array[Array[File?]]? site_bench_indels_merged = CollapseSiteBenchIndels.merged_file
-  Array[Array[File?]]? site_bench_svs_merged = CollapseSiteBenchSvs.merged_file
-  Array[File]? site_bench_snvs_merged_union = select_all(select_first([CollapseSiteBenchSnvsUnion.merged_file]))
-  Array[File]? site_bench_indels_merged_union = select_all(select_first([CollapseSiteBenchIndelsUnion.merged_file]))
-  Array[File]? site_bench_svs_merged_union = select_all(select_first([CollapseSiteBenchSvsUnion.merged_file]))
+  Array[Array[File?]]? site_bench_snvs_merged = sb_common_snv_flat
+  Array[Array[File?]]? site_bench_indels_merged = sb_common_indel_flat
+  Array[Array[File?]]? site_bench_svs_merged = sb_common_sv_flat
+  Array[File?]? site_bench_snvs_merged_union = sb_common_snv_flat_union
+  Array[File?]? site_bench_indels_merged_union = sb_common_indel_flat_union
+  Array[File?]? site_bench_svs_merged_union = sb_common_sv_flat_union
 
 
   #################
