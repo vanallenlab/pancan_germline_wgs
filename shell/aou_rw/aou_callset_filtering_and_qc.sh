@@ -196,6 +196,13 @@ gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.InferTwins.job_ids.list \
 > uris_to_delete.list
 cleanup_garbage
 
+# Locally filter putative twins to remove pairs that are more likely to be 
+# duplicated WGS files (based on WGS QC metric similarity) than true replicates
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.kin0.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $staging_dir/
+
 
 ##############################
 # Collect initial QC metrics #

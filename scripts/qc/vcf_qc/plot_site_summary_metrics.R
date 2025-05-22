@@ -102,7 +102,7 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   ss.df[1, ] <- c("site_count.all_variants", "count", rep(sum(df[, -(1:2)]), 2))
   vc.counts <- data.frame(do.call("rbind", lapply(names(var.class.abbrevs), function(vc){
     c(paste("site_count", vc, sep="."), "count",
-    rep(sum(df[which(df$class == vc), -(1:2)]), 2))
+      rep(sum(df[which(df$class == vc), -(1:2)]), 2))
   })))
   vsc.counts <- data.frame(do.call("rbind", lapply(names(var.subclass.abbrevs), function(vsc){
     c(paste("site_count", vsc, sep="."), "count",
@@ -225,33 +225,40 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
   breaks <- log10(size.d$breaks)
   snv.k <- log10(sum(as.numeric(apply(df[which(df$class == "snv"),
                                          -c(1:2)], 2, sum))))
+  do.snvs <- sum(10^snv.k, na.rm=T) > 0
   ins.k <- log10(as.numeric(df[which(df$subclass == "ins"), -c(1:2)]))
   del.k <- log10(as.numeric(df[which(df$subclass == "del"), -c(1:2)]))
+  do.indels <- sum(10^c(ins.k, del.k), na.rm=T) > 0
   GAIN.k <- log10(as.numeric(apply(df[which(df$subclass %in% GAIN.vsc),
                                       -c(1:2)], 2, sum)))
   LOSS.k <- log10(as.numeric(df[which(df$subclass == "DEL"), -c(1:2)]))
+  do.svs <- sum(10^c(GAIN.k, LOSS.k), na.rm=T) > 0
 
   # Get reference densities, if optioned
   if(is.null(ref.size.d)){
-    add.ref <- FALSE
+    add.ref <- do.ref.snvs <- do.ref.indels <- do.ref.svs <- FALSE
   }else{
     add.ref <- TRUE
     ref.breaks <- log10(ref.size.d$breaks)
     ref.df <- ref.size.d$df
     ref.snv.k <- log10(sum(as.numeric(apply(ref.df[which(ref.df$class == "snv"),
                                                    -c(1:2)], 2, sum))))
+    do.ref.snvs <- sum(10^ref.snv.k, na.rm=T) > 0
     ref.ins.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "ins"), -c(1:2)]))
     ref.del.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "del"), -c(1:2)]))
+    do.ref.indels <- sum(10^c(ref.ins.k, ref.del.k), na.rm=T) > 0
     ref.GAIN.k <- log10(as.numeric(apply(ref.df[which(ref.df$subclass %in% GAIN.vsc),
                                                 -c(1:2)], 2, sum)))
     ref.LOSS.k <- log10(as.numeric(ref.df[which(ref.df$subclass == "DEL"), -c(1:2)]))
+    do.ref.svs <- sum(10^c(ref.GAIN.k, ref.LOSS.k), na.rm=T) > 0
   }
 
   # Get plot values
   xlims <- c(-1, 1) * (max(breaks) + 0.1 + (0.5*snv.width) + snv.gap + indel.gap)
   xlims[1] <- xlims[1]-0.1
   if(add.ref){
-    ylims <- c(0, 1.05*log10(max(max(df[, -c(1:2)]), max(ref.df[, -c(1:2)]))))
+    ref.df.for.lims <- merge(df[, c("class", "subclass")], ref.df, all=F, sort=F)
+    ylims <- c(0, 1.05*log10(max(max(df[, -c(1:2)]), max(ref.df.for.lims[, -c(1:2)]))))
   }else{
     ylims <- c(0, log10(max(df[, -c(1:2)])))
   }
@@ -260,68 +267,73 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
   prep.plot.area(xlims, ylims, parmar, xaxs="r")
 
   # Add SNVs
-  rect(xleft=-0.5*snv.width, xright=0.5*snv.width,
-       ybottom=0, ytop=snv.k, col=var.class.colors["snv"],
-       border=NA, bty="n")
-  if(add.ref){
-    if(ref.snv.k >= (1-ref.hex.gap)*snv.k){
-      snv.ref.color <-var.ref.color
-    }else{
-      snv.ref.color <-"white"
-    }
-    segments(x0=-0.5*snv.width, x1=0.5*snv.width, y0=ref.snv.k, y1=ref.snv.k,
-             lty=ref.lty, col=snv.ref.color, xpd=T)
+  if(do.snvs){
+    rect(xleft=-0.5*snv.width, xright=0.5*snv.width,
+         ybottom=0, ytop=snv.k, col=var.class.colors["snv"],
+         border=NA, bty="n")
+    if(do.ref.snvs){
+        if(ref.snv.k >= (1-ref.hex.gap)*snv.k){
+          snv.ref.color <-var.ref.color
+        }else{
+          snv.ref.color <-"white"
+        }
+        segments(x0=-0.5*snv.width, x1=0.5*snv.width, y0=ref.snv.k, y1=ref.snv.k,
+                 lty=ref.lty, col=snv.ref.color, xpd=T)
+      }
   }
 
-  # Add indel polygons
-  indel.idx <- which(breaks >= 0 & breaks < log10(50))
-  ins.xy <- step.function(x=breaks[indel.idx] + snv.gap + (0.5 * snv.width),
-                          y=ins.k[indel.idx], offset=1)
-  polygon(x=c(ins.xy$x, rev(ins.xy$x)),
-          y=c(ins.xy$y, rep(0, length(ins.xy$x))),
-          col=var.class.colors["indel"], border=NA, bty="n")
-  del.xy <- step.function(x=breaks[indel.idx] + snv.gap + (0.5 * snv.width),
-                          y=del.k[indel.idx], offset=1)
-  polygon(x=-c(del.xy$x, rev(del.xy$x)),
-          y=c(del.xy$y, rep(0, length(del.xy$x))),
-          col=var.class.colors["indel"], border=NA, bty="n")
+  # Add indels
+  if(do.indels){
+    # Add indel polygons
+    indel.idx <- which(breaks >= 0 & breaks < log10(50))
+    ins.xy <- step.function(x=breaks[indel.idx] + snv.gap + (0.5 * snv.width),
+                            y=ins.k[indel.idx], offset=1)
+    polygon(x=c(ins.xy$x, rev(ins.xy$x)),
+            y=c(ins.xy$y, rep(0, length(ins.xy$x))),
+            col=var.class.colors["indel"], border=NA, bty="n")
+    del.xy <- step.function(x=breaks[indel.idx] + snv.gap + (0.5 * snv.width),
+                            y=del.k[indel.idx], offset=1)
+    polygon(x=-c(del.xy$x, rev(del.xy$x)),
+            y=c(del.xy$y, rep(0, length(del.xy$x))),
+            col=var.class.colors["indel"], border=NA, bty="n")
 
-  # Add indel reference ticks
-  if(add.ref){
-    ref.indel.idx <- which(ref.breaks >= 0 & ref.breaks <= log10(50))
-    ref.ins.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
-                       "y"=ref.ins.k[ref.indel.idx])
-    ref.ins.col <- sapply(1:(length(ref.ins.xy$x)-1), function(r){
-      ovr.idx <- which(sapply(ins.xy$x, is.inside, interval=ref.ins.xy$x[c(r, r+1)]))
-      if(length(ovr.idx) == 0){return(var.ref.color)}
-      if(mean(ref.ins.xy$y[r] >= (1-ref.hex.gap)*ins.xy$y[ovr.idx]) >= 0.5){
-        return(var.ref.color)
-      }else{
-        return("white")
-      }
-    })
-    segments(x0=ref.ins.xy$x[-length(ref.ins.xy$x)],
-             x1=ref.ins.xy$x[-1],
-             y0=ref.ins.xy$y[-length(ref.ins.xy$y)],
-             y1=ref.ins.xy$y[-length(ref.ins.xy$y)],
-             lty=ref.lty, col=ref.ins.col, lend="butt", xpd=T)
+    # Add indel reference ticks
+    if(do.ref.indels){
+        ref.indel.idx <- which(ref.breaks >= 0 & ref.breaks <= log10(50))
+        ref.ins.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
+                           "y"=ref.ins.k[ref.indel.idx])
+        ref.ins.col <- sapply(1:(length(ref.ins.xy$x)-1), function(r){
+          ovr.idx <- which(sapply(ins.xy$x, is.inside, interval=ref.ins.xy$x[c(r, r+1)]))
+          if(length(ovr.idx) == 0){return(var.ref.color)}
+          if(mean(ref.ins.xy$y[r] >= (1-ref.hex.gap)*ins.xy$y[ovr.idx]) >= 0.5){
+            return(var.ref.color)
+          }else{
+            return("white")
+          }
+        })
+        segments(x0=ref.ins.xy$x[-length(ref.ins.xy$x)],
+                 x1=ref.ins.xy$x[-1],
+                 y0=ref.ins.xy$y[-length(ref.ins.xy$y)],
+                 y1=ref.ins.xy$y[-length(ref.ins.xy$y)],
+                 lty=ref.lty, col=ref.ins.col, lend="butt", xpd=T)
 
-    ref.del.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
-                       "y"=ref.del.k[ref.indel.idx])
-    ref.del.col <- sapply(1:(length(ref.del.xy$x)-1), function(r){
-      ovr.idx <- which(sapply(del.xy$x, is.inside, interval=ref.del.xy$x[c(r, r+1)]))
-      if(length(ovr.idx) == 0){return(var.ref.color)}
-      if(mean(ref.del.xy$y[r] >= (1-ref.hex.gap)*del.xy$y[ovr.idx]) >= 0.5){
-        return(var.ref.color)
-      }else{
-        return("white")
+        ref.del.xy <- list("x"=ref.breaks[ref.indel.idx] + snv.gap + (0.5 * snv.width),
+                           "y"=ref.del.k[ref.indel.idx])
+        ref.del.col <- sapply(1:(length(ref.del.xy$x)-1), function(r){
+          ovr.idx <- which(sapply(del.xy$x, is.inside, interval=ref.del.xy$x[c(r, r+1)]))
+          if(length(ovr.idx) == 0){return(var.ref.color)}
+          if(mean(ref.del.xy$y[r] >= (1-ref.hex.gap)*del.xy$y[ovr.idx]) >= 0.5){
+            return(var.ref.color)
+          }else{
+            return("white")
+          }
+        })
+        segments(x0=-ref.del.xy$x[-length(ref.del.xy$x)],
+                 x1=-ref.del.xy$x[-1],
+                 y0=ref.del.xy$y[-length(ref.del.xy$y)],
+                 y1=ref.del.xy$y[-length(ref.del.xy$y)],
+                 lty=ref.lty, col=ref.del.col, lend="butt", xpd=T)
       }
-    })
-    segments(x0=-ref.del.xy$x[-length(ref.del.xy$x)],
-             x1=-ref.del.xy$x[-1],
-             y0=ref.del.xy$y[-length(ref.del.xy$y)],
-             y1=ref.del.xy$y[-length(ref.del.xy$y)],
-             lty=ref.lty, col=ref.del.col, lend="butt", xpd=T)
   }
 
   # Add indel axes
@@ -337,57 +349,60 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
   clean.axis(1, at=0:-1 - snv.gap - (0.5 * snv.width), tck=major.tck,
              labels=c(1, 10), cex.axis=4.5/6, label.line=-0.9)
 
-  # Add SV polygons
-  sv.idx <- which(breaks >= log10(50))
-  gain.xy <- step.function(x=breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
-                           y=GAIN.k[sv.idx], offset=1)
-  polygon(x=c(gain.xy$x, rev(gain.xy$x)),
-          y=c(gain.xy$y, rep(0, length(gain.xy$x))),
-          col=var.class.colors["sv"], border=NA, bty="n", xpd=T)
-  # points(x=gain.xy$x, y=gain.xy$y, type="l", xpd=T)
-  loss.xy <- step.function(x=breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
-                           y=LOSS.k[sv.idx], offset=1)
-  polygon(x=-c(loss.xy$x, rev(loss.xy$x)),
-          y=c(loss.xy$y, rep(0, length(loss.xy$x))),
-          col=var.class.colors["sv"], border=NA, bty="n", xpd=T)
-  # points(x=-loss.xy$x, y=loss.xy$y, type="l", xpd=T)
+  # Add SVs
+  if(do.svs){
+    # Add SV polygons
+    sv.idx <- which(breaks >= log10(50))
+    gain.xy <- step.function(x=breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                             y=GAIN.k[sv.idx], offset=1)
+    polygon(x=c(gain.xy$x, rev(gain.xy$x)),
+            y=c(gain.xy$y, rep(0, length(gain.xy$x))),
+            col=var.class.colors["sv"], border=NA, bty="n", xpd=T)
+    # points(x=gain.xy$x, y=gain.xy$y, type="l", xpd=T)
+    loss.xy <- step.function(x=breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                             y=LOSS.k[sv.idx], offset=1)
+    polygon(x=-c(loss.xy$x, rev(loss.xy$x)),
+            y=c(loss.xy$y, rep(0, length(loss.xy$x))),
+            col=var.class.colors["sv"], border=NA, bty="n", xpd=T)
+    # points(x=-loss.xy$x, y=loss.xy$y, type="l", xpd=T)
 
-  # Add SV reference ticks
-  if(add.ref){
-    ref.sv.idx <- which(ref.breaks >= log10(50))
-    ref.gain.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
-                        "y"=ref.GAIN.k[ref.sv.idx])
-    ref.gain.col <- sapply(1:(length(ref.gain.xy$x)-1), function(r){
-      ovr.idx <- which(sapply(gain.xy$x, is.inside, interval=ref.gain.xy$x[c(r, r+1)]))
-      if(length(ovr.idx) == 0){return(var.ref.color)}
-      if(mean(ref.gain.xy$y[r] >= (1-ref.hex.gap)*gain.xy$y[ovr.idx]) >= 0.5){
-        return(var.ref.color)
-      }else{
-        return("white")
-      }
-    })
-    segments(x0=ref.gain.xy$x[-length(ref.gain.xy$x)],
-             x1=ref.gain.xy$x[-1],
-             y0=ref.gain.xy$y[-length(ref.gain.xy$y)],
-             y1=ref.gain.xy$y[-length(ref.gain.xy$y)],
-             lty=ref.lty, col=ref.gain.col, lend="butt", xpd=T)
+    # Add SV reference ticks
+    if(do.ref.svs){
+        ref.sv.idx <- which(ref.breaks >= log10(50))
+        ref.gain.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                            "y"=ref.GAIN.k[ref.sv.idx])
+        ref.gain.col <- sapply(1:(length(ref.gain.xy$x)-1), function(r){
+          ovr.idx <- which(sapply(gain.xy$x, is.inside, interval=ref.gain.xy$x[c(r, r+1)]))
+          if(length(ovr.idx) == 0){return(var.ref.color)}
+          if(mean(ref.gain.xy$y[r] >= (1-ref.hex.gap)*gain.xy$y[ovr.idx]) >= 0.5){
+            return(var.ref.color)
+          }else{
+            return("white")
+          }
+        })
+        segments(x0=ref.gain.xy$x[-length(ref.gain.xy$x)],
+                 x1=ref.gain.xy$x[-1],
+                 y0=ref.gain.xy$y[-length(ref.gain.xy$y)],
+                 y1=ref.gain.xy$y[-length(ref.gain.xy$y)],
+                 lty=ref.lty, col=ref.gain.col, lend="butt", xpd=T)
 
-    ref.loss.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
-                        "y"=ref.LOSS.k[ref.sv.idx])
-    ref.loss.col <- sapply(1:(length(ref.loss.xy$x)-1), function(r){
-      ovr.idx <- which(sapply(loss.xy$x, is.inside, interval=ref.loss.xy$x[c(r, r+1)]))
-      if(length(ovr.idx) == 0){return(var.ref.color)}
-      if(mean(ref.loss.xy$y[r] >= (1-ref.hex.gap)*loss.xy$y[ovr.idx]) >= 0.5){
-        return(var.ref.color)
-      }else{
-        return("white")
+        ref.loss.xy <- list("x"=ref.breaks[sv.idx] + snv.gap + indel.gap + (0.5*snv.width),
+                            "y"=ref.LOSS.k[ref.sv.idx])
+        ref.loss.col <- sapply(1:(length(ref.loss.xy$x)-1), function(r){
+          ovr.idx <- which(sapply(loss.xy$x, is.inside, interval=ref.loss.xy$x[c(r, r+1)]))
+          if(length(ovr.idx) == 0){return(var.ref.color)}
+          if(mean(ref.loss.xy$y[r] >= (1-ref.hex.gap)*loss.xy$y[ovr.idx]) >= 0.5){
+            return(var.ref.color)
+          }else{
+            return("white")
+          }
+        })
+        segments(x0=-ref.loss.xy$x[-length(ref.loss.xy$x)],
+                 x1=-ref.loss.xy$x[-1],
+                 y0=ref.loss.xy$y[-length(ref.loss.xy$y)],
+                 y1=ref.loss.xy$y[-length(ref.loss.xy$y)],
+                 lty=ref.lty, col=ref.loss.col, lend="butt", xpd=T)
       }
-    })
-    segments(x0=-ref.loss.xy$x[-length(ref.loss.xy$x)],
-             x1=-ref.loss.xy$x[-1],
-             y0=ref.loss.xy$y[-length(ref.loss.xy$y)],
-             y1=ref.loss.xy$y[-length(ref.loss.xy$y)],
-             lty=ref.lty, col=ref.loss.col, lend="butt", xpd=T)
   }
 
   # Add SV axes
@@ -421,12 +436,18 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
              title="Variant count", title.line=0.85)
 
   # Add legend
-  text(x=0.5*snv.width, y=0.95*snv.k, labels="SNVs", pos=2,
-       col=var.class.colors["snv"], xpd=T)
-  text(x=-snv.gap-snv.width, y=max(del.xy$y),
-       labels="Indels", pos=2, col=var.class.colors["indel"], xpd=T)
-  text(x=-log10(50)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
-       labels="SVs", pos=2, col=var.class.colors["sv"], xpd=T)
+  if(do.snvs){
+    text(x=0.5*snv.width, y=0.95*snv.k, labels="SNVs", pos=2,
+         col=var.class.colors["snv"], xpd=T)
+  }
+  if(do.indels){
+    text(x=-snv.gap-snv.width, y=max(del.xy$y),
+         labels="Indels", pos=2, col=var.class.colors["indel"], xpd=T)
+  }
+  if(do.svs){
+    text(x=-log10(50)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
+         labels="SVs", pos=2, col=var.class.colors["sv"], xpd=T)
+  }
   if(add.ref){
     if(!is.null(ref.title)){
       ref.legend <- paste("Hashes from\n", ref.title)
@@ -613,7 +634,7 @@ plot.size.by.af <- function(joint.d, bar.sep=0.1, parmar=c(2.6, 2.75, 0.25, 3.75
   af.labels.pct <- c("\"AF\">\"10%\"", "\"AF\"<\"10%\"", "\"AF\"<\"1%\"")
   if(length(af.bins) > length(af.labels.pct)){
     af.labels <- rev(c(af.labels.pct,
-                   paste("AF<10^", -(length(af.labels.pct):(length(af.bins)-1)), sep="")))
+                       paste("AF<10^", -(length(af.labels.pct):(length(af.bins)-1)), sep="")))
     parse.any <- TRUE
   }else{
     af.labels <- head(af.labels.pct, length(af.bins))
@@ -710,7 +731,7 @@ if(!is.null(count.use.d)){
     pdf(paste(args$out_prefix, "variant_count_bars", pdf.suffix, sep="."),
         height=2.25, width=2.85)
     count.ss <- plot.counts.by.vsc(count.use.d$df, has.short.variants, has.svs,
-                       ref.d.sub, ref.title=args$ref_title)
+                                   ref.d.sub, ref.title=args$ref_title)
     dev.off()
   }
 }else{
