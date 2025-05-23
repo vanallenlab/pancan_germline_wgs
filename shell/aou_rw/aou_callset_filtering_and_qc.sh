@@ -202,6 +202,7 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.kin0.gz \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
   $staging_dir/
+# TODO: finish this
 
 
 ##############################

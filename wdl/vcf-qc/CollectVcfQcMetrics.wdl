@@ -33,7 +33,7 @@ workflow CollectVcfQcMetrics {
                                                 # be supplied as a chain of bash commands that could be inserted into
                                                 # an existing bash command as reading from stdin and writing to stdout
 
-    Float common_af_cutoff = 0.001              # Minimum AF for a variant to be included in common variant subsets
+    Float common_af_cutoff = 0.01               # Minimum AF for a variant to be included in common variant subsets
 
     Array[File?] snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
     Array[File?] indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort

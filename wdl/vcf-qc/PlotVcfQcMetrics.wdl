@@ -10,6 +10,7 @@
 version 1.0
 
 
+import "PrepSiteBenchDataToPlot.wdl" as PSB
 import "QcTasks.wdl" as QcTasks
 import "Utilities.wdl" as Utils
 
@@ -44,7 +45,7 @@ workflow PlotVcfQcMetrics {
     Array[String]? site_benchmark_dataset_titles
     Array[String]? site_benchmark_interval_names
 
-    Float common_af_cutoff = 0.001
+    Float common_af_cutoff = 0.01
 
     String output_prefix
 
@@ -61,7 +62,6 @@ workflow PlotVcfQcMetrics {
                                     && defined(site_benchmark_dataset_titles) 
                                     && defined(site_benchmark_interval_names))
   Int n_site_benchmark_datasets = length(select_first([site_benchmark_dataset_prefixes]))
-  Int n_site_benchmark_intervals = length(select_first([site_benchmark_interval_names]))
 
 
   ######################
@@ -204,179 +204,42 @@ workflow PlotVcfQcMetrics {
 
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
-
-    call QcTasks.MakeEmptyBenchBed {
-      input:
-        docker = bcftools_docker
-    }
-
     scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
 
       String bd_name = flatten(select_all([site_benchmark_dataset_prefixes]))[site_bench_di]
       String sb_prefix = output_prefix + "." + bd_name
 
-      scatter ( site_bench_ii in range(n_site_benchmark_intervals) ) {
+      Array[Array[File]] bd_snv_beds = if defined(site_benchmark_common_snv_ppv_beds)
+                                       then select_first([site_benchmark_common_snv_ppv_beds])[site_bench_di]
+                                       else [[]]
+      Array[Array[File]] bd_indel_beds = if defined(site_benchmark_common_indel_ppv_beds)
+                                         then select_first([site_benchmark_common_indel_ppv_beds])[site_bench_di]
+                                         else [[]]
+      Array[Array[File]] bd_sv_beds = if defined(site_benchmark_common_sv_ppv_beds)
+                                      then select_first([site_benchmark_common_sv_ppv_beds])[site_bench_di]
+                                      else [[]]
+      Array[Array[File]] bd_ppv_by_af = if defined(site_benchmark_ppv_by_freqs)
+                                        then select_first([site_benchmark_ppv_by_freqs])[site_bench_di]
+                                        else [[]]
+      Array[Array[File]] bd_sens_by_af = if defined(site_benchmark_sensitivity_by_freqs)
+                                         then select_first([site_benchmark_sensitivity_by_freqs])[site_bench_di]
+                                         else [[]]
 
-        String bi_name = flatten(select_all([site_benchmark_interval_names]))[site_bench_ii]
-        String sbi_prefix = sb_prefix + "." + bi_name
-        
-        # Collapse site benchmarking SNV BEDs
-        if (defined(site_benchmark_common_snv_ppv_beds)) {
-          Array[File] sb_common_snv_preflat = if defined(site_benchmark_common_snv_ppv_beds) 
-                                              then flatten(select_all([site_benchmark_common_snv_ppv_beds]))[site_bench_di][site_bench_ii]
-                                              else [MakeEmptyBenchBed.empty_bed]
-          if ( length(sb_common_snv_preflat) > 1 ) {
-            call Utils.ConcatTextFiles as CollapseSiteBenchSnvs {
-              input:
-                shards = sb_common_snv_preflat,
-                concat_command = "zcat",
-                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-                compression_command = "bgzip -c",
-                input_has_header = true,
-                output_filename = sbi_prefix + ".common_snvs.bed.gz",
-                docker = bcftools_docker
-            }
-          }
-          File sb_common_snv_flat = select_first([CollapseSiteBenchSnvs.merged_file,
-                                                  sb_common_snv_preflat[0]])
-        }
-        
-        # Collapse site benchmarking indel BEDs
-        if (defined(site_benchmark_common_indel_ppv_beds)) {
-          Array[File] sb_common_indel_preflat = if defined(site_benchmark_common_indel_ppv_beds) 
-                                              then flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii]
-                                              else [MakeEmptyBenchBed.empty_bed]
-          if ( length(sb_common_indel_preflat) > 1 ) {
-            call Utils.ConcatTextFiles as CollapseSiteBenchIndels {
-              input:
-                shards = flatten(select_all([site_benchmark_common_indel_ppv_beds]))[site_bench_di][site_bench_ii],
-                concat_command = "zcat",
-                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-                compression_command = "bgzip -c",
-                input_has_header = true,
-                output_filename = sbi_prefix + ".common_indels.bed.gz",
-                docker = bcftools_docker
-            }
-          }
-          File sb_common_indel_flat = select_first([CollapseSiteBenchIndels.merged_file,
-                                                    sb_common_indel_preflat[0]])
-        }
-        
-        # Collapse site benchmarking SV BEDs
-        if (defined(site_benchmark_common_sv_ppv_beds)) {
-          Array[File] sb_common_sv_preflat = if defined(site_benchmark_common_sv_ppv_beds) 
-                                              then flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii]
-                                              else [MakeEmptyBenchBed.empty_bed]
-          if ( length(sb_common_sv_preflat) > 1 ) {
-            call Utils.ConcatTextFiles as CollapseSiteBenchSvs {
-              input:
-                shards = flatten(select_all([site_benchmark_common_sv_ppv_beds]))[site_bench_di][site_bench_ii],
-                concat_command = "zcat",
-                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-                compression_command = "bgzip -c",
-                input_has_header = true,
-                output_filename = sbi_prefix + ".common_svs.bed.gz",
-                docker = bcftools_docker
-            }
-          }
-          File sb_common_sv_flat = select_first([CollapseSiteBenchSvs.merged_file,
-                                                    sb_common_sv_preflat[0]])
-        }
-
-        # Collapse compressed PPV tsvs
-        if (defined(site_benchmark_ppv_by_freqs)) {
-          call QcTasks.SumCompressedDistribs as SumSiteBenchPpvByAf {
-            input:
-              distrib_tsvs = select_first([site_benchmark_ppv_by_freqs])[site_bench_di][site_bench_ii],
-              n_key_columns = 3,
-              out_prefix = sbi_prefix + ".ppv_by_freq",
-              g2c_analysis_docker = g2c_analysis_docker
-          }
-        }
-
-        # Collapse compressed sensitivity tsvs
-        if (defined(site_benchmark_sensitivity_by_freqs)) {
-          call QcTasks.SumCompressedDistribs as SumSiteBenchSensByAf {
-            input:
-              distrib_tsvs = select_first([site_benchmark_sensitivity_by_freqs])[site_bench_di][site_bench_ii],
-              n_key_columns = 3,
-              out_prefix = sbi_prefix + ".sensitivity_by_freq",
-              g2c_analysis_docker = g2c_analysis_docker
-          }
-        }
-      }
-
-      # For each benchmarking dataset, further collapse SNVs across interval sets
-      if ( defined(sb_common_snv_flat) ) {
-        Array[File] sb_common_snv_flat_array = if defined(sb_common_snv_flat)
-                                               then select_all(sb_common_snv_flat)
-                                               else [MakeEmptyBenchBed.empty_bed]
-        if ( length(sb_common_snv_flat_array) > 1 ) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
-            input:
-              shards = sb_common_snv_flat_array,
-              concat_command = "zcat",
-              sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-              compression_command = "bgzip -c",
-              input_has_header = true,
-              output_filename = sb_prefix + ".merged.common_snvs.bed.gz",
-              docker = bcftools_docker
-          }
-        }
-        File sb_common_snv_flat_union = select_first([CollapseSiteBenchSnvsUnion.merged_file,
-                                                      sb_common_snv_flat_array[0]])
-      }
-
-      # For each benchmarking dataset, further collapse indels across interval sets
-      if ( defined(sb_common_indel_flat) ) {
-        Array[File] sb_common_indel_flat_array = if defined(sb_common_indel_flat)
-                                                 then select_all(sb_common_indel_flat)
-                                                 else [MakeEmptyBenchBed.empty_bed]
-        if ( length(sb_common_indel_flat_array) > 1 ) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
-              input:
-                shards = sb_common_indel_flat_array,
-                concat_command = "zcat",
-                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-                compression_command = "bgzip -c",
-                input_has_header = true,
-                output_filename = sb_prefix + ".merged.common_indels.bed.gz",
-                docker = bcftools_docker
-          }
-        }
-        File sb_common_indel_flat_union = select_first([CollapseSiteBenchIndelsUnion.merged_file,
-                                                        sb_common_indel_flat_array[0]])
-      }
-
-      # For each benchmarking dataset, further collapse SVs across interval sets
-      if ( defined(sb_common_sv_flat) ) {
-        Array[File] sb_common_sv_flat_array = if defined(sb_common_sv_flat)
-                                              then select_all(sb_common_sv_flat)
-                                              else [MakeEmptyBenchBed.empty_bed]
-        if ( length(sb_common_sv_flat_array) > 1 ) {
-          call Utils.ConcatTextFiles as CollapseSiteBenchSvsUnion {
-              input:
-                shards = sb_common_sv_flat_array,
-                concat_command = "zcat",
-                sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-                compression_command = "bgzip -c",
-                input_has_header = true,
-                output_filename = sb_prefix + ".merged.common_svs.bed.gz",
-                docker = bcftools_docker
-          }
-        }
-        File sb_common_sv_flat_union = select_first([CollapseSiteBenchSvsUnion.merged_file,
-                                                     sb_common_sv_flat_array[0]])
-
+      call PSB.PrepSiteBenchDataToPlot as PrepSiteBench {
+        input:
+          dataset_name = bd_name,
+          dataset_prefix = sb_prefix,
+          interval_set_names = select_first([site_benchmark_interval_names]),
+          common_snv_ppv_beds = bd_snv_beds,
+          common_indel_ppv_beds = bd_indel_beds,
+          common_sv_ppv_beds = bd_sv_beds,
+          ppv_by_freqs = bd_ppv_by_af,
+          sensitivity_by_freqs = bd_sens_by_af,
+          bcftools_docker = bcftools_docker,
+          g2c_analysis_docker = g2c_analysis_docker
       }
     }
   }
-  Array[Array[File?]]? site_bench_snvs_merged = sb_common_snv_flat
-  Array[Array[File?]]? site_bench_indels_merged = sb_common_indel_flat
-  Array[Array[File?]]? site_bench_svs_merged = sb_common_sv_flat
-  Array[File?]? site_bench_snvs_merged_union = sb_common_snv_flat_union
-  Array[File?]? site_bench_indels_merged_union = sb_common_indel_flat_union
-  Array[File?]? site_bench_svs_merged_union = sb_common_sv_flat_union
 
 
   #################
@@ -401,40 +264,42 @@ workflow PlotVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
-  # Plot site benchmarking, if provided
-  if (has_site_benchmarking) {
-    scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
+  # # Plot site benchmarking, if provided
+  # if (has_site_benchmarking) {
+  #   scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
 
-      String plot_bd_prefix = select_first([site_benchmark_dataset_prefixes])[site_bench_di]
-      String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
+  #     String plot_bd_prefix = select_first([site_benchmark_dataset_prefixes])[site_bench_di]
+  #     String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
 
-      # Concatenate interval set-specific and union benchmarking BEDs for visualization
-      Array[String] site_bench_di_names = select_first([site_benchmark_interval_names])
-      Array[File] site_bench_di_snv_to_plot = select_all(flatten([select_first([site_bench_snvs_merged])[site_bench_di], 
-                                                                  [select_first([site_bench_snvs_merged_union])[site_bench_di]]]))
-      Array[File] site_bench_di_indel_to_plot = select_all(flatten([select_first([site_bench_indels_merged])[site_bench_di], 
-                                                                    [select_first([site_bench_indels_merged_union])[site_bench_di]]]))
-      Array[File] site_bench_di_sv_to_plot = select_all(flatten([select_first([site_bench_svs_merged])[site_bench_di], 
-                                                                 [select_first([site_bench_svs_merged_union])[site_bench_di]]]))
-      Array[File] site_bench_di_ppv_by_af = select_all(select_first([SumSiteBenchPpvByAf.merged_distrib])[site_bench_di])
-      Array[File] site_bench_di_sens_by_af = select_all(select_first([SumSiteBenchSensByAf.merged_distrib])[site_bench_di])
+  #     # Index into arrays of prepped files
+  #     Array[File] site_bench_di_snv_to_plot = if defined(PrepSiteBench.snv_ppv_beds_plus_union)
+  #                                             then select_all(select_first([PrepSiteBench.snv_ppv_beds_plus_union])[site_bench_di])
+  #                                             else []
+  #     Array[File] site_bench_di_indel_to_plot = if defined(PrepSiteBench.indel_ppv_beds_plus_union)
+  #                                               then select_all(select_first([PrepSiteBench.indel_ppv_beds_plus_union])[site_bench_di])
+  #                                               else []
+  #     Array[File] site_bench_di_sv_to_plot = if defined(PrepSiteBench.sv_ppv_beds_plus_union)
+  #                                            then select_all(select_first([PrepSiteBench.sv_ppv_beds_plus_union])[site_bench_di])
+  #                                            else []
+  #     Array[File] site_bench_di_ppv_by_af = select_all(select_first([PrepSiteBench.ppv_by_af])[site_bench_di])
+  #     Array[File] site_bench_di_sens_by_af = select_all(select_first([PrepSiteBench.sens_by_af])[site_bench_di])
 
-      call PlotSiteBenchmarking {
-        input:
-          ref_dataset_prefix = plot_bd_prefix,
-          ref_dataset_title = plot_bd_title,
-          eval_interval_names = site_bench_di_names,
-          snv_beds = site_bench_di_snv_to_plot,
-          indel_beds = site_bench_di_indel_to_plot,
-          sv_beds = site_bench_di_sv_to_plot,
-          ppv_by_af_tsvs = site_bench_di_ppv_by_af,
-          sens_by_af_tsvs = site_bench_di_sens_by_af,
-          output_prefix = output_prefix,
-          common_af_cutoff = common_af_cutoff,
-          g2c_analysis_docker = g2c_analysis_docker
-      }
-    }
-  }
+  #     call PlotSiteBenchmarking {
+  #       input:
+  #         ref_dataset_prefix = plot_bd_prefix,
+  #         ref_dataset_title = plot_bd_title,
+  #         eval_interval_names = select_first([site_benchmark_interval_names]),
+  #         snv_beds = site_bench_di_snv_to_plot,
+  #         indel_beds = site_bench_di_indel_to_plot,
+  #         sv_beds = site_bench_di_sv_to_plot,
+  #         ppv_by_af_tsvs = site_bench_di_ppv_by_af,
+  #         sens_by_af_tsvs = site_bench_di_sens_by_af,
+  #         output_prefix = output_prefix,
+  #         common_af_cutoff = common_af_cutoff,
+  #         g2c_analysis_docker = g2c_analysis_docker
+  #     }
+  #   }
+  # }
 
 
   ##################
@@ -450,7 +315,7 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
 
@@ -610,7 +475,9 @@ task PlotSiteBenchmarking {
   # Note that this outdir string is used as both a directory name and a file prefix
   String outdir = sub(output_prefix + "." + ref_dataset_prefix + "." + "site_benchmarking", "[ ]+", "_")
 
-  Array[String] eval_interval_names_plus_union = if bed_arrays_include_union then flatten([eval_interval_names, ["all"]]) else eval_interval_names
+  Array[String] eval_interval_names_plus_union = if bed_arrays_include_union 
+                                                 then flatten([eval_interval_names, ["all"]]) 
+                                                 else eval_interval_names
   Int n_sets = length(eval_interval_names_plus_union)
 
   command <<<
