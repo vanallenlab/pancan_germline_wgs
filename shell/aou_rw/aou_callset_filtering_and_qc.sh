@@ -209,8 +209,8 @@ gsutil -m cp \
 # Collect initial QC metrics #
 ##############################
 
-# Note: this workflow is scattered across all five workspaces for max parallelization
-# It must be submitted as below in each workspace
+# Note: this workflow below is scattered across all five workspaces for 
+# max parallelization. It must be submitted as below in each workspace.
 
 # Reaffirm staging directory
 staging_dir=staging/initial_qc

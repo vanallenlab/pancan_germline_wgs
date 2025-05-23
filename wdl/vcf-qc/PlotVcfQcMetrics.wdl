@@ -33,17 +33,17 @@ workflow PlotVcfQcMetrics {
 
     # Expected organization of site benchmarking inputs:
     # Outer array: one entry per benchmarking dataset
-    # Middle arrays: one file per evaluation interval set
+    # Middle arrays: one entry per evaluation interval set
     # Inner arrays: one or more files, such as one file per chromosome 
     # (or just one file if already collapsed across all chromosomes)
-    Array[Array[Array[File]]]? site_benchmark_common_snv_ppv_beds
-    Array[Array[Array[File]]]? site_benchmark_common_indel_ppv_beds
-    Array[Array[Array[File]]]? site_benchmark_common_sv_ppv_beds
-    Array[Array[Array[File]]]? site_benchmark_ppv_by_freqs
-    Array[Array[Array[File]]]? site_benchmark_sensitivity_by_freqs
-    Array[String]? site_benchmark_dataset_prefixes
-    Array[String]? site_benchmark_dataset_titles
-    Array[String]? site_benchmark_interval_names
+    Array[Array[Array[File?]]] site_benchmark_common_snv_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_common_indel_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_common_sv_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_ppv_by_freqs = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_sensitivity_by_freqs = [[[]]]
+    Array[String?] site_benchmark_dataset_prefixes = []
+    Array[String?] site_benchmark_dataset_titles = []
+    Array[String?] site_benchmark_interval_names = []
 
     Float common_af_cutoff = 0.01
 
@@ -53,15 +53,21 @@ workflow PlotVcfQcMetrics {
     String g2c_analysis_docker
   }
 
-  Boolean has_site_benchmarking = ( (defined(site_benchmark_common_snv_ppv_beds) 
-                                     || defined(site_benchmark_common_indel_ppv_beds) 
-                                     || defined(site_benchmark_common_sv_ppv_beds) 
-                                     || defined(site_benchmark_ppv_by_freqs)
-                                     || defined(site_benchmark_sensitivity_by_freqs)) 
-                                    && defined(site_benchmark_dataset_prefixes) 
-                                    && defined(site_benchmark_dataset_titles) 
-                                    && defined(site_benchmark_interval_names))
-  Int n_site_benchmark_datasets = length(select_first([site_benchmark_dataset_prefixes]))
+  # Postprocess site benchmarking inputs
+  Int n_sb_snv_beds = length(flatten(flatten(site_benchmark_common_snv_ppv_beds)))
+  Int n_sb_indel_beds = length(flatten(flatten(site_benchmark_common_indel_ppv_beds)))
+  Int n_sb_sv_beds = length(flatten(flatten(site_benchmark_common_sv_ppv_beds)))
+  Int n_sb_ppv_by_afs = length(flatten(flatten(site_benchmark_ppv_by_freqs)))
+  Int n_sb_sens_by_afs = length(flatten(flatten(site_benchmark_sensitivity_by_freqs)))
+  Int n_sb_datasets = length(select_first([site_benchmark_dataset_prefixes]))
+  Int n_sb_intervals = length(select_first([site_benchmark_interval_names]))
+  Boolean has_site_benchmarking = ( (n_sb_snv_beds > 0 
+                                     || n_sb_indel_beds > 0
+                                     || n_sb_sv_beds > 0
+                                     || n_sb_ppv_by_afs > 0
+                                     || n_sb_sens_by_afs > 0) 
+                                    && n_sb_datasets > 0 
+                                    && n_sb_intervals > 0)
 
 
   ######################
@@ -204,32 +210,22 @@ workflow PlotVcfQcMetrics {
 
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
-    scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
+    scatter ( site_bench_di in range(n_sb_datasets) ) {
 
-      String bd_name = flatten(select_all([site_benchmark_dataset_prefixes]))[site_bench_di]
+      String bd_name = select_first([site_benchmark_dataset_prefixes[site_bench_di], "benchmark_data"])
       String sb_prefix = output_prefix + "." + bd_name
 
-      Array[Array[File]] bd_snv_beds = if defined(site_benchmark_common_snv_ppv_beds)
-                                       then select_first([site_benchmark_common_snv_ppv_beds])[site_bench_di]
-                                       else [[]]
-      Array[Array[File]] bd_indel_beds = if defined(site_benchmark_common_indel_ppv_beds)
-                                         then select_first([site_benchmark_common_indel_ppv_beds])[site_bench_di]
-                                         else [[]]
-      Array[Array[File]] bd_sv_beds = if defined(site_benchmark_common_sv_ppv_beds)
-                                      then select_first([site_benchmark_common_sv_ppv_beds])[site_bench_di]
-                                      else [[]]
-      Array[Array[File]] bd_ppv_by_af = if defined(site_benchmark_ppv_by_freqs)
-                                        then select_first([site_benchmark_ppv_by_freqs])[site_bench_di]
-                                        else [[]]
-      Array[Array[File]] bd_sens_by_af = if defined(site_benchmark_sensitivity_by_freqs)
-                                         then select_first([site_benchmark_sensitivity_by_freqs])[site_bench_di]
-                                         else [[]]
+      Array[Array[File?]] bd_snv_beds = site_benchmark_common_snv_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_indel_beds = site_benchmark_common_indel_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_sv_beds = site_benchmark_common_sv_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_ppv_by_af = site_benchmark_ppv_by_freqs[site_bench_di]
+      Array[Array[File?]] bd_sens_by_af = site_benchmark_sensitivity_by_freqs[site_bench_di]
 
       call PSB.PrepSiteBenchDataToPlot as PrepSiteBench {
         input:
           dataset_name = bd_name,
           dataset_prefix = sb_prefix,
-          interval_set_names = select_first([site_benchmark_interval_names]),
+          interval_set_names = select_all(site_benchmark_interval_names),
           common_snv_ppv_beds = bd_snv_beds,
           common_indel_ppv_beds = bd_indel_beds,
           common_sv_ppv_beds = bd_sv_beds,
@@ -264,42 +260,36 @@ workflow PlotVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
-  # # Plot site benchmarking, if provided
-  # if (has_site_benchmarking) {
-  #   scatter ( site_bench_di in range(n_site_benchmark_datasets) ) {
+  # Plot site benchmarking, if provided
+  if (has_site_benchmarking) {
+    scatter ( site_bench_di in range(n_sb_datasets) ) {
 
-  #     String plot_bd_prefix = select_first([site_benchmark_dataset_prefixes])[site_bench_di]
-  #     String plot_bd_title = select_first([site_benchmark_dataset_titles])[site_bench_di]
+      String plot_bd_prefix = select_all(site_benchmark_dataset_prefixes)[site_bench_di]
+      String plot_bd_title = select_all(site_benchmark_dataset_titles)[site_bench_di]
 
-  #     # Index into arrays of prepped files
-  #     Array[File] site_bench_di_snv_to_plot = if defined(PrepSiteBench.snv_ppv_beds_plus_union)
-  #                                             then select_all(select_first([PrepSiteBench.snv_ppv_beds_plus_union])[site_bench_di])
-  #                                             else []
-  #     Array[File] site_bench_di_indel_to_plot = if defined(PrepSiteBench.indel_ppv_beds_plus_union)
-  #                                               then select_all(select_first([PrepSiteBench.indel_ppv_beds_plus_union])[site_bench_di])
-  #                                               else []
-  #     Array[File] site_bench_di_sv_to_plot = if defined(PrepSiteBench.sv_ppv_beds_plus_union)
-  #                                            then select_all(select_first([PrepSiteBench.sv_ppv_beds_plus_union])[site_bench_di])
-  #                                            else []
-  #     Array[File] site_bench_di_ppv_by_af = select_all(select_first([PrepSiteBench.ppv_by_af])[site_bench_di])
-  #     Array[File] site_bench_di_sens_by_af = select_all(select_first([PrepSiteBench.sens_by_af])[site_bench_di])
+      # Read inputs from .json as curated by PrepSiteBench above
+      call ParseSiteBenchInputs {
+        input:
+          inputs_json = select_first([PrepSiteBench.plot_files_json])[site_bench_di]
+      }
 
-  #     call PlotSiteBenchmarking {
-  #       input:
-  #         ref_dataset_prefix = plot_bd_prefix,
-  #         ref_dataset_title = plot_bd_title,
-  #         eval_interval_names = select_first([site_benchmark_interval_names]),
-  #         snv_beds = site_bench_di_snv_to_plot,
-  #         indel_beds = site_bench_di_indel_to_plot,
-  #         sv_beds = site_bench_di_sv_to_plot,
-  #         ppv_by_af_tsvs = site_bench_di_ppv_by_af,
-  #         sens_by_af_tsvs = site_bench_di_sens_by_af,
-  #         output_prefix = output_prefix,
-  #         common_af_cutoff = common_af_cutoff,
-  #         g2c_analysis_docker = g2c_analysis_docker
-  #     }
-  #   }
-  # }
+      # Generate plots
+      call PlotSiteBenchmarking {
+        input:
+          ref_dataset_prefix = plot_bd_prefix,
+          ref_dataset_title = plot_bd_title,
+          eval_interval_names = flatten([select_all(site_benchmark_interval_names), ["All"]]),
+          snv_beds = ParseSiteBenchInputs.snv_ppv_beds,
+          indel_beds = ParseSiteBenchInputs.indel_ppv_beds,
+          sv_beds = ParseSiteBenchInputs.sv_ppv_beds,
+          ppv_by_af_tsvs = ParseSiteBenchInputs.ppv_by_af,
+          sens_by_af_tsvs = ParseSiteBenchInputs.sens_by_af,
+          output_prefix = output_prefix,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
 
 
   ##################
@@ -315,7 +305,38 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+  }
+}
+
+
+task ParseSiteBenchInputs {
+  input {
+    File inputs_json
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/parse_site_benchmarking_json.py ~{inputs_json}
+  }
+  >>>
+
+  output {
+    Array[String]? snv_ppv_beds = read_lines("snv_ppv_beds.txt")
+    Array[String]? indel_ppv_beds = read_lines("indel_ppv_beds.txt")
+    Array[String]? sv_ppv_beds = read_lines("sv_ppv_beds.txt")
+    Array[String]? ppv_by_af = read_lines("ppv_by_af.txt")
+    Array[String]? sens_by_af = read_lines("sens_by_af.txt")
+  }
+
+  runtime {
+    docker: "python:3.9-slim"
+    memory: "1.7 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }
 
@@ -381,15 +402,15 @@ task PlotSiteMetrics {
     mkdir ~{output_prefix}.site_metrics
 
     # Symlink full SV BED to working directory
-    if [ ~{has_all_svs} ]; then
+    if ~{has_all_svs}; then
       ln -s ~{default="" all_svs_bed} ~{all_sv_bname}
     fi
 
     # Symlink ref distribs to working directory
-    if [ ~{has_ref_size} ]; then
+    if ~{has_ref_size}; then
       ln -s ~{default="" ref_size_distrib} ~{ref_size_bname}
     fi
-    if [ ~{has_ref_af} ]; then
+    if ~{has_ref_af}; then
       ln -s ~{default="" ref_af_distrib} ~{ref_af_bname}
     fi
 
@@ -406,13 +427,13 @@ task PlotSiteMetrics {
       --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
 
     # Symlink common variant BEDs to working directory
-    if [ ~{has_common_snvs} ]; then
+    if ~{has_common_snvs}; then
       ln -s ~{default="" common_snvs_bed} ~{common_snv_bname}
     fi
-    if [ ~{has_common_indels} ]; then
+    if ~{has_common_indels}; then
       ln -s ~{default="" common_indels_bed} ~{common_indel_bname}
     fi
-    if [ ~{has_common_svs} ]; then
+    if ~{has_common_svs}; then
       ln -s ~{default="" common_svs_bed} ~{common_sv_bname}
     fi
 
@@ -486,21 +507,21 @@ task PlotSiteBenchmarking {
     mkdir ~{outdir}
 
     # Write list of localized SNV beds
-    if [ ~{defined(snv_beds)} ]; then
+    if ~{defined(snv_beds)}; then
       cat ~{write_lines(select_first([snv_beds]))} > snv_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > snv_beds.list
     fi
 
     # Write list of localized indel beds
-    if [ ~{defined(indel_beds)} ]; then
+    if ~{defined(indel_beds)}; then
       cat ~{write_lines(select_first([indel_beds]))} > indel_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > indel_beds.list
     fi
 
     # Write list of localized SV beds
-    if [ ~{defined(sv_beds)} ]; then
+    if ~{defined(sv_beds)}; then
       cat ~{write_lines(select_first([sv_beds]))} > sv_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > sv_beds.list
@@ -536,12 +557,12 @@ task PlotSiteBenchmarking {
 
     # Plot site summary metrics like PPV and sensitivity
     cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_benchmarking_metrics.R"
-    if [ ~{defined(ppv_by_af_tsvs)} == "true" ]; then
+    if ~{defined(ppv_by_af_tsvs)}; then
       while read tsv; do
         cmd="$cmd --ppv-by-af $tsv"
       done < ~{write_lines(select_first([ppv_by_af_tsvs]))}
     fi
-    if [ ~{defined(sens_by_af_tsvs)} == "true" ]; then
+    if ~{defined(sens_by_af_tsvs)}; then
       while read tsv; do
         cmd="$cmd --sens-by-af $tsv"
       done < ~{write_lines(select_first([sens_by_af_tsvs]))}
