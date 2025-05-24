@@ -264,8 +264,8 @@ workflow PlotVcfQcMetrics {
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_sb_datasets) ) {
 
-      String plot_bd_prefix = select_all(site_benchmark_dataset_prefixes)[site_bench_di]
-      String plot_bd_title = select_all(site_benchmark_dataset_titles)[site_bench_di]
+      # String plot_bd_prefix = select_all(site_benchmark_dataset_prefixes)[site_bench_di]
+      # String plot_bd_title = select_all(site_benchmark_dataset_titles)[site_bench_di]
 
       # Read inputs from .json as curated by PrepSiteBench above
       call ParseSiteBenchInputs {
@@ -273,21 +273,21 @@ workflow PlotVcfQcMetrics {
           inputs_json = select_first([PrepSiteBench.plot_files_json])[site_bench_di]
       }
 
-      # Generate plots
-      call PlotSiteBenchmarking {
-        input:
-          ref_dataset_prefix = plot_bd_prefix,
-          ref_dataset_title = plot_bd_title,
-          eval_interval_names = flatten([select_all(site_benchmark_interval_names), ["All"]]),
-          snv_beds = ParseSiteBenchInputs.snv_ppv_beds,
-          indel_beds = ParseSiteBenchInputs.indel_ppv_beds,
-          sv_beds = ParseSiteBenchInputs.sv_ppv_beds,
-          ppv_by_af_tsvs = ParseSiteBenchInputs.ppv_by_af,
-          sens_by_af_tsvs = ParseSiteBenchInputs.sens_by_af,
-          output_prefix = output_prefix,
-          common_af_cutoff = common_af_cutoff,
-          g2c_analysis_docker = g2c_analysis_docker
-      }
+      # # Generate plots
+      # call PlotSiteBenchmarking {
+      #   input:
+      #     ref_dataset_prefix = plot_bd_prefix,
+      #     ref_dataset_title = plot_bd_title,
+      #     eval_interval_names = flatten([select_all(site_benchmark_interval_names), ["All"]]),
+      #     snv_beds = ParseSiteBenchInputs.snv_ppv_beds,
+      #     indel_beds = ParseSiteBenchInputs.indel_ppv_beds,
+      #     sv_beds = ParseSiteBenchInputs.sv_ppv_beds,
+      #     ppv_by_af_tsvs = ParseSiteBenchInputs.ppv_by_af,
+      #     sens_by_af_tsvs = ParseSiteBenchInputs.sens_by_af,
+      #     output_prefix = output_prefix,
+      #     common_af_cutoff = common_af_cutoff,
+      #     g2c_analysis_docker = g2c_analysis_docker
+      # }
     }
   }
 
@@ -305,7 +305,7 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
 
@@ -318,8 +318,28 @@ task ParseSiteBenchInputs {
   command <<<
     set -eu -o pipefail
 
-    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/parse_site_benchmarking_json.py ~{inputs_json}
-  }
+    python3 - "~{inputs_json}" <<CODE
+      import json
+      import sys
+
+      infile = sys.argv[1]
+      with open(infile, "r") as f:
+        data = json.load(f)
+
+      def write_array(name, val):
+        val = [v for v in val if v is not None and v != ""]
+        with open(f"{name}.txt", "w") as out:
+            for item in (val or []):
+                if item is not None:
+                    out.write(item + "\n")
+
+      write_array("snv_ppv_beds", data.get("snv_ppv_beds", []) + [data.get("snv_ppv_union")])
+      write_array("indel_ppv_beds", data.get("indel_ppv_beds", []) + [data.get("indel_ppv_union")])
+      write_array("sv_ppv_beds", data.get("sv_ppv_beds", []) + [data.get("sv_ppv_union")])
+
+      write_array("ppv_by_af", data.get("ppv_by_af"))
+      write_array("sens_by_af", data.get("sens_by_af"))
+    CODE
   >>>
 
   output {
@@ -335,7 +355,7 @@ task ParseSiteBenchInputs {
     memory: "1.7 GB"
     cpu: 1
     disks: "local-disk 20 HDD"
-    preemptible: 3
+    preemptible: 2
     max_retries: 1
   }
 }

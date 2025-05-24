@@ -19,8 +19,6 @@ with open(infile, "r") as f:
 
 def write_array(name, val):
   val = [v for v in val if v is not None and v != ""]
-  if len(val) == 0:
-    return
   with open(f"{name}.txt", "w") as out:
       for item in (val or []):
           if item is not None:

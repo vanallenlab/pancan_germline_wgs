@@ -202,7 +202,14 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.kin0.gz \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
   $staging_dir/
-# TODO: finish this
+code/scripts/clean_candidate_twins.R \
+  $staging_dir/dfci-g2c.v1.kin0.gz \
+  $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $staging_dir/dfci-g2c.v1.cleaned.kin0
+gzip -f $staging_dir/dfci-g2c.v1.cleaned.kin0
+gsutil -m cp \
+  $staging_dir/dfci-g2c.v1.cleaned.kin0.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/
 
 
 ##############################
