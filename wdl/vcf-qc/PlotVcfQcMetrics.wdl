@@ -264,30 +264,31 @@ workflow PlotVcfQcMetrics {
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_sb_datasets) ) {
 
-      # String plot_bd_prefix = select_all(site_benchmark_dataset_prefixes)[site_bench_di]
-      # String plot_bd_title = select_all(site_benchmark_dataset_titles)[site_bench_di]
+      String plot_bd_prefix = select_all(site_benchmark_dataset_prefixes)[site_bench_di]
+      String plot_bd_title = select_all(site_benchmark_dataset_titles)[site_bench_di]
 
       # Read inputs from .json as curated by PrepSiteBench above
       call ParseSiteBenchInputs {
         input:
-          inputs_json = select_first([PrepSiteBench.plot_files_json])[site_bench_di]
+          inputs_json = select_first([PrepSiteBench.plot_files_json])[site_bench_di],
+          prefix = plot_bd_prefix
       }
 
-      # # Generate plots
-      # call PlotSiteBenchmarking {
-      #   input:
-      #     ref_dataset_prefix = plot_bd_prefix,
-      #     ref_dataset_title = plot_bd_title,
-      #     eval_interval_names = flatten([select_all(site_benchmark_interval_names), ["All"]]),
-      #     snv_beds = ParseSiteBenchInputs.snv_ppv_beds,
-      #     indel_beds = ParseSiteBenchInputs.indel_ppv_beds,
-      #     sv_beds = ParseSiteBenchInputs.sv_ppv_beds,
-      #     ppv_by_af_tsvs = ParseSiteBenchInputs.ppv_by_af,
-      #     sens_by_af_tsvs = ParseSiteBenchInputs.sens_by_af,
-      #     output_prefix = output_prefix,
-      #     common_af_cutoff = common_af_cutoff,
-      #     g2c_analysis_docker = g2c_analysis_docker
-      # }
+      # Generate plots
+      call PlotSiteBenchmarking {
+        input:
+          ref_dataset_prefix = plot_bd_prefix,
+          ref_dataset_title = plot_bd_title,
+          eval_interval_names = select_all(site_benchmark_interval_names),
+          snv_beds = ParseSiteBenchInputs.snv_ppv_beds,
+          indel_beds = ParseSiteBenchInputs.indel_ppv_beds,
+          sv_beds = ParseSiteBenchInputs.sv_ppv_beds,
+          ppv_by_af_tsvs = ParseSiteBenchInputs.ppv_by_af,
+          sens_by_af_tsvs = ParseSiteBenchInputs.sens_by_af,
+          output_prefix = output_prefix,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
     }
   }
 
@@ -305,7 +306,7 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    # Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
+    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
 
@@ -313,41 +314,49 @@ workflow PlotVcfQcMetrics {
 task ParseSiteBenchInputs {
   input {
     File inputs_json
+    String prefix
   }
 
   command <<<
     set -eu -o pipefail
 
-    python3 - "~{inputs_json}" <<CODE
-      import json
-      import sys
+    ls -ltrh
 
-      infile = sys.argv[1]
-      with open(infile, "r") as f:
-        data = json.load(f)
+    python3 - "~{inputs_json}" "~{prefix}" <<CODE
+import json
+import sys
 
-      def write_array(name, val):
-        val = [v for v in val if v is not None and v != ""]
-        with open(f"{name}.txt", "w") as out:
-            for item in (val or []):
-                if item is not None:
-                    out.write(item + "\n")
+infile = sys.argv[1]
+prefix = sys.argv[2]
+with open(infile, "r") as f:
+  data = json.load(f)
 
-      write_array("snv_ppv_beds", data.get("snv_ppv_beds", []) + [data.get("snv_ppv_union")])
-      write_array("indel_ppv_beds", data.get("indel_ppv_beds", []) + [data.get("indel_ppv_union")])
-      write_array("sv_ppv_beds", data.get("sv_ppv_beds", []) + [data.get("sv_ppv_union")])
+def write_array(name, val):
+  val = [v for v in val if v is not None and v != ""]
+  if len(val) > 0:
+    return
+  with open(f"{prefix}.{name}.txt", "w") as out:
+      for item in (val or []):
+          if item is not None:
+              out.write(item + "\n")
 
-      write_array("ppv_by_af", data.get("ppv_by_af"))
-      write_array("sens_by_af", data.get("sens_by_af"))
+write_array("snv_ppv_beds", data.get("snv_ppv_beds", []) + [data.get("snv_ppv_union")])
+write_array("indel_ppv_beds", data.get("indel_ppv_beds", []) + [data.get("indel_ppv_union")])
+write_array("sv_ppv_beds", data.get("sv_ppv_beds", []) + [data.get("sv_ppv_union")])
+
+write_array("ppv_by_af", data.get("ppv_by_af"))
+write_array("sens_by_af", data.get("sens_by_af"))
     CODE
+
+    ls -ltrh
   >>>
 
   output {
-    Array[String]? snv_ppv_beds = read_lines("snv_ppv_beds.txt")
-    Array[String]? indel_ppv_beds = read_lines("indel_ppv_beds.txt")
-    Array[String]? sv_ppv_beds = read_lines("sv_ppv_beds.txt")
-    Array[String]? ppv_by_af = read_lines("ppv_by_af.txt")
-    Array[String]? sens_by_af = read_lines("sens_by_af.txt")
+    File? snv_ppv_beds = "~{prefix}.snv_ppv_beds.txt"
+    File? indel_ppv_beds = "~{prefix}.indel_ppv_beds.txt"
+    File? sv_ppv_beds = "~{prefix}.sv_ppv_beds.txt"
+    File? ppv_by_af = "~{prefix}.ppv_by_af.txt"
+    File? sens_by_af = "~{prefix}.sens_by_af.txt"
   }
 
   runtime {
@@ -493,11 +502,11 @@ task PlotSiteBenchmarking {
     Array[String] eval_interval_names
     Boolean bed_arrays_include_union = true
 
-    Array[File]? snv_beds
-    Array[File]? indel_beds
-    Array[File]? sv_beds
-    Array[File]? ppv_by_af_tsvs
-    Array[File]? sens_by_af_tsvs
+    File? snv_beds
+    File? indel_beds
+    File? sv_beds
+    File? ppv_by_af_tsvs
+    File? sens_by_af_tsvs
 
     String output_prefix
 
@@ -505,19 +514,16 @@ task PlotSiteBenchmarking {
 
     Float mem_gb = 7.5
     Int n_cpu = 4
-    Int? disk_gb
+    Int disk_gb = 50
 
     String g2c_analysis_docker
   }
-
-  Array[File] loc_inputs = flatten(select_all([snv_beds, indel_beds, sv_beds]))
-  Int default_disk_gb = ceil(2 * size(loc_inputs, "GB")) + 20
 
   # Note that this outdir string is used as both a directory name and a file prefix
   String outdir = sub(output_prefix + "." + ref_dataset_prefix + "." + "site_benchmarking", "[ ]+", "_")
 
   Array[String] eval_interval_names_plus_union = if bed_arrays_include_union 
-                                                 then flatten([eval_interval_names, ["all"]]) 
+                                                 then flatten([eval_interval_names, ["All"]]) 
                                                  else eval_interval_names
   Int n_sets = length(eval_interval_names_plus_union)
 
@@ -526,23 +532,26 @@ task PlotSiteBenchmarking {
 
     mkdir ~{outdir}
 
-    # Write list of localized SNV beds
+    # Localize SNV beds
     if ~{defined(snv_beds)}; then
-      cat ~{write_lines(select_first([snv_beds]))} > snv_beds.list
+      cat ~{select_first([snv_beds])} | gsutil -m cp -I ./
+      cat ~{select_first([snv_beds])} | xargs -I {} basename {} > snv_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > snv_beds.list
     fi
 
     # Write list of localized indel beds
     if ~{defined(indel_beds)}; then
-      cat ~{write_lines(select_first([indel_beds]))} > indel_beds.list
+      cat ~{select_first([indel_beds])} | gsutil -m cp -I ./
+      cat ~{select_first([indel_beds])} | xargs -I {} basename {} > indel_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > indel_beds.list
     fi
 
     # Write list of localized SV beds
     if ~{defined(sv_beds)}; then
-      cat ~{write_lines(select_first([sv_beds]))} > sv_beds.list
+      cat ~{select_first([sv_beds])} | gsutil -m cp -I ./
+      cat ~{select_first([sv_beds])} | xargs -I {} basename {} > sv_beds.list
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > sv_beds.list
     fi
@@ -578,14 +587,16 @@ task PlotSiteBenchmarking {
     # Plot site summary metrics like PPV and sensitivity
     cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_benchmarking_metrics.R"
     if ~{defined(ppv_by_af_tsvs)}; then
+      cat ~{select_first([ppv_by_af_tsvs])} | gsutil -m cp -I ./
       while read tsv; do
         cmd="$cmd --ppv-by-af $tsv"
-      done < ~{write_lines(select_first([ppv_by_af_tsvs]))}
+      done < <( cat ~{select_first([ppv_by_af_tsvs])} | xargs -I {} basename {} )
     fi
     if ~{defined(sens_by_af_tsvs)}; then
+      cat ~{select_first([sens_by_af_tsvs])} | gsutil -m cp -I ./
       while read tsv; do
         cmd="$cmd --sens-by-af $tsv"
-      done < ~{write_lines(select_first([sens_by_af_tsvs]))}
+      done < <( cat ~{select_first([sens_by_af_tsvs])} | xargs -I {} basename {} )
     fi
     while read sname; do
       cmd="$cmd --set-name $sname"
@@ -608,7 +619,7 @@ task PlotSiteBenchmarking {
     docker: g2c_analysis_docker
     memory: mem_gb + " GB"
     cpu: n_cpu
-    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    disks: "local-disk " + disk_gb + " HDD"
     preemptible: 2
     max_retries: 1
   }
