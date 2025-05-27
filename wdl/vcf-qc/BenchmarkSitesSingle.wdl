@@ -123,6 +123,7 @@ workflow BenchmarkSitesSingle {
           genome_file = genome_file,
           mode = "exact",
           common_af = common_af_cutoff,
+          degenerate = true,
           prefix = sens_prefix + ".snv." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -170,6 +171,7 @@ workflow BenchmarkSitesSingle {
           genome_file = genome_file,
           mode = "both",
           common_af = common_af_cutoff,
+          degenerate = true,
           prefix = sens_prefix + ".indel." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -205,7 +207,7 @@ workflow BenchmarkSitesSingle {
           ref_bed = PrepTargetSvs.ref_bed,
           genome_file = genome_file,
           mode = "both",
-          overlap_pad = 5,
+          overlap_pad = 2,
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".sv." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
@@ -217,8 +219,9 @@ workflow BenchmarkSitesSingle {
           ref_bed = PrepSourceSvs.ref_bed,
           genome_file = genome_file,
           mode = "both",
-          overlap_pad = 5,
+          overlap_pad = 2,
           common_af = common_af_cutoff,
+          degenerate = true,
           prefix = sens_prefix + ".sv." + shard_prefix,
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -458,6 +461,7 @@ task CompareSites {
     String mode
     Float common_af
     Int overlap_pad = 1
+    Boolean degenerate = false
     
     String prefix
 
@@ -470,6 +474,7 @@ task CompareSites {
 
   Int default_disk_gb = ceil(2.5 * size([query_bed, ref_bed], "GB")) + 10
   Int use_disk_gb = select_first([disk_gb, default_disk_gb])
+  String degen_cmd = if degenerate then "--one-to-many" else ""
 
   command <<<
     set -eu -o pipefail
@@ -482,6 +487,7 @@ task CompareSites {
       --common-af ~{common_af} \
       --mode ~{mode} \
       --overlap-pad ~{overlap_pad} \
+      ~{degen_cmd} \
       --no-reverse \
       --gzip
   >>>

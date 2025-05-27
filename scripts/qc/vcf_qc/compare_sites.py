@@ -252,15 +252,14 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
         edges = list(hits_g.edges(nid))
         if len(edges) == 0:
             match_id, match_af, match_dist = ['NA'] * 3
-        elif len(edges) == 1:
-            match_nid = list(set(edges[0]).difference(set([nid])))[0]
+        else:
+            if len(edges) > 1:
+                match_nid = list(get_distances(hits_g, nid).keys())[0]
+            else:
+                match_nid = list(set(edges[0]).difference(set([nid])))[0]
             match_id = sub('^' + ref_prefix, '', match_nid)
             match_af = '{:.2e}'.format(hits_g.nodes[match_nid].get('af'))
             match_dist = '{:.2}'.format(hits_g[nid][match_nid]['dist'])
-        else:
-            msg = 'Node {} from has more than one edge after pruning. ' + \
-                  'This indicates a bug that needs to be fixed. Exiting.'
-            exit(msg.format(nid))
 
         # Format output line and add to bt collector
         bed_line_vals = [ninfo[k] for k in 'chrom pos end vc vsc size af'.split()]
@@ -425,11 +424,17 @@ def main():
                         'left or right breakpoints to tolerate for --mode ' +
                         '"overlap" or "both". Specified as a fraction of larger ' +
                         'variant total size. [default: 0.5]')
-    parser.add_argument('--overlap-pad', type=int, default=1, metavar='int', 
+    parser.add_argument('--overlap-pad', type=int, default=0, metavar='int', 
                         help='Distance to pad each variant for --mode "overlap" ' +
                         'or "both". Does not alter variant coordinates or size ' +
                         'estimates; helps for 0bp/1bp SV intervals like insertions ' +
-                        '[default: 1]')
+                        '[default: 0]')
+    parser.add_argument('--one-to-many', action='store_true', help='Do not prune ' +
+                        'overlaps to require strict one-to-one matches between ' +
+                        '-a and -b. Instead, report the best match for each ' +
+                        'variant, even if that matching variant also matches ' +
+                        'other variants in the same file. [default: one-to-one ' +
+                        'matches only]')
     parser.add_argument('--common-af', type=float, help='AF cutoff for common ' +
                         'variants. If provided, will generate separate sites.bed ' +
                         'output files restricted to common variants. [default: ' +
@@ -466,8 +471,9 @@ def main():
                                  args.max_overlap_bkpt_rel_dist, 
                                  args.overlap_pad)
 
-    # Process candidate matches to generate 1:1 mapping of hits
-    hits = prune_hits(hits)
+    # Process candidate matches to generate 1:1 mapping of hits, unless specified otherwise
+    if not args.one_to_many:
+        hits = prune_hits(hits)
 
     # Write output files for left outer join  (LoJ; all A sites, with matching B info)
     write_outputs(hits, args.output_prefix + '.loj', 'a_', 'b_', args.genome,
