@@ -556,8 +556,7 @@ CODE
     eval "$cmd"
 
     # Compress outputs
-    tar -czvf "~{outdir}.tar.gz" \
-      ~{outdir}/
+    tar -czvf "~{outdir}.tar.gz" ~{outdir}/
   >>>
 
   output {

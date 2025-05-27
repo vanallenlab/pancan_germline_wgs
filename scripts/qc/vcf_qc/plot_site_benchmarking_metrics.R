@@ -85,8 +85,8 @@ compress.benchmarking <- function(bd, vc.elig=names(var.class.abbrevs),
   df <- df[, -(1:3)]
 
   # Count total variants and those with no match
-  n.all <- sum(df)
-  n.miss <- sum(df[, 1])
+  n.all <- sum(df, na.rm=T)
+  n.miss <- sum(df[, 1], na.rm=T)
   n.hit <- n.all - n.miss
 
   # Return hit rate & total number of variants
@@ -381,7 +381,7 @@ args <- parser$parse_args()
 #                               "~/scratch/site_bench_metric_inputs/dfci-g2c.v1.initial_qc.gnomad_v4.1.Hard.ppv_by_freq.merged.tsv.gz"),
 #              "set_name" = c("Easy", "Hard"),
 #              "ref_title" = "gnomAD v4.1",
-#              "common.af" = 0.001,
+#              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
 # Load sensitivity & PPV data
@@ -406,7 +406,7 @@ if(!is.null(sens.by.af)){
                                    set.colors, strata.labels=af.strata.labels,
                                    reverse.strata=TRUE, strata.title=strata.title,
                                    args$ref_title, y.title="Rediscovery rate",
-                                   "Rediscovery of", "from", common.af=args$common.af,
+                                   "Rediscovery of", "from", common.af=args$common_af,
                                    ss.metric.name="sensitivity")
 }else{
   sens.ss <- NULL
@@ -428,7 +428,7 @@ if(!is.null(ppv.by.af)){
                                   reverse.strata=TRUE, strata.title=strata.title,
                                   args$ref_title, y.title="Confirmation rate",
                                   "Confirmation of", "versus",
-                                  common.af=args$common.af, ss.metric.name="ppv")
+                                  common.af=args$common_af, ss.metric.name="ppv")
 }else{
   ppv.ss <- NULL
 }
