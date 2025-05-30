@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import random
 import string
+import math
 import networkx as nx
 from scipy.stats import chisquare, fisher_exact
 
@@ -349,7 +350,7 @@ def main():
         f.write(f"{sample_size5}\t{(sample_size4 - sample_size5)}\t{round(((sample_size4 - sample_size5)/sample_size4),3) * 100}\tExcluded due to relatedness with other individuals.\n")
 
     # Downsample controls to match on cases ancestry
-    min_ancestry_case_control_ratio = get_min_case_control_ratio(meta)
+    min_ancestry_case_control_ratio = math.ceil(get_min_case_control_ratio(meta))
     meta = match_controls_by_ancestry(meta, max_controls_per_case = min_ancestry_case_control_ratio)
     sample_size6 = len(meta)
     with open(args.log_file, "a") as f:
