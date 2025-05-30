@@ -41,3 +41,27 @@ load.famfile <- function(in.fam, header=FALSE){
 }
 
 
+#' Read sample QC manifest
+#'
+#' Load & clean a sample intake QC manifest as a dataframe
+#'
+#' @param tsv.in Path to QC .tsv
+#'
+#' @export load.sample.qc.df
+#' @export
+load.sample.qc.df <- function(tsv.in){
+  G2CR::load.constants(subset=c("names", "other"))
+  qc.df <- read.table(tsv.in, check.names=F, header=T, sep="\t", comment.char="")
+  colnames(qc.df)[1] <- gsub("^#", "", colnames(qc.df)[1])
+  rownames(qc.df) <- qc.df$G2C_id
+  qc.df$G2C_id <- NULL
+  qc.df$cohort_type <- remap(qc.df$cohort, cohort.type.map)
+  qc.df$single_cancer <- qc.df$cancer
+  qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
+  bool.cols <- grep("_qc_pass", colnames(qc.df))
+  if(length(bool.cols) > 0){
+    qc.df[, bool.cols] <- apply(qc.df[, bool.cols], 2, remap,
+                                map=c("True" = TRUE, "False" = FALSE))
+  }
+  return(qc.df)
+}

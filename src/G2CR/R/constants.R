@@ -103,7 +103,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
 #'
 #' Load a subset of constants used throughout G2C
 #'
-#' @param susbet Vector of constant groups to load. See `Details` for options. \[default: load all constants\]
+#' @param subset Vector of constant groups to load. See `Details` for options. \[default: load all constants\]
 #' @param envir Environment passed to [base::assign] \[default: .GlobalEnv\]
 #'
 #' @details Recognized values for `subset` include:

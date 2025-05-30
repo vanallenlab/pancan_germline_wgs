@@ -212,26 +212,61 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/
 
 
-############################################################################
-# Extract overlapping samples from core sample-level benchmarking datasets #
-############################################################################
+###############################################################
+# Build QC sample inclusion priority & sampling probabilities #
+###############################################################
 
 # Note: this only needs to be run once for the entire cohort across all workspaces
 
 # Reaffirm staging directory
-staging_dir=staging/external_data_curation
+staging_dir=staging/sample_priority
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# TODO: preprocess each individual callset in terra & stage in gs://dfci-g2c-refs/
+# Localize most up-to-date sample QC manifest
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $staging_dir/
 
-# Extract list of sample IDs present in the G2C callset at this stage
-# TODO: implement this
+# Generate sampling probabilities
+code/scripts/assign_sample_qc_weights.R \
+  --qc-tsv dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --
 
-# 1KGP - srWGS - short variants
-## Find overlapping sample IDs
-# TODO: implement this
-## Submit VCF slicing task
-# TODO: implement this
+# Extract list of sample IDs still present in callset at this stage
+zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+| awk -v FS="\t" -v OFS="\t" '{ if ($NF=="True") print $1 }' \
+> $staging_dir/g2c_ids.present_after_calling.samples.list
+zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+| awk -v FS="\t" -v OFS="\t" '{ if ($NF=="True") print $1, $2, $3 }' \
+> $staging_dir/g2c_ids.present_after_calling.sample_cohort_map.tsv
+
+# Find list of samples included in complete trios
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/data/sample_info/relatedness/dfci-g2c.reported_families.fam \
+  $staging_dir/
+code/scripts/subset_fam.R \
+  --in-fam $staging_dir/dfci-g2c.reported_families.fam \
+  --all-samples $staging_dir/g2c_ids.present_after_calling.samples.list \
+  --out-fam $staging_dir/dfci-g2c.reported_families.filtered.fam
+awk -v FS="\t" -v OFS="\t" '{ if ($2!=0 && $3!=0 && $4!=0) print }' \
+  $staging_dir/dfci-g2c.reported_families.filtered.fam \
+> $staging_dir/dfci-g2c.reported_families.filtered.complete.fam
+awk -v OFS="\n" '{ print $2, $3, $4 }' \
+  $staging_dir/dfci-g2c.reported_families.filtered.complete.fam \
+| sort -V | uniq \
+> $staging_dir/dfci-g2c.reported_families.filtered.complete.samples.list
+
+# # Localize unfiltered list of candidate twins/replicates
+# gsutil -m cp \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.kin0.gz \
+#   $staging_dir/
+
+# # Build map of sample IDs for 1KGP srWGS short variants
+# gsutil -m cat \
+#   gs://dfci-g2c-refs/hgsv/dense_vcfs/srwgs/snv_indel/1KGP.srWGS.snv_indel.cleaned.chrY.vcf.gz \
+# | gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
+# > $staging_dir/1KGP.srWGS.snv_indel.external_ids.tsv
+# # TODO: write script to make alias table, accounting for putative twins
 
 # 1KGP - srWGS - SVs
 ## Find overlapping sample IDs

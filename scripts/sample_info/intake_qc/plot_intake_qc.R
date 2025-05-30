@@ -20,27 +20,6 @@ require(vioplot, quietly=TRUE)
 G2CR::load.constants("all")
 
 
-##################
-# Data Functions #
-##################
-# Load & clean QC dataframe
-load.qc.df <- function(tsv.in){
-  qc.df <- read.table(tsv.in, check.names=F, header=T, sep="\t", comment.char="")
-  colnames(qc.df)[1] <- gsub("^#", "", colnames(qc.df)[1])
-  rownames(qc.df) <- qc.df$G2C_id
-  qc.df$G2C_id <- NULL
-  qc.df$cohort_type <- remap(qc.df$cohort, cohort.type.map)
-  qc.df$single_cancer <- qc.df$cancer
-  qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
-  bool.cols <- grep("_qc_pass", colnames(qc.df))
-  if(length(bool.cols) > 0){
-    qc.df[, bool.cols] <- apply(qc.df[, bool.cols], 2, remap,
-                                map=c("True" = TRUE, "False" = FALSE))
-  }
-  return(qc.df)
-}
-
-
 ######################
 # Plotting Functions #
 ######################
@@ -389,7 +368,7 @@ args <- parser$parse_args()
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
-qc.df <- load.qc.df(args$qc_tsv)
+qc.df <- load.sample.qc.df(args$qc_tsv)
 
 
 # Set shared barplot parameters

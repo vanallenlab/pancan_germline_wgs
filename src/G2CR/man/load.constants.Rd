@@ -7,9 +7,9 @@
 load.constants(subset = "all", envir = .GlobalEnv)
 }
 \arguments{
-\item{envir}{Environment passed to \link[base:assign]{base::assign} [default: .GlobalEnv]}
+\item{subset}{Vector of constant groups to load. See \code{Details} for options. [default: load all constants]}
 
-\item{susbet}{Vector of constant groups to load. See \code{Details} for options. [default: load all constants]}
+\item{envir}{Environment passed to \link[base:assign]{base::assign} [default: .GlobalEnv]}
 }
 \description{
 Load a subset of constants used throughout G2C
