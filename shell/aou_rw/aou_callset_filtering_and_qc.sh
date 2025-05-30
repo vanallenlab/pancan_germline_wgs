@@ -212,6 +212,47 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/
 
 
+############################################################################
+# Extract overlapping samples from core sample-level benchmarking datasets #
+############################################################################
+
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
+# Reaffirm staging directory
+staging_dir=staging/external_data_curation
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# TODO: preprocess each individual callset in terra & stage in gs://dfci-g2c-refs/
+
+# Extract list of sample IDs present in the G2C callset at this stage
+# TODO: implement this
+
+# 1KGP - srWGS - short variants
+## Find overlapping sample IDs
+# TODO: implement this
+## Submit VCF slicing task
+# TODO: implement this
+
+# 1KGP - srWGS - SVs
+## Find overlapping sample IDs
+# TODO: implement this
+## Submit VCF slicing task
+# TODO: implement this
+
+# 1KGP - lrWGS - short variants
+## Find overlapping sample IDs
+# TODO: implement this
+## Submit VCF slicing task
+# TODO: implement this
+
+# 1KGP - lrWGS - SVs
+## Find overlapping sample IDs
+# TODO: implement this
+## Submit VCF slicing task
+# TODO: implement this
+
+# TODO: add other cohorts here
+
 ##############################
 # Collect initial QC metrics #
 ##############################
