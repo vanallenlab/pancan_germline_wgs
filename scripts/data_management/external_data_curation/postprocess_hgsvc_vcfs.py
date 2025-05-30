@@ -65,7 +65,9 @@ def format_sv(record, minimal=False):
     record.info['SVLEN'] = int(np.abs(svlen))
 
     # Make new record as a near identical copy of the original
-    if not minimal:
+    if minimal:
+        newrec = record
+    else:
         if svtype == 'DEL':
             svlen = -svlen
         elif svtype == 'INS':

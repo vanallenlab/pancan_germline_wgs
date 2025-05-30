@@ -219,7 +219,7 @@ task CurateSrwgsSvs {
     | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools annotate --threads 2 \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS" \
-    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py --minimal-sv stdin "~{out_vcf_fname}"
+    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py --minimal-sv --no-gt stdin "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
 
     # Stage cleaned VCF to desired output bucket
