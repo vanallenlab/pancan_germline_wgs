@@ -159,7 +159,7 @@ task CurateSrwgsSnvs {
     wget ~{tbi_url}
 
     # Filter & clean VCF
-    bcftools norm --region "~{contig}" -m -any -f ~{ref_fasta} --threads 2 "~{in_vcf_fname}" \
+    bcftools norm --regions "~{contig}" -m -any -f ~{ref_fasta} -c s --threads 2 "~{in_vcf_fname}" \
     | bcftools view -f PASS -c 1 \
     | bcftools +fill-tags \
     | bcftools annotate -h ~{supp_vcf_header} \
@@ -214,12 +214,12 @@ task CurateSrwgsSvs {
     wget ~{tbi_url}
 
     # Filter & clean VCF
-    bcftools view --region "~{contig}" -f PASS --include 'INFO/SOURCE="gatksv"' "~{in_vcf_fname}" \
+    bcftools view --regions "~{contig}" -f PASS --include 'INFO/SOURCE="gatksv"' "~{in_vcf_fname}" \
     | bcftools +fill-tags \
     | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools annotate --threads 2 \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS" \
-      -Oz -o "~{out_vcf_fname}"
+    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py --minimal-sv stdin "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
 
     # Stage cleaned VCF to desired output bucket
@@ -277,9 +277,9 @@ task CurateLrwgsSnvs {
 
     # Merge, filter, and clean VCFs
     bcftools concat --allow-overlaps --regions ~{contig} ~{in_snv_fname} ~{in_indel_fname} \
-    | bcftools norm -m -any -f ~{ref_fasta} --threads 2 \
-    | bcftools annotate -h ~{supp_vcf_header} \
-    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_lrwgs_calls.py stdin stdout \
+    | bcftools norm -m -any -f ~{ref_fasta} -c s --threads 2 \
+    | bcftools annotate -h ~{supp_vcf_header} -x "^INFO/VARTYPE,^FORMAT/GT" \
+    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py stdin stdout \
     | bcftools view -c 1 \
     | bcftools +fill-tags \
     | bcftools annotate --threads 2 \
@@ -339,8 +339,8 @@ task CurateLrwgsSvs {
 
     # Merge, filter, and clean VCFs
     bcftools concat --allow-overlaps --regions ~{contig} ~{in_cnv_fname} ~{in_inv_fname} \
-    | bcftools annotate -h ~{supp_vcf_header} \
-    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_lrwgs_calls.py stdin stdout --sv \
+    | bcftools annotate -h ~{supp_vcf_header} -x "^INFO/SVTYPE,INFO/SVLEN,^FORMAT/GT" \
+    | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py stdin stdout --sv \
     | bcftools +fill-tags \
     | bcftools view -c 1 \
     | bcftools annotate --threads 2 \

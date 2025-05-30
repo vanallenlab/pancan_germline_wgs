@@ -7,7 +7,7 @@
 # Distributed under the terms of the GNU GPL v2.0
 
 """
-Clean up HGSVC long-read WGS variant calls for G2C QC
+Clean up HGSVC WGS variant calls for G2C QC
 """
 
 
@@ -48,7 +48,7 @@ def clean_gts(record):
     return record
 
 
-def format_sv(record):
+def format_sv(record, minimal=False):
     """
     Format SVs to loose GATK-SV convention (always positive SVLEN and always specify END)
     This requires replacing the original record with a new record due to being 
@@ -62,15 +62,16 @@ def format_sv(record):
     if isinstance(svlen, Iterable):
         svlen = int(svlen[0])
 
-    if svtype == 'DEL':
-        svlen = -svlen
-        record.info['SVLEN'] = svlen
-    elif svtype == 'INS':
-        svlen = 1
+    record.info['SVLEN'] = int(np.abs(svlen))
 
     # Make new record as a near identical copy of the original
-    newrec = record.copy()
-    newrec.stop = record.pos + svlen
+    if not minimal:
+        if svtype == 'DEL':
+            svlen = -svlen
+        elif svtype == 'INS':
+            svlen = 1
+        newrec = record.copy()
+        newrec.stop = record.pos + svlen
 
     return newrec
 
@@ -83,6 +84,10 @@ def main():
     parser.add_argument('vcf_out', help='Output vcf. Also accepts "stdout" and "-".')
     parser.add_argument('--sv', action='store_true', help='Perform extra steps ' +
                         'for SV curation [default: only clean up GTs]')
+    parser.add_argument('--minimal-sv', action='store_true', help='Only enforce ' +
+                        'non-negative SVLEN values (i.e., do not update ' +
+                        'variant coordinates)')
+    parser.add_argument('--no-gt', action='store_true', help='Disable GT cleanup')
     args = parser.parse_args()
 
     # Open connections to input VCF
@@ -99,9 +104,10 @@ def main():
 
     # Process each record from input VCF
     for r in vcf:
-        r = clean_gts(r)
-        if args.sv:
-            r = format_sv(r)
+        if not args.no_gt:
+            r = clean_gts(r)
+        if args.sv or args.minimal_sv:
+            r = format_sv(r, minimal=args.minimal_sv)
         fout.write(r)
 
     fout.close()
