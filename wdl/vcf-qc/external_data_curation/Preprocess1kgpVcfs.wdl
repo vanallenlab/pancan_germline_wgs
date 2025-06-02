@@ -10,6 +10,7 @@ version 1.0
 
 
 import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/Utilities.wdl" as Utils
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/vcf-qc/QcTasks.wdl" as QcTasks
 
 
 workflow Preprocess1kgpVcfs {
@@ -47,7 +48,7 @@ workflow Preprocess1kgpVcfs {
     String g2c_pipeline_docker
   }
 
-  call MakeHeaderFiller {}
+  call QcTasks.MakeHeaderFiller {}
 
   scatter ( contig_info in zip(contigs, srwgs_snv_scatter_intervals) ) {
 
@@ -150,39 +151,6 @@ workflow Preprocess1kgpVcfs {
 }
 
 
-task MakeHeaderFiller {
-  input {}
-
-  command <<<
-    set -eu -o pipefail
-
-    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" > header.supp.vcf
-    echo "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" >> header.supp.vcf
-    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Het,Number=A,Type=Integer,Description=\"Heterozygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Hom,Number=A,Type=Integer,Description=\"Homozygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Hemi,Number=A,Type=Integer,Description=\"Hemizygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
-    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" >> header.supp.vcf
-  >>>
-
-  output {
-    File supp_vcf_header = "header.supp.vcf"
-  }
-
-  runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk 20 HDD"
-    preemptible: 3
-    max_retries: 1
-  }
-}
-
-
 task CurateSrwgsSnvs {
   input {
     File vcf
@@ -236,7 +204,7 @@ task CurateSrwgsSnvs {
     memory: "4 GB"
     cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 0
+    preemptible: 3
     max_retries: 1
   }
 }
@@ -268,11 +236,11 @@ task CurateSrwgsSvs {
     wget ~{tbi_url}
 
     # Filter & clean VCF
-    bcftools view --regions "~{contig}" -f PASS --include 'INFO/SOURCE="gatksv"' "~{in_vcf_fname}" \
+    bcftools view --regions "~{contig}" -f PASS,MULTIALLELIC --include 'INFO/SOURCE="gatksv"' "~{in_vcf_fname}" \
     | bcftools +fill-tags \
     | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools annotate --threads 2 \
-      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS" \
+      -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS,FILTER/MULTIALLELIC" \
     | /opt/pancan_germline_wgs/scripts/data_management/external_data_curation/postprocess_hgsvc_vcfs.py --minimal-sv --no-gt stdin "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
 

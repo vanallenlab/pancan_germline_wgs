@@ -212,6 +212,14 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/
 
 
+#########################################################################
+# Curate existing long-read and short-read WGS callsets for AoU samples #
+#########################################################################
+
+# TODO: implement this
+
+
+
 ###############################################################
 # Build QC sample inclusion priority & sampling probabilities #
 ###############################################################

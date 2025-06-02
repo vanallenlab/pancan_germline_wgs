@@ -56,8 +56,11 @@ def format_sv(record, minimal=False):
     """
 
     svtype = record.info.get('SVTYPE')
-    if isinstance(svtype, Iterable):
+    if isinstance(svtype, Iterable) \
+    and not isinstance(svtype, str):
         svtype = svtype[0]
+    if svtype == 'UNK':
+        svtype = 'CPX'
     svlen = record.info.get('SVLEN', 0)
     if isinstance(svlen, Iterable):
         svlen = int(svlen[0])
@@ -74,6 +77,10 @@ def format_sv(record, minimal=False):
             svlen = 1
         newrec = record.copy()
         newrec.stop = record.pos + svlen
+        if len(newrec.ref) > 1:
+            newrec.ref = 'N'
+        if not newrec.alts[0].startswith('<'):
+            newrec.alts = ('<{}>'.format(svtype), )
 
     return newrec
 

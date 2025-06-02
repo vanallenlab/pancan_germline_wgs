@@ -208,6 +208,7 @@ task FtpDownload {
     disks: "local-disk " + disk_gb + " HDD"
     cpu: n_cpu
     memory: mem_gb + " GB"
+    preemptible: 0
   }
 }
 
