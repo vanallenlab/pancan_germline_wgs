@@ -9,6 +9,9 @@
 version 1.0
 
 
+import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/Utilities.wdl" as Utils
+
+
 workflow Preprocess1kgpVcfs {
   input {
     String srwgs_snv_vcf_prefix = "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20201028_3202_raw_GT_with_annot/20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_"
@@ -32,6 +35,7 @@ workflow Preprocess1kgpVcfs {
     File ref_fasta
     File ref_fasta_idx
 
+    Array[File] srwgs_snv_scatter_intervals # Expects one file per chromosome in the same order as `contigs`
     Array[String] contigs = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", 
                              "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", 
                              "chr13", "chr14", "chr15", "chr16", "chr17", 
@@ -45,17 +49,66 @@ workflow Preprocess1kgpVcfs {
 
   call MakeHeaderFiller {}
 
-  scatter ( contig in contigs ) {
-    call CurateSrwgsSnvs {
+  scatter ( i in range(contigs) ) {
+
+    String contig = contigs[i]
+    String vcf_ftp_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix
+
+    call Utils.FtpDownload as DownloadSrwgsSnvVcf {
       input:
-        vcf_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix,
-        tbi_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix + ".tbi",
-        dest_bucket = dest_bucket_uri_prefix + "dense_vcfs/srwgs/snv_indel/",
-        contig = contig,
-        ref_fasta = ref_fasta,
-        ref_fasta_idx = ref_fasta_idx,
-        supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
-        g2c_pipeline_docker = g2c_pipeline_docker
+        ftp_url = vcf_ftp_url,
+        output_name = basename(vcf_ftp_url),
+        lftp_docker = g2c_pipeline_docker,
+        disk_gb = 200
+    }
+
+    File srwgs_snv_vcf = DownloadSrwgsSnvVcf.downloaded_file
+
+    call Utils.MakeTabixIndex as TabixSrwgsSnvVcf {
+      input:
+        input_file = srwgs_snv_vcf,
+        docker = g2c_pipeline_docker
+    }
+
+    call Utils.ParseIntervals as MakeSrwgsSnvIntervals {
+      input:
+        intervals_list = srwgs_snv_scatter_intervals[i],
+        docker = linux_docker
+    }
+
+    Array[Array[String]] srwgs_snv_interval_infos = MakeSrwgsSnvIntervals.interval_info
+    
+    scatter ( snv_interval_info in srwgs_snv_interval_infos ) {
+
+      String snv_interval_coords = snv_interval_info[1]
+      String snv_shard_fname = basename(srwgs_snv_vcf, ".vcf.gz") + "." + snv_interval_info[0] ".vcf.gz"
+
+      call CurateSrwgsSnvs {
+        input:
+          vcf = srwgs_snv_vcf,
+          vcf_tbi = TabixSrwgsSnvVcf.tbi,
+          out_vcf_fname = snv_shard_fname,
+          interval = snv_interval_coords,
+          ref_fasta = ref_fasta,
+          ref_fasta_idx = ref_fasta_idx,
+          supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
+          g2c_pipeline_docker = g2c_pipeline_docker
+      }
+    }
+
+    call Utils.ConcatVcfs as ConcatSrwgsSnvs {
+      input:
+        vcfs = CurateSrwgsSnvs.vcf_out,
+        vcf_idxs = CurateSrwgsSnvs.tbi_out,
+        out_prefix = "1KGP.srWGS.snv_indel.cleaned." + contig + ".vcf.gz",
+        bcftools_concat_options = "--naive --threads 2",
+        bcftools_docker = g2c_pipeline_docker
+    }
+
+    call Utils.CopyGcpObjects as CopySrwgsSnvVcf {
+      input:
+        files_to_copy = [ConcatSrwgsSnvs.merged_vcf, ConcatSrwgsSnvs.merged_vcf_idx],
+        destination = dest_bucket_uri_prefix + "dense_vcfs/srwgs/snv_indel/"
     }
 
     call CurateSrwgsSvs {
@@ -129,13 +182,25 @@ task MakeHeaderFiller {
   }
 }
 
+call CurateSrwgsSnvs {
+  input:
+    vcf = srwgs_snv_vcf,
+    vcf_tbi = TabixSrwgsSnvVcf.tbi,
+    vcf_out_fname = snv_shard_fname,
+    interval = snv_interval_coords,
+    ref_fasta = ref_fasta,
+    ref_fasta_idx = ref_fasta_idx,
+    supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
+    g2c_pipeline_docker = g2c_pipeline_docker
+}
+
 
 task CurateSrwgsSnvs {
   input {
-    String vcf_url
-    String tbi_url
-    String dest_bucket
-    String contig
+    File vcf
+    File vcf_tbi
+    String out_vcf_fname
+    String interval
 
     File ref_fasta
     File ref_fasta_idx
@@ -146,20 +211,24 @@ task CurateSrwgsSnvs {
     Int disk_gb = 300
   }
 
-  String in_vcf_fname = basename(vcf_url)
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
 
-  String out_vcf_fname = "1KGP.srWGS.snv_indel.cleaned." + contig + ".vcf.gz"
   String out_tbi_fname = out_vcf_fname + ".tbi"
 
   command <<<
     set -eu -o pipefail
 
-    # Download VCF and index
-    wget ~{vcf_url}
-    wget ~{tbi_url}
+    # Symlink vcf_idx to current working dir
+    ln -s ~{vcf_idx} .
 
-    # Filter & clean VCF
-    bcftools norm --regions "~{contig}" -m -any -f ~{ref_fasta} -c s --threads 2 "~{in_vcf_fname}" \
+    # Stream VCF to interval of interest before filtering & cleaning VCF
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    bcftools view --regions "~{interval}" ~{vcf} \
+    | bcftools norm -m -any -f ~{ref_fasta} -c s --threads 2 \
     | bcftools view -f PASS -c 1 \
     | bcftools +fill-tags \
     | bcftools annotate -h ~{supp_vcf_header} \
@@ -167,15 +236,12 @@ task CurateSrwgsSnvs {
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,^FILTER/PASS" \
       -Oz -o "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
-
-    # Stage cleaned VCF to desired output bucket
-    gsutil -m cp \
-      "~{out_vcf_fname}" \
-      "~{out_tbi_fname}" \
-      ~{dest_bucket}
   >>>
 
-  output {}
+  output {
+    File vcf_out = "~{out_vcf_fname}"
+    File tbi_out = "~{out_tbi_fname}"
+  }
 
   runtime {
     docker: g2c_pipeline_docker

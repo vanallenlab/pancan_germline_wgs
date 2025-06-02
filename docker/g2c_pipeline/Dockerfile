@@ -23,9 +23,12 @@ RUN curl -sSL https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_x86_64_
     rm plink2.zip && \
     plink2 --version
 
-# Install git
+# Install git & lftp
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-upgrade --no-install-recommends git
+    apt-get -qqy install --no-upgrade --no-install-recommends \
+        git \
+        lftp && \
+        apt-get clean
 
 # Install missing R libraries as necessary
 RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'

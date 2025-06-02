@@ -100,6 +100,33 @@ task ConcatVcfs {
 }
 
 
+task CopyGcpObjects {
+  input {
+    Array[File] files_to_copy
+    String destination
+    String gsutil_cp_options = ""
+  }
+
+  Int disk_gb = ceil(1.2 * size(files_to_copy, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    gsutil -m cp ~{gsutil_cp_options} "~{files_to_copy}" "~{destination}"
+  >>>
+
+  output {}
+
+  runtime {
+    docker: "google/cloud-sdk"
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 task CountRecordsInVcf {
   input {
     File vcf
@@ -138,6 +165,9 @@ task FtpDownload {
   input {
     String ftp_url
     String output_name
+
+    String lftp_docker
+    
     Int max_download_tries = 3
     Int disk_gb = 150
     Int n_cpu = 4
@@ -174,7 +204,7 @@ task FtpDownload {
   }
 
   runtime {
-    docker: "debian:bullseye"
+    docker: lftp_docker
     disks: "local-disk " + disk_gb + " HDD"
     cpu: n_cpu
     memory: mem_gb + " GB"
