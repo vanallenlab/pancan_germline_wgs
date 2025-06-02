@@ -49,9 +49,10 @@ workflow Preprocess1kgpVcfs {
 
   call MakeHeaderFiller {}
 
-  scatter ( i in range(contigs) ) {
+  scatter ( contig_info in zip(contigs, srwgs_snv_scatter_intervals) ) {
 
-    String contig = contigs[i]
+    String contig = contig_info.left
+    File snv_scatter_interval = contig_info.right
     String vcf_ftp_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix
 
     call Utils.FtpDownload as DownloadSrwgsSnvVcf {
@@ -72,16 +73,15 @@ workflow Preprocess1kgpVcfs {
 
     call Utils.ParseIntervals as MakeSrwgsSnvIntervals {
       input:
-        intervals_list = srwgs_snv_scatter_intervals[i],
-        docker = linux_docker
+        intervals_list = snv_scatter_interval,
+        docker = "marketplace.gcr.io/google/ubuntu1804"
     }
-
-    Array[Array[String]] srwgs_snv_interval_infos = MakeSrwgsSnvIntervals.interval_info
     
-    scatter ( snv_interval_info in srwgs_snv_interval_infos ) {
+    scatter ( snv_interval_info in MakeSrwgsSnvIntervals.interval_info ) {
 
+      String snv_vcf_shard_suffix = snv_interval_info[0]
       String snv_interval_coords = snv_interval_info[1]
-      String snv_shard_fname = basename(srwgs_snv_vcf, ".vcf.gz") + "." + snv_interval_info[0] ".vcf.gz"
+      String snv_shard_fname = "srwgs.snv." + contig + "." + snv_vcf_shard_suffix + ".vcf.gz"
 
       call CurateSrwgsSnvs {
         input:
@@ -182,18 +182,6 @@ task MakeHeaderFiller {
   }
 }
 
-call CurateSrwgsSnvs {
-  input:
-    vcf = srwgs_snv_vcf,
-    vcf_tbi = TabixSrwgsSnvVcf.tbi,
-    vcf_out_fname = snv_shard_fname,
-    interval = snv_interval_coords,
-    ref_fasta = ref_fasta,
-    ref_fasta_idx = ref_fasta_idx,
-    supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
-    g2c_pipeline_docker = g2c_pipeline_docker
-}
-
 
 task CurateSrwgsSnvs {
   input {
@@ -223,7 +211,7 @@ task CurateSrwgsSnvs {
     set -eu -o pipefail
 
     # Symlink vcf_idx to current working dir
-    ln -s ~{vcf_idx} .
+    ln -s ~{vcf_tbi} .
 
     # Stream VCF to interval of interest before filtering & cleaning VCF
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
