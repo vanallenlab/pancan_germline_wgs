@@ -77,7 +77,7 @@ task CurateSrwgsSvs {
 
   String out_tbi_fname = out_vcf_fname + ".tbi"
   Int disk_gb = ceil(3 * size(vcf, "GB")) + 10
-  String sample_subset_cmd = if defined(samples_list) then "--samples-file ~{basename(samples_list)} --force-samples" else ""
+  String sample_subset_cmd = if defined(samples_list) then "--samples-file ~{basename(select_first([samples_list]))} --force-samples" else ""
 
   command <<<
     set -eu -o pipefail
@@ -93,6 +93,7 @@ task CurateSrwgsSvs {
     | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools annotate --threads 2 --include 'AC>0 & AN>0' \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS,FILTER/MULTIALLELIC" \
+      -Oz -o "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
   >>>
 
@@ -125,7 +126,7 @@ task CurateLrwgsSvs {
 
   String out_tbi_fname = out_vcf_fname + ".tbi"
   Int disk_gb = ceil(3 * size(vcf, "GB")) + 10
-  String sample_subset_cmd = if defined(samples_list) then "--samples-file ~{basename(samples_list)} --force-samples" else ""
+  String sample_subset_cmd = if defined(samples_list) then "--samples-file ~{basename(select_first([samples_list]))} --force-samples" else ""
 
   command <<<
     set -eu -o pipefail

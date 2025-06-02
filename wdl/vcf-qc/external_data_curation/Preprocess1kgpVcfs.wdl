@@ -55,6 +55,7 @@ workflow Preprocess1kgpVcfs {
     String contig = contig_info.left
     File snv_scatter_interval = contig_info.right
     String vcf_ftp_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix
+    String tbi_ftp_url = srwgs_snv_vcf_prefix + contig + srwgs_snv_vcf_suffix + ".tbi"
 
     call Utils.FtpDownload as DownloadSrwgsSnvVcf {
       input:
@@ -64,13 +65,16 @@ workflow Preprocess1kgpVcfs {
         disk_gb = 200
     }
 
-    File srwgs_snv_vcf = DownloadSrwgsSnvVcf.downloaded_file
-
-    call Utils.MakeTabixIndex as TabixSrwgsSnvVcf {
+    call Utils.FtpDownload as DownloadSrwgsSnvTbi {
       input:
-        input_file = srwgs_snv_vcf,
-        docker = g2c_pipeline_docker
+        ftp_url = tbi_ftp_url,
+        output_name = basename(tbi_ftp_url),
+        lftp_docker = g2c_pipeline_docker,
+        disk_gb = 200
     }
+
+    File srwgs_snv_vcf = DownloadSrwgsSnvVcf.downloaded_file
+    File srwgs_snv_tbi = DownloadSrwgsSnvTbi.downloaded_file
 
     call Utils.ParseIntervals as MakeSrwgsSnvIntervals {
       input:
@@ -87,7 +91,7 @@ workflow Preprocess1kgpVcfs {
       call CurateSrwgsSnvs {
         input:
           vcf = srwgs_snv_vcf,
-          vcf_tbi = TabixSrwgsSnvVcf.tbi,
+          vcf_tbi = srwgs_snv_tbi,
           out_vcf_fname = snv_shard_fname,
           interval = snv_interval_coords,
           ref_fasta = ref_fasta,

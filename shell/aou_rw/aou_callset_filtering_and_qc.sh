@@ -151,7 +151,7 @@ for k in $( seq 1 22 ); do
   >> $staging_dir/gatkhc.tbis.uris.list
 done
 
-# Write input .json for short variant QC metric collection
+# Write input .json
 cat << EOF | python -m json.tool > cromshell/inputs/InferTwins.inputs.json
 {
   "InferTwins.ConcatVcfs.bcftools_concat_options": "--allow-overlaps",
@@ -216,7 +216,58 @@ gsutil -m cp \
 # Curate existing long-read and short-read WGS callsets for AoU samples #
 #########################################################################
 
-# TODO: implement this
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
+# Reaffirm staging directory
+staging_dir=staging/aou_benchmark_curation
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Collate list of AoU sample IDs corresponding to those samples present after variant calling
+gsutil -m cat \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+| gunzip -c \
+| awk -v FS="\t" -v OFS="\t" '{ if ($NF=="True" && $3=="aou") print $2 }' \
+> $staging_dir/aou_ids.present_after_calling.samples.list
+gsutil -m cp \
+  $staging_dir/aou_ids.present_after_calling.samples.list \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
+
+# Write input .json for SV curation workflow
+cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouSvs.inputs.json
+{
+ "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
+ "PreprocessAouSvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
+}
+EOF
+
+# Submit QC visualization workflow
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip g2c.dependencies.zip \
+  code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouSvs.wdl \
+  cromshell/inputs/PreprocessAouSvs.inputs.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list
+
+# Monitor QC visualization workflow
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list ) 2
+
+# # Once workflow is complete, stage output
+# cromshell -t 120 list-outputs \
+#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list ) \
+# | awk '{ print $2 }' \
+# | gsutil -m cp -I \
+#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/PlotQc/
+
+# # Clear Cromwell execution & output buckets for patch jobs
+# gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
+#                 | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
+#                   '{ print bucket_prefix$1"/**" }' ) \
+# > uris_to_delete.list
+# cleanup_garbage
+
+
+
 
 
 
@@ -419,7 +470,7 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
 }
 EOF
 
-# Submit, monitor, stage, and cleanup short variant QC metadata workflow
+# Submit, monitor, stage, and cleanup QC metadata workflow
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectVcfQcMetrics.inputs.template.json \
@@ -500,7 +551,7 @@ for k in $( seq 1 22 ) X Y; do
   done
 done
 
-# Write input .json for short variant QC metric collection
+# Write input .json
 cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json
 {
   "PlotVcfQcMetrics.af_distribution_tsvs": $( collapse_txt $staging_dir/af_distrib.uris.list ),

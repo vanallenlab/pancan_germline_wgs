@@ -112,7 +112,7 @@ task CopyGcpObjects {
   command <<<
     set -eu -o pipefail
 
-    gsutil -m cp ~{gsutil_cp_options} "~{files_to_copy}" "~{destination}"
+    gsutil -m cp ~{gsutil_cp_options} ~{sep=" " files_to_copy} "~{destination}"
   >>>
 
   output {}
