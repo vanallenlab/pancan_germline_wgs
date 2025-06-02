@@ -14,6 +14,7 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
+require(G2CR, quietly=TRUE)
 
 
 ###########

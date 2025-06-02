@@ -9,55 +9,6 @@
 version 1.0
 
 
-# Checks a VCF header for fields indicating that it might contain mCNVs
-task McnvHeaderCheck {
-  input {
-    File vcf
-    File vcf_idx
-    String docker
-  }
-
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    ln -s ~{vcf_idx} .
-
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-
-    bcftools view --header-only ~{vcf} > header.vcf
-
-    # Check for header rows potentially indicative of MCNVs
-    touch mcnv.header.vcf
-    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
-    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
-    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
-    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
-      echo "true" > has_mcnvs.txt
-    else
-      echo "false" > has_mcnvs.txt
-    fi
-  >>>
-
-  output {
-    Boolean has_mcnvs = read_boolean("has_mcnvs.txt")
-  }
-
-  runtime {
-    docker: docker
-    memory: "3.75 GB"
-    cpu: 2
-    disks: "local-disk 15 HDD"
-    preemptible: 3
-  }
-}
-
-
 task ConcatTextFiles {
   input {
     Array[File] shards
@@ -178,6 +129,55 @@ task CountRecordsInVcf {
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
+  }
+}
+
+
+# Generic task to efficiently download a file from an FTP server
+task FtpDownload {
+  input {
+    String ftp_url
+    String output_name
+    Int max_download_tries = 3
+    Int disk_gb = 150
+    Int n_cpu = 4
+    Float mem_gb = 8
+  }
+
+  command {
+    set -euo pipefail
+
+    echo "Downloading ${ftp_url} to ${output_name}"
+    
+    # Retry loop with up to 5 attempts
+    count=0
+    success=0
+
+    while [ $count -lt ~{max_download_tries} ]; do
+      echo "Attempt $((count+1))..."
+      lftp -c "set net:max-retries 2; set net:timeout 30; pget -n 8 -c ${ftp_url} -o ${output_name}" && success=1 && break
+      count=$((count+1))
+      echo "Attempt $count failed. Retrying..."
+      sleep 30
+    done
+
+    if [ $success -ne 1 ]; then
+      echo "Failed to download after ~{max_download_tries} attempts."
+      exit 1
+    fi
+
+    echo "Download completed successfully."
+  }
+
+  output {
+    File downloaded_file = output_name
+  }
+
+  runtime {
+    docker: "debian:bullseye"
+    disks: "local-disk " + disk_gb + " HDD"
+    cpu: n_cpu
+    memory: mem_gb + " GB"
   }
 }
 
@@ -310,6 +310,55 @@ task MakeTabixIndex {
     memory: "3.5 GB"
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Checks a VCF header for fields indicating that it might contain mCNVs
+task McnvHeaderCheck {
+  input {
+    File vcf
+    File vcf_idx
+    String docker
+  }
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    ln -s ~{vcf_idx} .
+
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    bcftools view --header-only ~{vcf} > header.vcf
+
+    # Check for header rows potentially indicative of MCNVs
+    touch mcnv.header.vcf
+    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
+    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
+    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
+    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
+      echo "true" > has_mcnvs.txt
+    else
+      echo "false" > has_mcnvs.txt
+    fi
+  >>>
+
+  output {
+    Boolean has_mcnvs = read_boolean("has_mcnvs.txt")
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 15 HDD"
     preemptible: 3
   }
 }

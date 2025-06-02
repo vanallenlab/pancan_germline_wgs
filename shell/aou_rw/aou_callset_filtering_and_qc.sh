@@ -229,8 +229,14 @@ gsutil -m cp \
 
 # Generate sampling probabilities
 code/scripts/assign_sample_qc_weights.R \
-  --qc-tsv dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
-  --
+  --qc-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --pass-column global_qc_pass \
+  --pass-column batch_qc_pass \
+  --pass-column clusterbatch_qc_pass \
+  --pass-column filtersites_qc_pass \
+  --pass-column gatksv_posthoc_qc_pass \
+  --pass-column gatkhc_posthoc_qc_pass \
+  --out-tsv $staging_dir/dfci-g2c.v1.qc.sample_weights.tsv
 
 # Extract list of sample IDs still present in callset at this stage
 zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
@@ -256,10 +262,79 @@ awk -v OFS="\n" '{ print $2, $3, $4 }' \
 | sort -V | uniq \
 > $staging_dir/dfci-g2c.reported_families.filtered.complete.samples.list
 
-# # Localize unfiltered list of candidate twins/replicates
-# gsutil -m cp \
-#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.kin0.gz \
-#   $staging_dir/
+# Find list of samples included in complete twin pairs
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.cleaned.kin0.gz \
+  $staging_dir/
+zcat $staging_dir/dfci-g2c.v1.cleaned.kin0.gz \
+| fgrep -v "#" | awk -v OFS="\t" '{ print "twins_"NR, $2, $4, 0, 0 }' \
+> $staging_dir/all_twins.fam
+code/scripts/subset_fam.R \
+  --in-fam $staging_dir/all_twins.fam \
+  --all-samples $staging_dir/g2c_ids.present_after_calling.samples.list \
+  --out-fam $staging_dir/all_twins.filtered.fam
+awk -v FS="\t" -v OFS="\n" '{ if ($2!=0 && $3!=0) print $2, $3 }' \
+  $staging_dir/all_twins.filtered.fam \
+| sort -V | uniq \
+> $staging_dir/dfci-g2c.inferred_twins.complete.samples.list
+
+# Get list of samples with complete HGSV long-read WGS calls
+# Supplement with twins/replicates, since these are equally useful for our purposes
+gsutil -m cat \
+  gs://dfci-g2c-refs/hgsv/dense_vcfs/lrwgs/snv_indel/1KGP.lrWGS.snv_indel.cleaned.chrY.vcf.gz \
+| gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
+> $staging_dir/1KGP.lrWGS.snv_indel.external_ids.tsv
+gsutil -m cat \
+  gs://dfci-g2c-refs/hgsv/dense_vcfs/lrwgs/sv/1KGP.lrWGS.sv.cleaned.chrY.vcf.gz \
+| gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
+> $staging_dir/1KGP.lrWGS.sv.external_ids.tsv
+fgrep -xf \
+  $staging_dir/1KGP.lrWGS.snv_indel.external_ids.tsv \
+  $staging_dir/1KGP.lrWGS.sv.external_ids.tsv \
+| sort | uniq \
+> $staging_dir/1KGP.lrWGS.complete.external_ids.tsv
+awk -v OFS="\t" '{ if ($3=="hgsvc") print $2, $1 }' \
+  $staging_dir/g2c_ids.present_after_calling.sample_cohort_map.tsv \
+| sort -k1,1 \
+| join -j 1 -t $'\t' - $staging_dir/1KGP.lrWGS.complete.external_ids.tsv \
+| cut -f2 | sort -V \
+> $staging_dir/1KGP.lrWGS.complete.g2c_ids.no_twins.samples.list
+zcat $staging_dir/dfci-g2c.v1.cleaned.kin0.gz | cut -f2,4 \
+| fgrep -wf $staging_dir/1KGP.lrWGS.complete.g2c_ids.no_twins.samples.list \
+| sed 's/\t/\n/g' \
+| cat - $staging_dir/1KGP.lrWGS.complete.g2c_ids.no_twins.samples.list \
+| sort -V | uniq \
+> $staging_dir/1KGP.lrWGS.complete.g2c_ids.samples.list
+
+# Get list of samples with complete AoU long-read WGS calls
+# Supplement with twins/replicates, since these are equally useful for our purposes
+# TODO: implement this
+
+# Combine lists of samples with lrWGS available from at least one source
+# TODO: implement this
+cp \
+  $staging_dir/1KGP.lrWGS.complete.g2c_ids.samples.list \
+  $staging_dir/dfci-g2c.lrWGS.complete.samples.list
+
+# Compute sample priority and append sampling probabilities
+cat \
+  $staging_dir/dfci-g2c.reported_families.filtered.complete.samples.list \
+  $staging_dir/dfci-g2c.inferred_twins.complete.samples.list \
+  $staging_dir/dfci-g2c.lrWGS.complete.samples.list \
+  $staging_dir/g2c_ids.present_after_calling.samples.list \
+| sort -V | uniq -c | awk -v OFS="\t" '{ print $2, $1 }' | sort -k1,1 \
+| join -j 1 -t $'\t' \
+  - <( sort -k1,1 $staging_dir/dfci-g2c.v1.qc.sample_weights.tsv ) \
+| sort -nrk2,2 -k3,3nr -k1,1V \
+| cat <( echo -e "#G2C_ID\tpriority\tweight" ) - \
+> $staging_dir/dfci-g2c.v1.sample_qc_priority.tsv
+
+
+#####################################
+# Build inter-cohort sample ID maps #
+#####################################
+
+# TODO: implement this
 
 # # Build map of sample IDs for 1KGP srWGS short variants
 # gsutil -m cat \
@@ -268,25 +343,6 @@ awk -v OFS="\n" '{ print $2, $3, $4 }' \
 # > $staging_dir/1KGP.srWGS.snv_indel.external_ids.tsv
 # # TODO: write script to make alias table, accounting for putative twins
 
-# 1KGP - srWGS - SVs
-## Find overlapping sample IDs
-# TODO: implement this
-## Submit VCF slicing task
-# TODO: implement this
-
-# 1KGP - lrWGS - short variants
-## Find overlapping sample IDs
-# TODO: implement this
-## Submit VCF slicing task
-# TODO: implement this
-
-# 1KGP - lrWGS - SVs
-## Find overlapping sample IDs
-# TODO: implement this
-## Submit VCF slicing task
-# TODO: implement this
-
-# TODO: add other cohorts here
 
 ##############################
 # Collect initial QC metrics #
