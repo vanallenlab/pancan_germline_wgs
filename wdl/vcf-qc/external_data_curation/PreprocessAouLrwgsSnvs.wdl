@@ -81,6 +81,7 @@ task CleanSnvs {
 
   Int default_disk_gb = ceil(2.5 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
+  Float sort_mem = 0.6 * mem_gb
 
   command <<<
     set -eu -o pipefail
@@ -98,7 +99,7 @@ task CleanSnvs {
     | bcftools +fill-tags \
     | bcftools annotate --threads 2 \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT" \
-      -Oz -o "~{outfile_name}"
+    | bcftools sort -m ~{sort_mem}G -Oz -o "~{outfile_name}"
     tabix -f -p vcf "~{outfile_name}"
   >>>
 

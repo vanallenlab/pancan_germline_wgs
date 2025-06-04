@@ -298,7 +298,7 @@ cromshell --no_turtle -t 120 -mc submit \
 >> cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list
 
 # Monitor lrWGS SNV/indel curation workflow
-monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 10
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 2
 
 # Stage lrWGS short variants once curated
 # TODO: implement this
