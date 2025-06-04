@@ -281,10 +281,10 @@ cleanup_garbage
 # Write input .json for lrWGS SNV/indel curation
 cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouLrwgsSnvs.inputs.json
 {
- "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
+ "PreprocessAouLrwgsSnvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
  "PreprocessAouLrwgsSnvs.ref_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
  "PreprocessAouLrwgsSnvs.ref_fasta_idx" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
- "PreprocessAouSvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
+ "PreprocessAouLrwgsSnvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
 }
 EOF
 
@@ -298,7 +298,7 @@ cromshell --no_turtle -t 120 -mc submit \
 >> cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list
 
 # Monitor lrWGS SNV/indel curation workflow
-monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 2
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 10
 
 # Stage lrWGS short variants once curated
 # TODO: implement this

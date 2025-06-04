@@ -79,28 +79,18 @@ task CleanSnvs {
 
   String samples_cmd = if defined(samples_list) then "--samples-file ~{basename(select_first([samples_list]))} --force-samples" else ""
 
-  Int default_disk_gb = ceil(size(vcf, "GB")) + 10
+  Int default_disk_gb = ceil(2.5 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
-
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
 
   command <<<
     set -eu -o pipefail
-
-    # Symlink vcf_idx to current working dir
-    ln -s ~{vcf_idx} .
 
     # Localize samples list to pwd if provided
     if [ ~{defined(samples_list)} ]; then
       cp ~{samples_list} ./
     fi
 
-    # Stream VCF to interval of interest
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    # Filter & clean SNVs & indels
     bcftools view --regions "~{contig}" ~{samples_cmd} ~{vcf} \
     | bcftools norm -m -any -f ~{ref_fasta} -c s --threads ~{n_cpu} \
     | bcftools view -c 1 \
