@@ -560,6 +560,8 @@ task StreamSliceVcf {
     File vcf_idx
     String interval
 
+    File? samples_list
+
     String? outfile_name
     
     Int? disk_gb
@@ -570,6 +572,8 @@ task StreamSliceVcf {
   }
 
   String outfile = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".sliced.vcf.gz"])
+
+  String samples_cmd = if defined(samples_list) then "--samples-file ~{basename(select_first([samples_list]))} --force-samples" else ""
 
   Int default_disk_gb = ceil(size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
@@ -596,11 +600,14 @@ task StreamSliceVcf {
     # Symlink vcf_idx to current working dir
     ln -s ~{vcf_idx} .
 
+    # Localize samples list to pwd if provided
+    if [ ~{defined(samples_list)} ]; then
+      cp ~{samples_list} ./
+    fi
+
     # Stream VCF to interval of interest
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    bcftools view \
-      --regions "~{interval}" \
-      ~{vcf} \
+    bcftools view --regions "~{interval}" ~{samples_cmd} ~{vcf} \
     | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
       '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
     | bcftools view -Oz -o "~{outfile}"

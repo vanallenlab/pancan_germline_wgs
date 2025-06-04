@@ -118,7 +118,9 @@ def determine_filetype(path, return_extension=False):
                 'compressed-fasta' : '.fa.gz .fa.gzip .fasta.gz .fasta.gzip'.split(),
                 'hic' : ['hic'],
                 'gtf' : ['gtf'],
-                'compressed-gtf' : ['gtf.gz']}
+                'compressed-gtf' : ['gtf.gz'],
+                'gatk-interval-list' : '.intervals',
+                'picard-interval-list' : '.interval_list'}
 
     for ftype, suffs in suf_dict.items():
         suf_hits = [s for s in suffs if path.endswith(s)]

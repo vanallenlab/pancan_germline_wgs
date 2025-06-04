@@ -240,7 +240,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouSvs.inputs.json
 }
 EOF
 
-# Submit QC visualization workflow
+# Submit SV curation workflow
 cromshell --no_turtle -t 120 -mc submit \
   --options-json code/refs/json/aou.cromwell_options.default.json \
   --dependencies-zip g2c.dependencies.zip \
@@ -249,26 +249,64 @@ cromshell --no_turtle -t 120 -mc submit \
 | jq .id | tr -d '"' \
 >> cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list
 
-# Monitor QC visualization workflow
+# Monitor SV curation workflow
 monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list ) 2
 
-# # Once workflow is complete, stage output
-# cromshell -t 120 list-outputs \
-#   $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list ) \
-# | awk '{ print $2 }' \
-# | gsutil -m cp -I \
-#   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/PlotQc/
+# Once workflow is complete, stage output
+cromshell -t 120 list-outputs --json-summary \
+  $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list ) \
+| python -m json.tool \
+> $staging_dir/PreprocessAouSvs.outputs.json
+cat \
+  <( jq .\"PreprocessAouSvs.cleaned_lrwgs_vcf_idxs\" $staging_dir/PreprocessAouSvs.outputs.json ) \
+  <( jq .\"PreprocessAouSvs.cleaned_lrwgs_vcfs\" $staging_dir/PreprocessAouSvs.outputs.json ) \
+| awk '{ print $1 }' | tr -d '[]",' | sed '/^$/d' \
+| gsutil -m cp -I $MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/lrwgs/sv/
+cat \
+  <( jq .\"PreprocessAouSvs.cleaned_srwgs_vcf_idxs\" $staging_dir/PreprocessAouSvs.outputs.json ) \
+  <( jq .\"PreprocessAouSvs.cleaned_srwgs_vcfs\" $staging_dir/PreprocessAouSvs.outputs.json ) \
+| awk '{ print $1 }' | tr -d '[]",' | sed '/^$/d' \
+| gsutil -m cp -I $MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/srwgs/sv/
 
-# # Clear Cromwell execution & output buckets for patch jobs
-# gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
-#                 | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
-#                   '{ print bucket_prefix$1"/**" }' ) \
-# > uris_to_delete.list
-# cleanup_garbage
+# Clear Cromwell execution & output buckets for SV curation workflow
+gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.PreprocessAouSvs.job_ids.list \
+                | awk \
+                  -v exec_prefix="$WORKSPACE_BUCKET/cromwell-execution/PreprocessAouSvs/" \
+                  -v out_prefix="$WORKSPACE_BUCKET/cromwell/outputs/PreprocessAouSvs/" \
+                  -v OFS="\n" \
+                  '{ print exec_prefix$1"/**", out_prefix$1"/**" }' ) \
+> uris_to_delete.list
+cleanup_garbage
 
+# Write input .json for lrWGS SNV/indel curation
+cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouLrwgsSnvs.inputs.json
+{
+ "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
+ "PreprocessAouLrwgsSnvs.ref_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+ "PreprocessAouLrwgsSnvs.ref_fasta_idx" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+ "PreprocessAouSvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
+}
+EOF
 
+# Submit lrWGS SNV/indel curation workflow
+cromshell --no_turtle -t 120 -mc submit \
+  --options-json code/refs/json/aou.cromwell_options.default.json \
+  --dependencies-zip g2c.dependencies.zip \
+  code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouLrwgsSnvs.wdl \
+  cromshell/inputs/PreprocessAouLrwgsSnvs.inputs.json \
+| jq .id | tr -d '"' \
+>> cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list
 
+# Monitor lrWGS SNV/indel curation workflow
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 2
 
+# Stage lrWGS short variants once curated
+# TODO: implement this
+
+# Clean up execution bucket for lrWGS short variant curation
+# TODO: implement this
+
+# TODO: curate SNVs and indels for srWGS
 
 
 ###############################################################

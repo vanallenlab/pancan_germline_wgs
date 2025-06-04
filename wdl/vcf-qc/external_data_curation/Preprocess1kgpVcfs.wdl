@@ -106,7 +106,7 @@ workflow Preprocess1kgpVcfs {
         vcfs = CurateSrwgsSnvs.vcf_out,
         vcf_idxs = CurateSrwgsSnvs.tbi_out,
         out_prefix = "1KGP.srWGS.snv_indel.cleaned." + contig + ".vcf.gz",
-        bcftools_concat_options = "--naive --threads 2",
+        bcftools_concat_options = "--allow-overlaps --threads 2",
         bcftools_docker = g2c_pipeline_docker
     }
 
@@ -168,25 +168,20 @@ task CurateSrwgsSnvs {
     File supp_vcf_header
 
     String g2c_pipeline_docker
-    Int disk_gb = 300
   }
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
+  Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
   String out_tbi_fname = out_vcf_fname + ".tbi"
 
   command <<<
     set -eu -o pipefail
 
-    # Symlink vcf_idx to current working dir
-    ln -s ~{vcf_tbi} .
+    # Need to copy VCF index to same directory as VCF on VM
+    # This is due to a weird interaction between how Cromwell localizes input files
+    # and where bcftools searches for index files
+    cp ~{vcf_tbi} ~{vcf}.tbi
 
-    # Stream VCF to interval of interest before filtering & cleaning VCF
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    # Filter & clean VCF
     bcftools view --regions "~{interval}" ~{vcf} \
     | bcftools norm -m -any -f ~{ref_fasta} -c s --threads 2 \
     | bcftools view -f PASS -c 1 \

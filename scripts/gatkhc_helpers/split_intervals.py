@@ -19,6 +19,7 @@ import gzip
 import numpy as np
 import pandas as pd
 import pybedtools as pbt
+import re
 from g2cpy import chrom2int, determine_filetype
 from sys import stdin, stdout
 from pysam import TabixFile
@@ -272,7 +273,10 @@ def main():
         # Store input intervals as tuples of (interval size, list of fields)
         # or as strings for pbt.BedTool, depending on split_mode
         else:
-            fields = line.rstrip().split()
+            if '\t' in line:
+                fields = line.rstrip().split()
+            else:
+                fields = re.split('[:-]', line.rstrip())
             if split_mode == 'density':
                 int_list.append('\t'.join(fields[:3]))
             else:
