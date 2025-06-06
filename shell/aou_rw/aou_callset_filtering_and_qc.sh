@@ -145,7 +145,6 @@ for k in $( seq 1 22 ); do
   | sed 's/,/\n/g' | tr -d '[]"' | sed '/^$/d' | awk '{ print $1 }' \
   >> $staging_dir/gatkhc.vcfs.uris.list
   
-  
   jq .filtered_vcf_idxs $staging_dir/$json_fname \
   | sed 's/,/\n/g' | tr -d '[]"' | sed '/^$/d' | awk '{ print $1 }' \
   >> $staging_dir/gatkhc.tbis.uris.list
@@ -493,13 +492,38 @@ zcat $staging_dir/dfci-g2c.v1.cleaned.kin0.gz | cut -f2,4 \
 
 # Get list of samples with complete AoU long-read WGS calls
 # Supplement with twins/replicates, since these are equally useful for our purposes
-# TODO: implement this
+gsutil -m cat \
+  $MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/lrwgs/snv_indel/AoU.lrWGS.snv_indel.cleaned.chrY.vcf.gz \
+| gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
+> $staging_dir/AoU.lrWGS.snv_indel.external_ids.tsv
+gsutil -m cat \
+  $MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/lrwgs/sv/AoU.lrWGS.sv.cleaned.chrY.vcf.gz \
+| gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
+> $staging_dir/AoU.lrWGS.sv.external_ids.tsv
+fgrep -xf \
+  $staging_dir/AoU.lrWGS.snv_indel.external_ids.tsv \
+  $staging_dir/AoU.lrWGS.sv.external_ids.tsv \
+| sort | uniq \
+> $staging_dir/AoU.lrWGS.complete.external_ids.tsv
+awk -v OFS="\t" '{ if ($3=="aou") print $2, $1 }' \
+  $staging_dir/g2c_ids.present_after_calling.sample_cohort_map.tsv \
+| sort -k1,1 \
+| join -j 1 -t $'\t' - $staging_dir/AoU.lrWGS.complete.external_ids.tsv \
+| cut -f2 | sort -V \
+> $staging_dir/AoU.lrWGS.complete.g2c_ids.no_twins.samples.list
+zcat $staging_dir/dfci-g2c.v1.cleaned.kin0.gz | cut -f2,4 \
+| fgrep -wf $staging_dir/AoU.lrWGS.complete.g2c_ids.no_twins.samples.list \
+| sed 's/\t/\n/g' \
+| cat - $staging_dir/AoU.lrWGS.complete.g2c_ids.no_twins.samples.list \
+| sort -V | uniq \
+> $staging_dir/AoU.lrWGS.complete.g2c_ids.samples.list
 
 # Combine lists of samples with lrWGS available from at least one source
-# TODO: implement this
-cp \
+cat \
   $staging_dir/1KGP.lrWGS.complete.g2c_ids.samples.list \
-  $staging_dir/dfci-g2c.lrWGS.complete.samples.list
+  $staging_dir/AoU.lrWGS.complete.g2c_ids.samples.list \
+| sort -V | uniq \
+> $staging_dir/dfci-g2c.lrWGS.complete.samples.list
 
 # Compute sample priority and append sampling probabilities
 cat \
@@ -519,14 +543,37 @@ cat \
 # Build inter-cohort sample ID maps #
 #####################################
 
-# TODO: implement this
+# Note: this only needs to be run once for the entire cohort across all workspaces
 
-# # Build map of sample IDs for 1KGP srWGS short variants
-# gsutil -m cat \
-#   gs://dfci-g2c-refs/hgsv/dense_vcfs/srwgs/snv_indel/1KGP.srWGS.snv_indel.cleaned.chrY.vcf.gz \
-# | gunzip -c | head -n10000 | fgrep "#" | bcftools query -l \
-# > $staging_dir/1KGP.srWGS.snv_indel.external_ids.tsv
-# # TODO: write script to make alias table, accounting for putative twins
+# Reaffirm staging directory
+staging_dir=staging/external_id_maps
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Localize most up-to-date sample QC manifest & cleaned twins
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/InferTwins/dfci-g2c.v1.cleaned.kin0.gz \
+  $staging_dir/
+
+# Build map of sample IDs for 1KGP (accounting for external twins/replicates)
+code/scripts/make_id_map.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --cohort hgsvc \
+  --twins $staging_dir/dfci-g2c.v1.cleaned.kin0.gz \
+  --out-tsv $staging_dir/dfci-g2c.v1.1KGP_id_map.tsv
+
+# Build map of sample IDs for AoU (accounting for external twins/replicates)
+code/scripts/make_id_map.R \
+  --metadata-tsv $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  --cohort aou \
+  --twins $staging_dir/dfci-g2c.v1.cleaned.kin0.gz \
+  --out-tsv $staging_dir/dfci-g2c.v1.AoU_id_map.tsv
+
+# Copy ID maps to reference directory
+gsutil -m cp \
+  $staging_dir/dfci-g2c.v1.1KGP_id_map.tsv \
+  $staging_dir/dfci-g2c.v1.AoU_id_map.tsv \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
 
 
 ##############################
