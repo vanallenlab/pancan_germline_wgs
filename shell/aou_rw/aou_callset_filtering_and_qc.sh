@@ -232,11 +232,48 @@ gsutil -m cp \
   $staging_dir/aou_ids.present_after_calling.samples.list \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
 
+# Exclude samples that failed srWGS snv/indel QC from srWGS consideration
+gsutil -u $GPROJECT -m cat \
+  gs://fc-aou-datasets-controlled/v8/wgs/short_read/snpindel/aux/qc/flagged_samples.tsv \
+| sed '1d' | cut -f1 \
+| fgrep -xvf - $staging_dir/aou_ids.present_after_calling.samples.list \
+> $staging_dir/aou_ids.present_after_calling.no_srwgs_flagged.samples.list
+gsutil -m cp \
+  $staging_dir/aou_ids.present_after_calling.no_srwgs_flagged.samples.list \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
+
+# Find intersection of samples that have both short variants and SVs from lrWGS
+# and were also present at the end of G2C variant calling
+gsutil -u $GPROJECT -m cat \
+  gs://fc-aou-datasets-controlled/v7/wgs/long_read/joint_vcf/GRCh38/cohort_for_GLNexus_2023Q1_1027.g.vcf.bgz \
+| gunzip -c | head -n5000 | bcftools query -l \
+> $staging_dir/aou.lrwgs.snv_indel.samples.list
+gsutil -u $GPROJECT -m cat \
+  gs://fc-aou-datasets-controlled/v7/wgs/long_read/joint_sv/GRCh38/integrated_sv_with_hprc_year_1_more_stringent.vcf.gz \
+| gunzip -c | head -n5000 | bcftools query -l \
+> $staging_dir/aou.lrwgs.sv.samples.list
+fgrep -xf \
+  $staging_dir/aou.lrwgs.snv_indel.samples.list \
+  $staging_dir/aou.lrwgs.sv.samples.list \
+| sort -V | uniq \
+> $staging_dir/aou.lrwgs.has_complete_variation.samples.list
+gsutil -m cp \
+  $staging_dir/aou.lrwgs.has_complete_variation.samples.list \
+  $MAIN_WORKSPACE_BUCKET/refs/aou/
+fgrep -xf \
+  $staging_dir/aou.lrwgs.has_complete_variation.samples.list \
+  $staging_dir/aou_ids.present_after_calling.samples.list \
+> $staging_dir/aou_ids.present_after_calling.complete_lrwgs.samples.list
+gsutil -m cp \
+  $staging_dir/aou_ids.present_after_calling.complete_lrwgs.samples.list \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
+
 # Write input .json for SV curation workflow
 cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouSvs.inputs.json
 {
  "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
- "PreprocessAouSvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
+ "PreprocessAouSvs.srwgs_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.no_srwgs_flagged.samples.list",
+ "PreprocessAouSvs.lrwgs_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.complete_lrwgs.samples.list"
 }
 EOF
 
@@ -284,7 +321,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouLrwgsSnvs.input
  "PreprocessAouLrwgsSnvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
  "PreprocessAouLrwgsSnvs.ref_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
  "PreprocessAouLrwgsSnvs.ref_fasta_idx" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
- "PreprocessAouLrwgsSnvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.samples.list"
+ "PreprocessAouLrwgsSnvs.samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.complete_lrwgs.samples.list"
 }
 EOF
 
@@ -354,9 +391,10 @@ code/scripts/manage_chromshards.py \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $WORKSPACE_BUCKET/scratch/ \
   --name IndexAouSrwgsSnvs \
-  --contig-list <( echo "chr22" ) \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.IndexAouSrwgsSnvs.initial_qc.progress.tsv \
-  --workflow-id-log-prefix "dfci-g2c.v1"
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --max-attempts 4
 
 
 ###############################################################

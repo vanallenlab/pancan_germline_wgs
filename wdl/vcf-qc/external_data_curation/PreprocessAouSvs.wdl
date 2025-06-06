@@ -18,7 +18,8 @@ workflow PreprocessAouSvs {
     File lrwgs_vcf = "gs://fc-aou-datasets-controlled/v7/wgs/long_read/joint_sv/GRCh38/integrated_sv_with_hprc_year_1_more_stringent.vcf.gz"
     File lrwgs_vcf_idx = "gs://fc-aou-datasets-controlled/v7/wgs/long_read/joint_sv/GRCh38/integrated_sv_with_hprc_year_1_more_stringent.vcf.gz.tbi"
 
-    File? samples_list
+    File? srwgs_samples_list
+    File? lrwgs_samples_list
 
     Array[String] contigs = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", 
                              "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", 
@@ -38,7 +39,7 @@ workflow PreprocessAouSvs {
         vcf = srwgs_vcf_prefix + "." + contig + ".vcf.gz",
         vcf_idx = srwgs_vcf_prefix + "." + contig + ".vcf.gz.tbi",
         out_vcf_fname = "AoU.srWGS.sv.cleaned." + contig + ".vcf.gz",
-        samples_list = samples_list,
+        samples_list = srwgs_samples_list,
         supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
         g2c_pipeline_docker = g2c_pipeline_docker
     }
@@ -50,7 +51,7 @@ workflow PreprocessAouSvs {
         vcf_idx = lrwgs_vcf_idx,
         out_vcf_fname = "AoU.lrWGS.sv.cleaned." + contig + ".vcf.gz",
         contig = contig,
-        samples_list = samples_list,
+        samples_list = lrwgs_samples_list,
         supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
         g2c_pipeline_docker = g2c_pipeline_docker
     }
