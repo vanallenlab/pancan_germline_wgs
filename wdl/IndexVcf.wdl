@@ -9,8 +9,8 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Utilities
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/IndexBam.wdl" as IndexBam
+import "Utilities.wdl" as Utilities
+import "IndexBam.wdl" as IndexBam
 
 
 workflow IndexVcf {

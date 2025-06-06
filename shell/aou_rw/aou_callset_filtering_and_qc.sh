@@ -298,15 +298,65 @@ cromshell --no_turtle -t 120 -mc submit \
 >> cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list
 
 # Monitor lrWGS SNV/indel curation workflow
-monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 2
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) 5
 
 # Stage lrWGS short variants once curated
-# TODO: implement this
+cromshell -t 120 list-outputs \
+$( tail -n1 cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list ) \
+| awk '{ print $2 }' \
+| gsutil -m cp -I \
+  $MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/lrwgs/snv_indel/
 
 # Clean up execution bucket for lrWGS short variant curation
-# TODO: implement this
+gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.PreprocessAouLrwgsSnvs.job_ids.list \
+                | awk \
+                  -v exec_prefix="$WORKSPACE_BUCKET/cromwell-execution/PreprocessAouLrwgsSnvs/" \
+                  -v out_prefix="$WORKSPACE_BUCKET/cromwell/outputs/PreprocessAouLrwgsSnvs/" \
+                  -v OFS="\n" \
+                  '{ print exec_prefix$1"/**", out_prefix$1"/**" }' ) \
+> uris_to_delete.list
+cleanup_garbage
 
-# TODO: curate SNVs and indels for srWGS
+# Gather list of AoU samples that had SV data (this is not the entire cohort)
+gsutil -m cat \
+  gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45/refs/aou/dense_vcfs/srwgs/sv/AoU.srWGS.sv.cleaned.chr22.vcf.gz \
+| gunzip -c | head -n5000 | bcftools query -l \
+> $staging_dir/AoU.G2C_samples_with_srWGS_sv.aou_ids.list
+gsutil -m cp \
+  $staging_dir/AoU.G2C_samples_with_srWGS_sv.aou_ids.list \
+  $MAIN_WORKSPACE_BUCKET/refs/aou/
+
+# Write desired header for srWGS SNV/indel output VCFs
+gsutil -m cat \
+  gs://dfci-g2c-refs/hgsv/dense_vcfs/srwgs/snv_indel/1KGP.srWGS.snv_indel.cleaned.chr1.vcf.gz.vcf.gz \
+| gunzip -c | head -n5000 | fgrep "##" \
+> $staging_dir/AoU.srwgs.snv_indel_header.vcf
+
+# Important note: raw AoU srWGS SNV/indel curation is documented elsewhere
+# This is due to the need to manipulate the raw callset in Hail .vds format,
+# which needs to be run on a dedicated Hail dataproc spark cluster
+# See: pancan_germline_wgs/shell/aou_rw/extract_aou_srwgs_short_variants.sh
+
+# Index AoU srWGS short variants after extraction from the overall VDS (see above)
+
+# Write template input .json for srWGS short variant indexing
+cat << EOF > $staging_dir/IndexAouSrwgsSnvs.inputs.template.json
+{
+  "IndexVcf.copy_index_to_vcf_bucket": true,
+  "IndexVcf.vcf": "$MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/srwgs/snv_indel/AoU.srWGS.snv_indel.cleaned.\$CONTIG.vcf.bgz"
+}
+EOF
+
+# Submit, monitor, stage, and cleanup AoU srWGS short variant indexing workflows
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/pancan_germline_wgs/IndexVcf.wdl \
+  --input-json-template $staging_dir/IndexAouSrwgsSnvs.inputs.template.json \
+  --dependencies-zip g2c.dependencies.zip \
+  --staging-bucket $WORKSPACE_BUCKET/scratch/ \
+  --name IndexAouSrwgsSnvs \
+  --contig-list <( echo "chr22" ) \
+  --status-tsv cromshell/progress/dfci-g2c.v1.IndexAouSrwgsSnvs.initial_qc.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1"
 
 
 ###############################################################

@@ -316,6 +316,8 @@ task MakeTabixIndex {
     File input_file
     String file_type = "vcf"
     String docker
+    Int n_cpu = 2
+    Float mem_gb = 3.5
   }
 
   String outfile = basename(input_file, "gz") + "gz.tbi"
