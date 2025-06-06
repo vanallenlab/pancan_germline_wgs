@@ -31,8 +31,7 @@ workflow IndexVcf {
       input:
         bai = IndexVcf.tbi,
         bam = vcf,
-        suffix = "tbi",
-        docker = docker
+        suffix = "tbi"
     }
   }
   
