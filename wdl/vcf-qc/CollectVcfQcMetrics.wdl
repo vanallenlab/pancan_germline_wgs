@@ -19,31 +19,43 @@ workflow CollectVcfQcMetrics {
     Array[File] vcfs
     Array[File] vcf_idxs
 
-    File? trios_fam_file                        # .fam file of known families for Mendelian transmission analyses
-    File? sample_priority_list                  # Rank-ordered list of samples to retain for sample-level analyses
-    Int n_for_sample_level_analyses = 1000      # Number of samples to use for sample-level summary analyses
+    Boolean shard_vcf = true                       # Should the input VCF be sharded for QC collection?
+    File? scatter_intervals_list                   # GATK-style intervals file for scattering over vcf 
+                                                   # (any tabix-compliant interval definitions should work)
+    Int n_records_per_shard = 25000                # Number of records per shard. This will only be used as a backup if 
+                                                   # scatter_intervals_list is not provided and shard_vcf is true
+    String? extra_vcf_preprocessing_commands       # Optional string of extra shell commands to execute when preprocessing
+                                                   # main input vcfs. This will automatically be prefixed by a pipe so should
+                                                   # be supplied as a chain of bash commands that could be inserted into
+                                                   # an existing bash command as reading from stdin and writing to stdout
 
-    Boolean shard_vcf = true                    # Should the input VCF be sharded for QC collection?
-    File? scatter_intervals_list                # GATK-style intervals file for scattering over vcf 
-                                                # (any tabix-compliant interval definitions should work)
-    Int n_records_per_shard = 25000             # Number of records per shard. This will only be used as a backup if 
-                                                # scatter_intervals_list is not provided and shard_vcf is true
-    String? extra_vcf_preprocessing_commands    # Optional string of extra shell commands to execute when preprocessing
-                                                # input vcfs. This will automatically be prefixed by a pipe so should
-                                                # be supplied as a chain of bash commands that could be inserted into
-                                                # an existing bash command as reading from stdin and writing to stdout
+    Float common_af_cutoff = 0.01                  # Minimum AF for a variant to be included in common variant subsets
 
-    Float common_af_cutoff = 0.01               # Minimum AF for a variant to be included in common variant subsets
+    File? trios_fam_file                           # .fam file of trios for Mendelian transmission analyses
+    File? twins_tsv                                # Two-column .tsv with pairs of IDs for technical replicates or identical twins
+    File? sample_priority_tsv                      # Three-column .tsv of sample ID, priority tier (integer), and sampling weight (float)
+                                                   # This file will be used in conjunction with n_for_sample_level_analyses
+                                                   # to determine which samples will be retained for sample-level analyses
+    Int n_for_sample_level_analyses = 1000         # Number of samples to use for sample-level summary analyses
 
-    Array[File?] snv_site_benchmark_beds        # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File?] indel_site_benchmark_beds      # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File?] sv_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] snv_site_benchmark_beds           # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] indel_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] sv_site_benchmark_beds            # BED files for SNV site benchmarking; one per reference dataset or cohort
     Array[String?] site_benchmark_dataset_names
 
-    Array[File]? benchmark_interval_beds        # BED files of intervals to consider for benchmarking evaluation
-    Array[String]? benchmark_interval_bed_names # Descriptive names for each set of evaluation intervals
-    File? genome_file                           # BEDTools-style .genome file
-    Int benchmarking_shards = 2500              # Number of parallel tasks to use for site benchmarking
+    Array[Array[File?]] sample_benchmark_vcfs      # VCFs to use for sample-level genotype benchmarking. Each outer array corresponds
+                                                   # to a single dataset or technology/modality. Each inner array can have any number
+                                                   # of VCFs; each of these VCFs will be benchmarked in parallel and their results
+                                                   # will be concatenated within each sample
+    Array[Array[File?]] sample_benchmark_vcf_idxs  # Tabix indexes for each VCF in sample_benchmark_vcfs; order must match.
+    Array[Array[File?]] sample_benchmark_id_maps   # Two-column .tsv mapping IDs in main input VCF to each VCF in sample_benchmark_vcfs
+                                                   # One id_map must be provided for each VCF in sample_benchmark_vcfs
+    Array[String?] sample_benchmark_dataset_names
+
+    Array[File]? benchmark_interval_beds           # BED files of intervals to consider for benchmarking evaluation
+    Array[String]? benchmark_interval_bed_names    # Descriptive names for each set of evaluation intervals
+    File? genome_file                              # BEDTools-style .genome file
+    Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site benchmarking
 
     String output_prefix
 
@@ -67,7 +79,7 @@ workflow CollectVcfQcMetrics {
   }
 
   # Clean input .fam file to retain only complete trios
-  if( defined(trios_fam_file) ) {
+  if ( defined(trios_fam_file) ) {
     call CleanFam {
       input:
         fam_file = select_first([trios_fam_file]),
@@ -75,17 +87,27 @@ workflow CollectVcfQcMetrics {
         docker = g2c_analysis_docker
     }
   }
-  File all_qc_samples_list = select_first([CleanFam.all_samples_no_probands_list,
-                                           GetSamplesInVcf.sample_list])
+
+  # Clean input twins file to retain only complete pairs
+  if ( defined(twins_tsv) ) {
+    call CleanTwins {
+      input:
+        twins_tsv = select_first([twins_tsv]),
+        all_samples_list = GetSamplesInVcf.sample_list,
+        docker = g2c_analysis_docker
+    }
+  }
 
   # Define list of samples to use for sample-specific analyses
   call ChooseTargetSamples {
     input:
-      all_samples_list = all_qc_samples_list,
-      sample_priority_list = sample_priority_list,
+      all_samples_list = GetSamplesInVcf.sample_list,
+      probands_list = CleanFam.probands_list,
+      duplicate_samples_list = CleanTwins.duplicate_samples_list,
+      sample_priority_tsv = sample_priority_tsv,
       n_samples = n_for_sample_level_analyses,
       out_prefix = output_prefix,
-      docker = bcftools_docker
+      g2c_analysis_docker = g2c_analysis_docker
   }
 
   #####################
@@ -197,7 +219,7 @@ workflow CollectVcfQcMetrics {
       input:
         vcf = shard_info.left,
         vcf_idx = shard_info.right,
-        n_samples = ChooseTargetSamples.n_samples_all,
+        n_samples = ChooseTargetSamples.n_unrelated_samples,
         common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }
@@ -418,7 +440,6 @@ task CleanFam {
 
   String fam_out_fname = basename(fam_file, ".fam") + ".cleaned_trios.fam"
   String proband_out_fname = basename(fam_file, ".fam") + ".proband_ids.list"
-  String unrelated_out_fname = basename(all_samples_list) + ".no_probands.list"
   String trio_samples_out_fname = basename(fam_file, ".fam") + ".trio_samples.list"
   
   command <<<
@@ -433,15 +454,9 @@ task CleanFam {
     # Write list of all probands (can exclude these samples for better AF estimates)
     cut -f1 duos_and_trios.fam > "~{proband_out_fname}"
 
-    # Remove probands from list of all samples (same rationale as above)
-    fgrep \
-      -xvf "~{proband_out_fname}" \
-      ~{all_samples_list} \
-    > "~{unrelated_out_fname}"
-
     # Further restrict .fam to complete trios
     awk -v FS="\t" -v OFS="\t" \
-      '{ if ($3!=0 && $4!=0) print }' \
+      '{ if ($2!=0 && $3!=0 && $4!=0) print }' \
       duos_and_trios.fam \
     > "~{fam_out_fname}"
 
@@ -453,7 +468,6 @@ task CleanFam {
   output {
     File trios_fam = "~{fam_out_fname}"
     File probands_list = "~{proband_out_fname}"
-    File all_samples_no_probands_list = "~{unrelated_out_fname}"
     File trio_samples_list = "~{trio_samples_out_fname}"
   }
 
@@ -467,57 +481,118 @@ task CleanFam {
 }
 
 
-# Define list of "target" samples to use for sample-based analyses
-task ChooseTargetSamples {
+# Clean input .tsv file to restrict to complete twin pairs present in input VCF
+task CleanTwins {
   input {
+    File twins_tsv
     File all_samples_list
-    String out_prefix
-    File? sample_priority_list
-    Int n_samples
     String docker
   }
 
-  String outfile = out_prefix + ".target.samples.list"
-
+  String twins_out_fname = basename(twins_tsv, ".tsv") + ".cleaned_twins.tsv"
+  String duplicate_out_fname = basename(twins_tsv, ".tsv") + ".duplicate_ids.list"
+  String twin_samples_out_fname = basename(twins_tsv, ".tsv") + ".twin_pair_samples.list"
+  
   command <<<
     set -eu -o pipefail
 
-    touch "~{outfile}"
+    # Coerce twins .tsv to fake .fam file for cleaning
+    awk -v FS="\t" -v OFS="\t" \
+      '{ print NR, $1, $2, "0", "0", "0" }' \
+      ~{twins_tsv} \
+    > twins.fam
 
-    # First, add samples from a priority list, if optioned
-    if [ ~{defined(sample_priority_list)} == "true" ]; then
-      fgrep \
-        -xf ~{all_samples_list} \
-        ~{select_first([sample_priority_list, ""])} \
-      | head -n ~{n_samples} \
-      >> "~{outfile}" || true
-      fgrep \
-        -xvf ~{select_first([sample_priority_list, ""])} \
-        ~{all_samples_list} \
-      > remainder.samples.list
-    else
-      cp ~{all_samples_list} remainder.samples.list
-    fi
+    # Clean .fam file to duos or trios present in all_samples_list
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/subset_fam.R \
+      --in-fam twins.fam \
+      --all-samples ~{all_samples_list} \
+      --out-fam cleaned_twins.fam
 
-    # Second, supplement from random selection of remaining samples
-    subtotal=$( cat ~{outfile} | wc -l )
-    n_to_add=$(( ~{n_samples} - $subtotal ))
-    if [ $n_to_add -gt 0 ]; then
-      shuf \
-        --random-source=<( yes 2025 ) \
-        remainder.samples.list \
-      | head -n $n_to_add \
-      >> "~{outfile}" || true
-    fi
+    # Write list of complete twin pairs
+    awk -v FS="\t" -v OFS="\t" \
+      '{ if ($2!=0 && $3!=0) print $2, $3 }' \
+      cleaned_twins.fam \
+    > "~{twins_out_fname}"
+
+    # Write list of all samples involved in complete trios
+    awk -v OFS="\n" '{ print $1, $2 }' "~{twins_out_fname}" \
+    | sort -V | uniq \
+    > "~{twin_samples_out_fname}"
+
+    # Write list of one member from each pair (can exclude these samples for better AF estimates)
+    cut -f1 "~{twins_out_fname}" | sort | uniq > "~{duplicate_out_fname}"
   >>>
 
   output {
-    File target_samples = outfile
-    Int n_samples_all = length(read_lines(all_samples_list))
+    File complete_twins_tsv = "~{twins_out_fname}"
+    File duplicate_samples_list = "~{duplicate_out_fname}"
+    File twin_samples_list = "~{twin_samples_out_fname}"
   }
 
   runtime {
     docker: docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+  }
+}
+
+
+# Define lists of "target" samples to use for site-level and sample-based analyses
+task ChooseTargetSamples {
+  input {
+    File all_samples_list
+    File? probands_list
+    File? duplicate_samples_list
+    String out_prefix
+    File? sample_priority_tsv
+    Int n_samples
+    String g2c_analysis_docker
+  }
+
+  String priority_cmd = if defined(sample_priority_tsv) then "--priority-tsv ~{sample_priority_tsv}" else ""
+  String site_excl_outfile = out_prefix + ".exclude_for_site_analysis.samples.list"
+  String target_outfile = out_prefix + ".target.samples.list"
+
+  command <<<
+    set -eu -o pipefail
+
+    # If probands or duplicates are provided, exclude them from sample universe
+    cp ~{all_samples_list} all.samples.list
+    if ~{defined(probands_list)}; then
+      fgrep -xvf \
+        ~{select_first([probands_list, ""])} \
+        all.samples.list \
+      > all.samples.list2
+      mv all.samples.list2 all.samples.list
+    fi
+    if ~{defined(duplicate_samples_list)}; then
+      fgrep -xvf \
+        ~{select_first([duplicate_samples_list, ""])} \
+        all.samples.list \
+      > all.samples.list2
+      mv all.samples.list2 all.samples.list
+    fi
+
+    touch "~{target_outfile}"
+
+    # Select samples to include for genotype-level analyses
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R \
+      --all-samples-list all.samples.list \
+      -N ~{n_samples} \
+      ~{priority_cmd} \
+      --out-list "~{target_outfile}"
+  >>>
+
+  output {
+    File target_samples = target_outfile
+    File site_exclude_samples = site_excl_outfile
+    Int n_unrelated_samples = length(read_lines("all.samples.list"))
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
     memory: "3.75 GB"
     cpu: 2
     disks: "local-disk 20 HDD"

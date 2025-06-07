@@ -105,7 +105,7 @@ workflow Preprocess1kgpVcfs {
       input:
         vcfs = CurateSrwgsSnvs.vcf_out,
         vcf_idxs = CurateSrwgsSnvs.tbi_out,
-        out_prefix = "1KGP.srWGS.snv_indel.cleaned." + contig + ".vcf.gz",
+        out_prefix = "1KGP.srWGS.snv_indel.cleaned." + contig,
         bcftools_concat_options = "--allow-overlaps --threads 2",
         bcftools_docker = g2c_pipeline_docker
     }
