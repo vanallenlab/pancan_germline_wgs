@@ -35,8 +35,13 @@ workflow CollectVcfQcMetrics {
     File? twins_tsv                                # Two-column .tsv with pairs of IDs for technical replicates or identical twins
     File? sample_priority_tsv                      # Three-column .tsv of sample ID, priority tier (integer), and sampling weight (float)
                                                    # This file will be used in conjunction with n_for_sample_level_analyses
-                                                   # to determine which samples will be retained for sample-level analyses
-    Int n_for_sample_level_analyses = 1000         # Number of samples to use for sample-level summary analyses
+                                                   # to determine which samples will be retained for sample-level analyses. Note that
+                                                   # this will also influence the number of samples included for sample-level 
+                                                   # benchmarking and twin/trio analysis. If you want to enforce a certain set of 
+                                                   # samples to always be included for these analyses, you should specify their IDs
+                                                   # with high priority tier in this file; otherwise, sample overlaps will be 
+                                                   # left to random chance, which will often be suboptimal.
+    Int n_for_sample_level_analyses = 1000         # Number of samples to use for all sample-level analyses, including trio/twin/benchmarking
 
     Array[File?] snv_site_benchmark_beds           # BED files for SNV site benchmarking; one per reference dataset or cohort
     Array[File?] indel_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
@@ -194,7 +199,7 @@ workflow CollectVcfQcMetrics {
           vcf = pp_vcf,
           vcf_idx = pp_vcf_idx,
           target_samples = ChooseTargetSamples.target_samples,
-          trio_samples = CleanFam.trio_samples_list,
+          site_exclude_samples = ChooseTargetSamples.site_exclude_samples,
           has_mcnvs = McnvCheck.has_mcnvs,
           extra_commands = extra_vcf_preprocessing_commands,
           out_prefix = basename(vcf, ".vcf.gz"),
@@ -210,6 +215,10 @@ workflow CollectVcfQcMetrics {
   Array[File] site_vcf_shards = flatten(PreprocessVcf.sites_vcf)
   Array[File] site_vcf_shard_idxs = flatten(PreprocessVcf.sites_vcf_idx)
   Array[Pair[File, File]] site_vcf_info = zip(site_vcf_shards, site_vcf_shard_idxs)
+
+  Array[File] dense_vcf_shards = flatten(PreprocessVcf.dense_vcf)
+  Array[File] dense_vcf_shard_idxs = flatten(PreprocessVcf.dense_vcf_idx)
+  Array[Pair[File, File]] dense_vcf_info = zip(dense_vcf_shards, dense_vcf_shard_idxs)
 
   # Collect site-level metrics for all preprocessed shards
   scatter ( shard_info in site_vcf_info ) {
@@ -559,27 +568,18 @@ task ChooseTargetSamples {
     set -eu -o pipefail
 
     # If probands or duplicates are provided, exclude them from sample universe
-    cp ~{all_samples_list} all.samples.list
+    echo -e "THIS_SAMPLE_SHOULD_NEVER_HIT" > site.exclude.samples.list
     if ~{defined(probands_list)}; then
-      fgrep -xvf \
-        ~{select_first([probands_list, ""])} \
-        all.samples.list \
-      > all.samples.list2
-      mv all.samples.list2 all.samples.list
+      cat ~{select_first([probands_list])} >> site.exclude.samples.list
     fi
     if ~{defined(duplicate_samples_list)}; then
-      fgrep -xvf \
-        ~{select_first([duplicate_samples_list, ""])} \
-        all.samples.list \
-      > all.samples.list2
-      mv all.samples.list2 all.samples.list
+      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list
     fi
-
-    touch "~{target_outfile}"
+    sort -V site.exclude.samples.list | uniq > ~{site_excl_outfile}
 
     # Select samples to include for genotype-level analyses
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R \
-      --all-samples-list all.samples.list \
+      --all-samples-list ~{all_samples_list} \
       -N ~{n_samples} \
       ~{priority_cmd} \
       --out-list "~{target_outfile}"
@@ -607,8 +607,7 @@ task PreprocessVcf {
     File vcf
     File vcf_idx
     File target_samples
-    File? trio_samples
-    File? benchmarking_samples
+    File? site_exclude_samples
     Boolean has_mcnvs = false
     String? extra_commands
     
@@ -621,52 +620,45 @@ task PreprocessVcf {
     String docker
   }
 
-  Array[File] all_sample_lists = select_all([trio_samples, target_samples, benchmarking_samples])
-
+  String no_rel_cmd = if defined(site_exclude_samples) then "--samples-file ^" + select_first([site_exclude_samples]) else ""
   String sites_outfile = out_prefix + ".sites.vcf.gz"
+  String dense_outfile = out_prefix + ".dense_subset.vcf.gz"
 
   String mcnv_anno = if has_mcnvs then "| /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - -" else ""
 
   String extra_cmd = if defined(extra_commands) then "| " + extra_commands else ""
 
-  Int default_disk_gb = ceil(3 * size(vcf, "GB")) + 10
+  Int default_disk_gb = ceil(4 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
 
   command <<<
     set -eu -o pipefail
 
-    # Define superset of samples whose GTs we need for subsequent analysis
-    cat ~{sep=" " all_sample_lists} | sort -V | uniq > all.samples.list
-
-    # Preprocess VCF
-    bcftools +fill-tags ~{vcf} -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
-    ~{extra_cmd} \
+    # Generate sites-only VCF of unrelated samples
+    bcftools view ~{no_rel_cmd} ~{vcf} \
+    | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
-    | bcftools view \
-      --samples-file all.samples.list \
-      --no-update \
-    -Oz -o "~{out_prefix}.cleaned_wGTs.vcf.gz"
-    tabix -p vcf "~{out_prefix}.cleaned_wGTs.vcf.gz"
+    ~{extra_cmd} \
+    | bcftools view -G \
+      --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
+      -Oz -o ~{sites_outfile}
+    tabix -p vcf -f ~{sites_outfile}
 
-    # Make sites VCF for site-level analyses
-    bcftools view -G \
-      -Oz -o "~{sites_outfile}" \
-      "~{out_prefix}.cleaned_wGTs.vcf.gz"
-    tabix -p vcf "~{sites_outfile}"
-
-    # Make VCF of only sites & samples appearing in target samples
-    # TODO: implement this
-
-    # Make VCF of only sites & samples appearing in complete trios
-    # TODO: implement this
-
-    # Make VCF of only sites & samples appearing in benchmarking samples
-    # TODO: implement this
+    # Generate dense VCF of only target samples
+    bcftools view --samples-file ~{target_samples} ~{vcf} \
+    | bcftools view --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
+    | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
+    ~{mcnv_anno} \
+    ~{extra_cmd} \
+    | bcftools view -Oz -o ~{dense_outfile}
+    tabix -p vcf -f ~{dense_outfile}    
   >>>
 
   output {
     File sites_vcf = sites_outfile
     File sites_vcf_idx = "~{sites_outfile}.tbi"
+    File dense_vcf = dense_outfile
+    File dense_vcf_idx = "~{dense_outfile}.tbi"
   }
 
   runtime {
