@@ -170,7 +170,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/InferTwins.inputs.json
 EOF
 
 # Submit twin inference workflow
-cromshell --no_turtle -t 120 -mc submit \
+cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
   --dependencies-zip g2c.dependencies.zip \
   code/wdl/pancan_germline_wgs/InferTwins.wdl \
@@ -281,7 +281,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouSvs.inputs.json
 EOF
 
 # Submit SV curation workflow
-cromshell --no_turtle -t 120 -mc submit \
+cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
   --dependencies-zip g2c.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouSvs.wdl \
@@ -329,7 +329,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouLrwgsSnvs.input
 EOF
 
 # Submit lrWGS SNV/indel curation workflow
-cromshell --no_turtle -t 120 -mc submit \
+cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
   --dependencies-zip g2c.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouLrwgsSnvs.wdl \
@@ -632,7 +632,7 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:d8cdae4",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:3a29c77",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
@@ -640,7 +640,14 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 7.5,
   "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
   "CollectVcfQcMetrics.sample_benchmark_dataset_names": ["srwgs", "lrwgs"],
-  "CollectVcfQcMetrics.sample_benchmark_id_maps": "Array[Array[File?]]",
+  "CollectVcfQcMetrics.sample_benchmark_id_maps": [["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.1KGP_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.1KGP_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.AoU_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.AoU_id_map.tsv"],
+                                                   ["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.1KGP_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.1KGP_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.AoU_id_map.tsv",
+                                                    "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.AoU_id_map.tsv"]],
   "CollectVcfQcMetrics.sample_benchmark_vcfs": [["gs://dfci-g2c-refs/hgsv/dense_vcfs/srwgs/snv_indel/1KGP.srWGS.snv_indel.cleaned.\$CONTIG.vcf.gz",
                                                  "gs://dfci-g2c-refs/hgsv/dense_vcfs/srwgs/sv/1KGP.srWGS.sv.cleaned.\$CONTIG.vcf.gz",
                                                  "$MAIN_WORKSPACE_BUCKET/refs/aou/dense_vcfs/srwgs/snv_indel/AoU.srWGS.snv_indel.cleaned.\$CONTIG.vcf.bgz",
@@ -786,7 +793,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
 EOF
 
 # Submit QC visualization workflow
-cromshell --no_turtle -t 120 -mc submit \
+cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
   --dependencies-zip g2c.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/PlotVcfQcMetrics.wdl \

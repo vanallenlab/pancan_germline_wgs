@@ -24,10 +24,10 @@ workflow CollectVcfQcMetrics {
                                                    # (any tabix-compliant interval definitions should work)
     Int n_records_per_shard = 25000                # Number of records per shard. This will only be used as a backup if 
                                                    # scatter_intervals_list is not provided and shard_vcf is true
-    String? extra_vcf_preprocessing_commands       # Optional string of extra shell commands to execute when preprocessing
-                                                   # main input vcfs. This will automatically be prefixed by a pipe so should
-                                                   # be supplied as a chain of bash commands that could be inserted into
-                                                   # an existing bash command as reading from stdin and writing to stdout
+    String extra_vcf_preprocessing_commands = ""   # Optional string of extra shell commands to execute when preprocessing
+                                                   # main input vcfs. This must be prefixed by a pipe so that it can
+                                                   # be injected into a chain of bash commands while reading from stdin 
+                                                   # and writing to stdout
 
     Float common_af_cutoff = 0.01                  # Minimum AF for a variant to be included in common variant subsets
 
@@ -119,6 +119,8 @@ workflow CollectVcfQcMetrics {
   ### VCF PREPROCESSING
   #####################
 
+  call QcTasks.MakeHeaderFiller {}
+
   # Read scatter intervals, if optioned
   if ( defined(scatter_intervals_list) ) {
     call Utils.ParseIntervals {
@@ -202,6 +204,7 @@ workflow CollectVcfQcMetrics {
           site_exclude_samples = ChooseTargetSamples.site_exclude_samples,
           has_mcnvs = McnvCheck.has_mcnvs,
           extra_commands = extra_vcf_preprocessing_commands,
+          supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
           out_prefix = basename(vcf, ".vcf.gz"),
           docker = g2c_analysis_docker
       }
@@ -461,7 +464,7 @@ task CleanFam {
       --out-fam duos_and_trios.fam
 
     # Write list of all probands (can exclude these samples for better AF estimates)
-    cut -f1 duos_and_trios.fam > "~{proband_out_fname}"
+    fgrep -v "#" duos_and_trios.fam | cut -f2 > "~{proband_out_fname}"
 
     # Further restrict .fam to complete trios
     awk -v FS="\t" -v OFS="\t" \
@@ -560,35 +563,48 @@ task ChooseTargetSamples {
     String g2c_analysis_docker
   }
 
-  String priority_cmd = if defined(sample_priority_tsv) then "--priority-tsv ~{sample_priority_tsv}" else ""
   String site_excl_outfile = out_prefix + ".exclude_for_site_analysis.samples.list"
   String target_outfile = out_prefix + ".target.samples.list"
 
   command <<<
     set -eu -o pipefail
 
+    # Debugging
+    echo -e "Contents of working directory:"
+    find ./
+
     # If probands or duplicates are provided, exclude them from sample universe
     echo -e "THIS_SAMPLE_SHOULD_NEVER_HIT" > site.exclude.samples.list
     if ~{defined(probands_list)}; then
-      cat ~{select_first([probands_list])} >> site.exclude.samples.list
+      cat ~{select_first([probands_list])} >> site.exclude.samples.list || true
     fi
     if ~{defined(duplicate_samples_list)}; then
-      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list
+      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list || true
     fi
     sort -V site.exclude.samples.list | uniq > ~{site_excl_outfile}
 
+    # Produce list of unrelated samples (for counting effective sample size only)
+    fgrep \
+      -xvf site.exclude.samples.list \
+      ~{all_samples_list} \
+    | sort -V | uniq \
+    > unrelated.samples.list
+
     # Select samples to include for genotype-level analyses
-    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R \
-      --all-samples-list ~{all_samples_list} \
-      -N ~{n_samples} \
-      ~{priority_cmd} \
-      --out-list "~{target_outfile}"
+    cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R"
+    cmd="$cmd --all-samples-list \"~{all_samples_list}\" -N ~{n_samples}"
+    cmd="$cmd --out-list \"~{target_outfile}\""
+    if ~{defined(sample_priority_tsv)}; then
+      cmd="$cmd --priority-tsv \"~{select_first([sample_priority_tsv])}\""
+    fi
+    echo -e "Now selecting samples with this command:\n$cmd"
+    eval $cmd
   >>>
 
   output {
     File target_samples = target_outfile
     File site_exclude_samples = site_excl_outfile
-    Int n_unrelated_samples = length(read_lines("all.samples.list"))
+    Int n_unrelated_samples = length(read_lines("unrelated.samples.list"))
   }
 
   runtime {
@@ -609,7 +625,8 @@ task PreprocessVcf {
     File target_samples
     File? site_exclude_samples
     Boolean has_mcnvs = false
-    String? extra_commands
+    String extra_commands = ""
+    File supp_vcf_header
     
     String out_prefix
     
@@ -620,13 +637,11 @@ task PreprocessVcf {
     String docker
   }
 
-  String no_rel_cmd = if defined(site_exclude_samples) then "--samples-file ^" + select_first([site_exclude_samples]) else ""
+  String no_rel_cmd = if defined(site_exclude_samples) then "--force-samples --samples-file ^" + basename(select_first([site_exclude_samples])) else ""
   String sites_outfile = out_prefix + ".sites.vcf.gz"
   String dense_outfile = out_prefix + ".dense_subset.vcf.gz"
 
   String mcnv_anno = if has_mcnvs then "| /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - -" else ""
-
-  String extra_cmd = if defined(extra_commands) then "| " + extra_commands else ""
 
   Int default_disk_gb = ceil(4 * size(vcf, "GB")) + 10
   Int hdd_gb = select_first([disk_gb, default_disk_gb])
@@ -634,23 +649,30 @@ task PreprocessVcf {
   command <<<
     set -eu -o pipefail
 
+    # Move site exclude samples to working directory, if optioned
+    if ~{defined(site_exclude_samples)}; then
+      mv ~{select_first([site_exclude_samples])} ./
+    fi
+
     # Generate sites-only VCF of unrelated samples
     bcftools view ~{no_rel_cmd} ~{vcf} \
+    | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
-    ~{extra_cmd} \
-    | bcftools view -G \
+    ~{extra_commands} \
+    | bcftools view -G --threads 2 \
       --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
       -Oz -o ~{sites_outfile}
     tabix -p vcf -f ~{sites_outfile}
 
     # Generate dense VCF of only target samples
-    bcftools view --samples-file ~{target_samples} ~{vcf} \
+    bcftools view --samples-file ~{target_samples} --force-samples ~{vcf} \
+    | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools view --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
-    ~{extra_cmd} \
-    | bcftools view -Oz -o ~{dense_outfile}
+    ~{extra_commands} \
+    | bcftools view --threads 2 -Oz -o ~{dense_outfile}
     tabix -p vcf -f ~{dense_outfile}    
   >>>
 

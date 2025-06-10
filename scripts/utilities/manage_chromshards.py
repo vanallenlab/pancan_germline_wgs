@@ -155,7 +155,7 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
 
 def submit_workflow(contig, wdl, input_template, input_json, prev_wids, 
                     dependencies_zip=None, contig_var_overrides=None, 
-                    dry_run=False, quiet=False, verbose=False):
+                    dry_run=False, quiet=False, verbose=False, validate=False):
     """
     Submit a workflow for a single contig to Cromwell and log the workflow ID
     """
@@ -186,6 +186,8 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
     cmd += ' --options-json code/refs/json/aou.cromwell_options.default.json'
     if dependencies_zip is not None:
         cmd += ' --dependencies-zip ' + dependencies_zip
+    if not validate:
+        cmd += ' --no-validation'
     cmd += ' ' + wdl + ' ' + input_json
 
     # Submit the workflow
@@ -269,6 +271,8 @@ def main():
                         help='Path to file collecting all GCP URIs to be deleted. ' +
                         'Note that this script will only ever append to this file, ' +
                         'not overwrite it.')
+    parser.add_argument('--no-stage', action='store_true', help='Disable ' +
+                        'automatic staging of outputs. Useful for WDL testing.')
     parser.add_argument('--no-cleanup', action='store_true', help='Disable ' +
                         'automatic cleanup of Cromwell execution buckets.')
     parser.add_argument('--hard-reset', action='store_true', help='\'Unstage\' ' +
@@ -495,6 +499,11 @@ def main():
                         if not args.quiet:
                             msg = '[{}] Found successful workflow ({}); would stage ' + \
                                   'outputs and clean garbage if not for --dry-run'
+                            print(msg.format(clean_date(), wid))
+                    elif args.no_stage:
+                        if not args.quiet:
+                            msg = '[{}] Found successful workflow ({}); would stage ' + \
+                                  'outputs and clean garbage if not for --no-stage'
                             print(msg.format(clean_date(), wid))
                     else:
                         relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
