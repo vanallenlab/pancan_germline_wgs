@@ -24,13 +24,18 @@ task CollectSampleGenotypeMetrics {
   String gt_outfile = out_base + ".genotypes.tsv.gz"
   String distrib_outfile = out_base + ".gt_distrib.tsv.gz"
 
-  String distrib_cmd = if defined(site_metrics) then "--site-metrics ~{select_first([site_metrics])} --distrib-out ~{out_base}.gt_distrib.tsv.gz" else ""
+  String site_metrics_basename = if defined(site_metrics) then basename(select_first([site_metrics])) else ""
+  String distrib_cmd = if defined(site_metrics) then "--site-metrics ~{site_metrics_basename} --distrib-out ~{out_base}.gt_distrib.tsv.gz" else ""
   String common_cmd = if defined(site_metrics) && defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
 
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
+
+    if ~{defined(site_metrics)}; then
+      mv ~{select_first([site_metrics])} ./
+    fi
 
     bcftools query -i 'GT="alt"' -f '[%CHROM\t%POS\t%REF\t%ALT\t%INFO/SVLEN\t%SAMPLE\t%GT\t%RD_CN\n]' ~{vcf} \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_sample_genotypes.py ~{distrib_cmd} ~{common_cmd} \
@@ -96,15 +101,15 @@ task CollectSiteMetrics {
     # Concatenate all site metrics for downstream 
     # compatability with CollectSampleGenotypeMetrics
     find ./ -name "~{out_prefix}.*.sites.bed.gz" > site_beds.list
-    zcat $( head -n1 site_beds.list ) | head -n1 > site_metrics.header
+    zcat $( head -n1 site_beds.list ) | head -n1 > site_metrics.header || true
     while read site_file; do
-      zcat $site_file | fgrep -v "#"
+      zcat $site_file | fgrep -v "#" || true
     done < site_beds.list \
     | sort -Vk1,1 -k2,2n -k3,3n -k4,4V -k5,5V -k6,6V \
     | uniq \
     | cat site_metrics.header - \
     | bgzip -c \
-    > ~{out_prefix}.all.sites.bed.gz
+    > ~{out_prefix}.all.sites.bed.gz || true
     tabix -p bed -f ~{out_prefix}.all.sites.bed.gz
   >>>
 
