@@ -14,9 +14,75 @@ Cleans non-reference sample genotypes and optionally gathers distributions by sa
 import argparse
 import csv
 import gzip
+import numpy as np
 import pandas as pd
+import re
 from g2cpy import classify_variant, determine_filetype
-from sys import stdin, stdout
+from sys import exit, stdin, stdout
+
+
+def load_site_metrics(metrics_in, common_af = 0.01):
+    """
+    Load necessary variant information from a .bed.gz
+    Returns a dict keyed by variant ID
+    """
+
+    metrics = {}
+
+    with gzip.open(metrics_in, 'rt') as fin:
+
+        metrics_reader = csv.reader(fin, delimiter='\t')
+        
+        for chrom, start, end, vid, vc, vsc, size, ac, af, freq_het, \
+            freq_hom, hwe in metrics_reader:
+
+            # Skip header line
+            if chrom.startswith('#') or chrom == 'chrom':
+                continue
+
+            # Simple frequency binning
+            if int(ac) == 1:
+                fc = 'singleton'
+            elif float(af) < common_af:
+                fc = 'rare'
+            else:
+                fc = 'common'
+
+            metrics[vid] = {'vc' : vc, 'vsc' : vsc, 'fc' : fc}
+
+    return metrics
+
+
+def clean_gts(gt_str, cn_str):
+    """
+    Cleans up genotypes & copy-number estimates into standard unphased notation
+    """
+
+    # Clean copy-number estimate
+    if cn_str == '.':
+        cn = None
+    else:
+        cn = int(cn_str)
+
+    # Clean genotype string
+    def _coerce_to_int(x):
+        try:
+            return(int(x))
+        except (ValueError, TypeError):
+            return None
+    alleles = [_coerce_to_int(a) for a in re.split('[/|]+', gt_str)]
+    sorted_alleles = sorted(alleles, key=lambda x: (x is None, x))
+
+    # If GT is null, try to use CN as a backup
+    if all(a is None for a in sorted_alleles):
+        if cn is None:
+            return('./.')
+        else:
+            n_nonref = min([abs(cn - 2), 2])
+            n_ref = min([2 - n_nonref, 2])
+            sorted_alleles = [[0] * n_ref] + [[1] * n_nonref]
+
+    return('/'.join([str(a) for a in sorted_alleles]))
 
 
 def main():
@@ -38,14 +104,22 @@ def main():
     parser.add_argument('--distrib-out', metavar='.tsv', help='Optional output ' +
                         '.tsv of compressed genotype distributions per sample. ' +
                         'Will only be generated if --site-metrics are provided.')
+    parser.add_argument('--common-af', type=float, default=0.01, help='AF cutoff ' +
+                        'for common variants. Only used with --site-metrics ' +
+                        '[default: 0.01]')
+
     args = parser.parse_args()
 
     # Load site metrics into memory, if provided
     if args.site_metrics is not None:
-        # TODO: implement this
-        import pdb; pdb.set_trace()
+        if args.distrib_out is not None:
+            metrics = load_site_metrics(args.site_metrics, args.common_af)
+            counter = {}
+        else:
+            msg = 'Error: --site-metrics provided without --distrib-out. Exiting'
+            exit(msg)
     else:
-        site_metrics = None
+        metrics = None
 
     # Open connection to input file
     if args.input in '- stdin /dev/stdin'.split():
@@ -60,23 +134,81 @@ def main():
     if args.output in '- stdout /dev/stdout'.split():
         fout = stdout
     elif 'compressed' in determine_filetype(args.output):
-        fout = gzip.open(args.output, 'wt')
+        fout = gzip.open(args.output, 'wt', encoding='utf-8')
     else:
         fout = open(args.input, 'w')
 
     # Processes each line in serial
-    for sid, vid, gt, cn in indat:
+    for chrom, pos, ref, alt, svlen, sid, gt, cn in indat:
+        
         # Clean GT + CN
-        import pdb; pdb.set_trace()
+        new_gt = clean_gts(gt, cn)
+
+        # Convert variant info to variant ID 
+        if svlen != '.':
+            varlen = int(svlen)
+        else:
+            varlen = np.abs(len(alt) - len(ref))
+        vc, vsc = classify_variant(ref, alt, varlen)
+        if vc == 'sv':
+            vid = '_'.join([str(x) for x in [chrom, pos, vsc, varlen]])
+        else:
+            vid = '_'.join([str(x) for x in [chrom, pos, ref, alt]])
+
+        # Update compressed distribution, if optioned
+        if metrics is not None:
+
+            if sid not in counter:
+                counter[sid] = {}
+            
+            if vid not in metrics.keys():
+                msg = 'Variant {} not found in --site-metrics. Exiting.'
+                exit(msg.format(vid))
+
+            vc = metrics.get(vid).get('vc')
+            if vc not in counter[sid].keys():
+                counter[sid][vc] = {}
+
+            vsc = metrics.get(vid).get('vsc')
+            if vsc not in counter[sid][vc].keys():
+                counter[sid][vc][vsc] = {}
+
+            fc = metrics.get(vid).get('fc')
+            if fc not in counter[sid][vc][vsc].keys():
+                counter[sid][vc][vsc][fc] = {'het' : 0, 'hom' : 0, 'other' : 0}
+            
+            if new_gt == '0/1':
+                counter[sid][vc][vsc][fc]['het'] += 1
+            elif new_gt == '1/1':
+                counter[sid][vc][vsc][fc]['hom'] += 1
+            else:
+                counter[sid][vc][vsc][fc]['other'] += 1
 
         # Write to --output
-
-    # Close input handle to clear buffer
-    indat.close()
+        if new_gt != './.':
+            fout.write('\t'.join([sid, vid, new_gt]) + '\n')
 
     # If optioned, write compressed distributions to --distrib-out
-    # TODO: implement this
+    if metrics is not None:
+        if 'compressed' in determine_filetype(args.distrib_out):
+            dist_fout = gzip.open(args.distrib_out, mode='wt', encoding='utf-8')
+        else:
+            dist_fout = open(args.distrib_out, mode='w')
+        header = '#sample class subclass freq_bin het hom other'.split()
+        dist_fout.write('\t'.join(header) + '\n')
+        for sid, vc_dat in counter.items():
+            for vc, vsc_dat in vc_dat.items():
+                for vsc, fc_dat in vsc_dat.items():
+                    for fc, gt_dat in fc_dat.items():
+                        counts = gt_dat.values()
+                    if sum(counts) > 0:
+                        outvals = [sid, vc, vsc, fc] + [str(k) for k in counts]
+                        dist_fout.write('\t'.join(outvals) + '\n')
+        dist_fout.close()
 
+    # Close input & output handles to clear buffer
+    fin.close()
+    fout.close()
 
 if __name__ == '__main__':
     main()

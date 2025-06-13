@@ -339,6 +339,13 @@ workflow CollectVcfQcMetrics {
       }
   }
 
+  # Collapse sample genotypes and split into one file per sample
+  call QcTasks.ConcatGenotypeTsvs {
+    input:
+      tsvs = CollectSampleGenotypeMetrics.genotypes_tsv,
+      output_prefix = output_prefix
+  }
+
   #########################
   ### EXTERNAL BENCHMARKING
   #########################
@@ -428,6 +435,15 @@ workflow CollectVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
+  # Collapse genotype distributions
+  call QcTasks.SumCompressedDistribs as SumGenotypeDistribs {
+    input:
+      distrib_tsvs = select_all(CollectSampleGenotypeMetrics.compressed_gt_distrib),
+      n_key_columns = 4,
+      out_prefix = output_prefix + ".genotype_distribution",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
   output {
     File? all_snvs_bed = CollapseAllSnvs.merged_file
     File? all_indels_bed = CollapseAllIndels.merged_file
@@ -439,6 +455,7 @@ workflow CollectVcfQcMetrics {
     File size_distrib = SumSizeDistribs.merged_distrib
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
+    File genotype_distrib = SumGenotypeDistribs.merged_distrib
 
     Array[Array[File]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
     Array[Array[File]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds

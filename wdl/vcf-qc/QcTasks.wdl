@@ -13,7 +13,9 @@ task CollectSampleGenotypeMetrics {
   input {
     File vcf
     File vcf_idx
+
     File? site_metrics
+    Float? common_af_cutoff
 
     String g2c_analysis_docker
   }
@@ -23,20 +25,22 @@ task CollectSampleGenotypeMetrics {
   String distrib_outfile = out_base + ".gt_distrib.tsv.gz"
 
   String distrib_cmd = if defined(site_metrics) then "--site-metrics ~{select_first([site_metrics])} --distrib-out ~{out_base}.gt_distrib.tsv.gz" else ""
+  String common_cmd = if defined(site_metrics) && defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
 
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
 
-    bcftools query -i 'GT="alt"' -f '[%SAMPLE\t%ID\t%GT\t%RD_CN\n]' ~{vcf} \
-    | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_sample_genotypes.py ~{distrib_cmd} \
+    bcftools query -i 'GT="alt"' -f '[%CHROM\t%POS\t%REF\t%ALT\t%INFO/SVLEN\t%SAMPLE\t%GT\t%RD_CN\n]' ~{vcf} \
+    | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_sample_genotypes.py ~{distrib_cmd} ~{common_cmd} \
     | gzip -c \
     > ~{gt_outfile}
   >>>
 
   output {
     File genotypes_tsv = gt_outfile
+    File? compressed_gt_distrib = distrib_outfile
   }
 
   runtime {
@@ -91,14 +95,14 @@ task CollectSiteMetrics {
 
     # Concatenate all site metrics for downstream 
     # compatability with CollectSampleGenotypeMetrics
-    find ~{out_prefix} -name "*.sites.bed.gz" > site_beds.list
-    head -n1 $( head -n1 site_beds.list ) > site_metrics.header
+    find ./ -name "~{out_prefix}.*.sites.bed.gz" > site_beds.list
+    zcat $( head -n1 site_beds.list ) | head -n1 > site_metrics.header
     while read site_file; do
       zcat $site_file | fgrep -v "#"
     done < site_beds.list \
     | sort -Vk1,1 -k2,2n -k3,3n -k4,4V -k5,5V -k6,6V \
     | uniq \
-    | cat site_metrics.header \
+    | cat site_metrics.header - \
     | bgzip -c \
     > ~{out_prefix}.all.sites.bed.gz
     tabix -p bed -f ~{out_prefix}.all.sites.bed.gz
@@ -126,6 +130,44 @@ task CollectSiteMetrics {
 
   runtime {
     docker: g2c_analysis_docker
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Concatenate an array of sample genotype .tsvs and split into one file per sample
+task ConcatGenotypeTsvs {
+  input {
+    Array[File] tsvs
+    String output_prefix
+  }
+
+  Int disk_gb = ceil(2 * size(tsvs, "GB")) + 10
+  String outdir = output_prefix + "_sample_genotypes"
+
+  command <<<
+    set -eu -o pipefail
+
+    mkdir ~{outdir}
+
+    # Split each input tsv by appending to sample-specific files in outdir/
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/split_and_append_gts.py \
+      ~{write_lines(tsvs)} \
+      ~{outdir}
+
+    # Compress outdir as tarball for easier GCP/Cromwell IO
+    tar -czvf ~{outdir}.tar.gz ~{outdir}
+  >>>
+
+  output {
+    File genotypes_tarball = "~{outdir}.tar.gz"
+  }
+
+  runtime {
+    docker: "python:3.9"
     memory: "3.5 GB"
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"
