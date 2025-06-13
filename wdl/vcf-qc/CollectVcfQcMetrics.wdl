@@ -237,12 +237,15 @@ workflow CollectVcfQcMetrics {
     }
 
     # Compute sample-level metrics
-    # TODO: implement this
+    call QcTasks.CollectSampleGenotypeMetrics {
+      input:
+        vcf = shard_info.left,
+        vcf_idx = shard_info.right,
+        site_metrics = CollectSiteMetrics.all_sites,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
 
     # Compute trio metrics
-    # TODO: implement this
-
-    # Compute sample-level benchmarking metrics
     # TODO: implement this
   }
 
@@ -385,6 +388,15 @@ workflow CollectVcfQcMetrics {
       }
     }
   }
+
+  # Compute sample-level benchmarking metrics
+  # TODO: implement this as separate subworkflow. Steps:
+  # 1. Subset benchmarking VCF to overlapping samples
+  # 2. Collect site-level metrics for subsetted benchmarking VCF from 1
+  # 3. Run site-level benchmarking between 2 and target/input cohort site metrics. Produce a .tsv mapping variant IDs between cohort A and cohort B
+  # 4. Collect (vid, gt) .tsvs for all variants per sample in subsetted benchmarking VCF from 1
+  # 5. Compare .tsvs from 4 to equivalent .tsvs generated from target/input callset while linking through variant ID map from #3
+  # 6. Collapse outputs of 5 across all samples and compute summary metrics (medians?)
   
 
   ##################
@@ -656,10 +668,11 @@ task PreprocessVcf {
 
     # Generate sites-only VCF of unrelated samples
     bcftools view ~{no_rel_cmd} ~{vcf} \
-    | bcftools annotate -h ~{supp_vcf_header} \
+    | bcftools annotate -h ~{supp_vcf_header} --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
     ~{extra_commands} \
+    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS,FILTER/MULTIALLELIC" \
     | bcftools view -G --threads 2 \
       --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
       -Oz -o ~{sites_outfile}
@@ -667,11 +680,12 @@ task PreprocessVcf {
 
     # Generate dense VCF of only target samples
     bcftools view --samples-file ~{target_samples} --force-samples ~{vcf} \
-    | bcftools annotate -h ~{supp_vcf_header} \
+    | bcftools annotate -h ~{supp_vcf_header} --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
     | bcftools view --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
     ~{extra_commands} \
+    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC" \
     | bcftools view --threads 2 -Oz -o ~{dense_outfile}
     tabix -p vcf -f ~{dense_outfile}    
   >>>

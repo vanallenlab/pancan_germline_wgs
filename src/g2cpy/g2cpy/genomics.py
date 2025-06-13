@@ -120,7 +120,9 @@ def determine_filetype(path, return_extension=False):
                 'gtf' : ['gtf'],
                 'compressed-gtf' : ['gtf.gz'],
                 'gatk-interval-list' : '.intervals',
-                'picard-interval-list' : '.interval_list'}
+                'picard-interval-list' : '.interval_list',
+                'tsv' : ['.tsv'],
+                'compressed-tsv' : ['.tsv.gz']}
 
     for ftype, suffs in suf_dict.items():
         suf_hits = [s for s in suffs if path.endswith(s)]

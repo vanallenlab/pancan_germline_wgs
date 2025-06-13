@@ -9,6 +9,46 @@
 version 1.0
 
 
+task CollectSampleGenotypeMetrics {
+  input {
+    File vcf
+    File vcf_idx
+    File? site_metrics
+
+    String g2c_analysis_docker
+  }
+
+  String out_base = basename(vcf, ".vcf.gz")
+  String gt_outfile = out_base + ".genotypes.tsv.gz"
+  String distrib_outfile = out_base + ".gt_distrib.tsv.gz"
+
+  String distrib_cmd = if defined(site_metrics) then "--site-metrics ~{select_first([site_metrics])} --distrib-out ~{out_base}.gt_distrib.tsv.gz" else ""
+
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools query -i 'GT="alt"' -f '[%SAMPLE\t%ID\t%GT\t%RD_CN\n]' ~{vcf} \
+    | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/clean_sample_genotypes.py ~{distrib_cmd} \
+    | gzip -c \
+    > ~{gt_outfile}
+  >>>
+
+  output {
+    File genotypes_tsv = gt_outfile
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
 task CollectSiteMetrics {
   input {
     File vcf
@@ -48,9 +88,25 @@ task CollectSiteMetrics {
       -o ~{out_prefix} \
       --gzip \
       -N ~{n_samples}
+
+    # Concatenate all site metrics for downstream 
+    # compatability with CollectSampleGenotypeMetrics
+    find ~{out_prefix} -name "*.sites.bed.gz" > site_beds.list
+    head -n1 $( head -n1 site_beds.list ) > site_metrics.header
+    while read site_file; do
+      zcat $site_file | fgrep -v "#"
+    done < site_beds.list \
+    | sort -Vk1,1 -k2,2n -k3,3n -k4,4V -k5,5V -k6,6V \
+    | uniq \
+    | cat site_metrics.header \
+    | bgzip -c \
+    > ~{out_prefix}.all.sites.bed.gz
+    tabix -p bed -f ~{out_prefix}.all.sites.bed.gz
   >>>
 
   output {
+    File all_sites = out_prefix + ".all.sites.bed.gz"
+    File all_sites_idx = out_prefix + ".all.sites.bed.gz.tbi"
     File? snv_sites = out_prefix + ".snv.sites.bed.gz"
     File? snv_sites_idx = out_prefix + ".snv.sites.bed.gz.tbi"
     File? indel_sites = out_prefix + ".indel.sites.bed.gz"
@@ -194,16 +250,18 @@ task MakeHeaderFiller {
   command <<<
     set -eu -o pipefail
 
-    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" > header.supp.vcf
-    echo "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" >> header.supp.vcf
-    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
+    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" > header.supp.vcf
+    echo "##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description=\"Predicted copy state\">" >> header.supp.vcf
     echo "##INFO=<ID=AC_Het,Number=A,Type=Integer,Description=\"Heterozygous allele counts\">" >> header.supp.vcf
     echo "##INFO=<ID=AC_Hom,Number=A,Type=Integer,Description=\"Homozygous allele counts\">" >> header.supp.vcf
     echo "##INFO=<ID=AC_Hemi,Number=A,Type=Integer,Description=\"Hemizygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
+    echo "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" >> header.supp.vcf
     echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
-    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" >> header.supp.vcf
+    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
+    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" >> header.supp.vcf
+    
   >>>
 
   output {
