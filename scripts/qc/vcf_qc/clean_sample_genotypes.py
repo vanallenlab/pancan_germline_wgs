@@ -17,6 +17,7 @@ import gzip
 import numpy as np
 import pandas as pd
 import re
+import warnings
 from g2cpy import classify_variant, determine_filetype
 from sys import exit, stdin, stdout
 
@@ -107,6 +108,10 @@ def main():
     parser.add_argument('--common-af', type=float, default=0.01, help='AF cutoff ' +
                         'for common variants. Only used with --site-metrics ' +
                         '[default: 0.01]')
+    parser.add_argument('--strict', action='store_true', help='Strict cross-' +
+                        'checking between --input and --site-metrics; any ' +
+                        'variants in --input missing from --site-metrics will ' +
+                        'result in a forced exit.')
 
     args = parser.parse_args()
 
@@ -160,20 +165,30 @@ def main():
 
             if sid not in counter:
                 counter[sid] = {}
-            
-            if vid not in metrics.keys():
-                msg = 'Variant {} not found in --site-metrics. Exiting.'
-                exit(msg.format(vid))
 
-            vc = metrics.get(vid).get('vc')
+            # If a site is not found in the metrics file, either exit
+            # if --strict or otherwise assume it's a singleton
+            # (This matches default behavior of CollectVcfQcMetrics.wdl
+            # as the only variants that should be missing would be variants
+            # only called in private to pruned probands/related individuals)
+            if vid not in metrics.keys():
+                if args.strict:
+                    msg = 'Variant {} not found in --site-metrics. Exiting.'
+                    exit(msg.format(vid))
+                else:
+                    msg = 'Variant {} not found in --site-metrics; assuming ' + \
+                    'it is a singleton that was pruned from site metrics file.'
+                    warnings.warn(msg.format(vid))
+
+            vc = metrics.get(vid, {}).get('vc', vc)
             if vc not in counter[sid].keys():
                 counter[sid][vc] = {}
 
-            vsc = metrics.get(vid).get('vsc')
+            vsc = metrics.get(vid, {}).get('vsc', vsc)
             if vsc not in counter[sid][vc].keys():
                 counter[sid][vc][vsc] = {}
 
-            fc = metrics.get(vid).get('fc')
+            fc = metrics.get(vid, {}).get('fc', 'singleton')
             if fc not in counter[sid][vc][vsc].keys():
                 counter[sid][vc][vsc][fc] = {'het' : 0, 'hom' : 0, 'other' : 0}
             
