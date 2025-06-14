@@ -148,6 +148,7 @@ task ConcatGenotypeTsvs {
   input {
     Array[File] tsvs
     String output_prefix
+    String g2c_analysis_docker
   }
 
   Int disk_gb = ceil(2 * size(tsvs, "GB")) + 10
@@ -172,7 +173,7 @@ task ConcatGenotypeTsvs {
   }
 
   runtime {
-    docker: "python:3.9"
+    docker: g2c_analysis_docker
     memory: "3.5 GB"
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"

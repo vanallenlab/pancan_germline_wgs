@@ -348,7 +348,8 @@ workflow CollectVcfQcMetrics {
   call QcTasks.ConcatGenotypeTsvs {
     input:
       tsvs = CollectSampleGenotypeMetrics.genotypes_tsv,
-      output_prefix = output_prefix
+      output_prefix = output_prefix,
+      g2c_analysis_docker = g2c_analysis_docker
   }
 
   #########################
