@@ -224,13 +224,18 @@ workflow CollectVcfQcMetrics {
   Array[Pair[File, File]] dense_vcf_info = zip(dense_vcf_shards, dense_vcf_shard_idxs)
 
   # Collect site-level metrics for all preprocessed shards
-  scatter ( shard_info in site_vcf_info ) {
+  scatter ( i in range(length(site_vcf_info)) ) {
+
+    File sites_vcf_shard = site_vcf_info[i].left
+    File sites_vcf_shard_idx = site_vcf_info[i].right
+    File dense_vcf_shard = dense_vcf_info[i].left
+    File dense_vcf_shard_idx = dense_vcf_info[i].right
 
     # Compute site-level metrics
     call QcTasks.CollectSiteMetrics {
       input:
-        vcf = shard_info.left,
-        vcf_idx = shard_info.right,
+        vcf = sites_vcf_shard,
+        vcf_idx = sites_vcf_shard_idx,
         n_samples = ChooseTargetSamples.n_unrelated_samples,
         common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
@@ -239,8 +244,8 @@ workflow CollectVcfQcMetrics {
     # Compute sample-level metrics
     call QcTasks.CollectSampleGenotypeMetrics {
       input:
-        vcf = shard_info.left,
-        vcf_idx = shard_info.right,
+        vcf = dense_vcf_shard,
+        vcf_idx = dense_vcf_shard_idx,
         site_metrics = CollectSiteMetrics.all_sites,
         g2c_analysis_docker = g2c_analysis_docker
     }
