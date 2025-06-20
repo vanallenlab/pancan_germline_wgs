@@ -34,6 +34,8 @@ workflow BenchmarkSites {
     Int total_shards = 2500
     Float common_af_cutoff
 
+    Boolean make_full_id_maps = false
+
     String bcftools_docker
     String g2c_analysis_docker
   }
@@ -125,6 +127,7 @@ workflow BenchmarkSites {
         target_prefix = target_prefix,
         common_af_cutoff = common_af_cutoff,
         total_shards = shards_per_eval_bed,
+        make_full_id_maps = make_full_id_maps,
         bcftools_docker = bcftools_docker,
         g2c_analysis_docker = g2c_analysis_docker
     }
@@ -141,6 +144,8 @@ workflow BenchmarkSites {
     Array[File] sensitivity_by_sizes = BenchmarkTask.sensitivity_by_size
     Array[File] ppv_by_freqs = BenchmarkTask.ppv_by_freq
     Array[File] sensitivity_by_freqs = BenchmarkTask.sensitivity_by_freq
+    Array[File?] ppv_variant_id_maps = BenchmarkTask.ppv_variant_id_map
+    Array[File?] sensitivity_variant_id_maps = BenchmarkTask.sensitivity_variant_id_map
   }
 }
 

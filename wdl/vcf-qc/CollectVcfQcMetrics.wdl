@@ -9,6 +9,7 @@
 version 1.0
 
 
+import "BenchmarkSamples.wdl" as BenchSamples
 import "BenchmarkSites.wdl" as BenchSites
 import "QcTasks.wdl" as QcTasks
 import "Utilities.wdl" as Utils
@@ -60,7 +61,7 @@ workflow CollectVcfQcMetrics {
     Array[File]? benchmark_interval_beds           # BED files of intervals to consider for benchmarking evaluation
     Array[String]? benchmark_interval_bed_names    # Descriptive names for each set of evaluation intervals
     File? genome_file                              # BEDTools-style .genome file
-    Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site benchmarking
+    Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site and sample benchmarking
 
     String output_prefix
 
@@ -356,9 +357,16 @@ workflow CollectVcfQcMetrics {
   ### EXTERNAL BENCHMARKING
   #########################
 
-  # Compute site-level benchmarking metrics
+  # Divide benchmarking shard quota evenly between site and sample benchmarking
   Int n_site_benchmark_datasets = length(site_benchmark_dataset_names)
+  Boolean do_site_bench = (n_site_benchmark_datasets > 0)
+  Int n_gt_benchmark_datasets = length(sample_benchmark_dataset_names)
+  Boolean do_sample_bench = (n_gt_benchmark_datasets > 0)
+  Int half_bench_shards = ceil(benchmarking_shards / 2)
+  Int site_bench_shards = if do_sample_bench then half_bench_shards else benchmarking_shards
+  Int sample_bench_shards = if do_site_bench then half_bench_shards else benchmarking_shards
 
+  # Compute site-level benchmarking metrics
   if ( n_site_benchmark_datasets > 0 ) {
 
     call QcTasks.MakeEmptyBenchBed {
@@ -394,7 +402,7 @@ workflow CollectVcfQcMetrics {
           eval_interval_beds = select_first([benchmark_interval_beds]),
           eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
           genome_file = select_first([genome_file]),
-          total_shards = benchmarking_shards,
+          total_shards = site_bench_shards,
           common_af_cutoff = common_af_cutoff,
           bcftools_docker = bcftools_docker,
           g2c_analysis_docker = g2c_analysis_docker
@@ -403,13 +411,65 @@ workflow CollectVcfQcMetrics {
   }
 
   # Compute sample-level benchmarking metrics
-  # TODO: implement this as separate subworkflow. Steps:
-  # 1. Subset benchmarking VCF to overlapping samples
-  # 2. Collect site-level metrics for subsetted benchmarking VCF from 1
-  # 3. Run site-level benchmarking between 2 and target/input cohort site metrics. Produce a .tsv mapping variant IDs between cohort A and cohort B
-  # 4. Collect (vid, gt) .tsvs for all variants per sample in subsetted benchmarking VCF from 1
-  # 5. Compare .tsvs from 4 to equivalent .tsvs generated from target/input callset while linking through variant ID map from #3
-  # 6. Collapse outputs of 5 across all samples and compute summary metrics (medians?)
+  if ( n_gt_benchmark_datasets > 0 ) {
+
+    call QcTasks.MakeDummyFile as MakeEmptyFile {}
+
+    File empty_vcf = flatten(PreprocessVcf.empty_vcf)[0]
+    File empty_vcf_idx = flatten(PreprocessVcf.empty_vcf_idx)[0]
+
+    # Convert VCF to BED for subset of sites in samples to be benchmarked
+    Array[File] dense_sites_vcf_shards = flatten(PreprocessVcf.dense_sites_vcf)
+    Array[File] dense_sites_vcf_shard_idxs = flatten(PreprocessVcf.dense_sites_vcf_idx)
+    Array[Pair[File, File]] dense_sites_vcf_info = zip(dense_sites_vcf_shards, dense_sites_vcf_shard_idxs)
+
+    scatter ( i in range(length(dense_sites_vcf_info)) ) {
+      call QcTasks.CollectSiteMetrics as GtBenchmarkSiteMetrics {
+        input:
+          vcf = dense_sites_vcf_info[i].left,
+          vcf_idx = dense_sites_vcf_info[i].right,
+          n_samples = ChooseTargetSamples.n_target_samples,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+
+    scatter ( gt_bench_idx in range(n_gt_benchmark_datasets) ) {
+
+      Array[File] gb_target_vcfs = if length(sample_benchmark_id_maps) > gt_bench_idx
+                                   then select_all(sample_benchmark_vcfs[gt_bench_idx])
+                                   else [empty_vcf]
+      Array[File] gb_target_vcf_idxs = if length(sample_benchmark_id_maps) > gt_bench_idx
+                                       then select_all(sample_benchmark_vcf_idxs[gt_bench_idx])
+                                       else [empty_vcf_idx]
+      Array[File] gb_target_id_maps = if length(sample_benchmark_id_maps) > gt_bench_idx
+                                      then select_all(sample_benchmark_id_maps[gt_bench_idx])
+                                      else [MakeEmptyFile.empty_file]
+      String gb_target_prefix = if length(sample_benchmark_dataset_names) > gt_bench_idx
+                                then select_all(sample_benchmark_dataset_names)[gt_bench_idx]
+                                else ""
+
+      call BenchSamples.BenchmarkSamples {
+        input:
+          source_snv_beds = GtBenchmarkSiteMetrics.snv_sites,
+          source_indel_beds = GtBenchmarkSiteMetrics.indel_sites,
+          source_sv_beds = GtBenchmarkSiteMetrics.sv_sites,
+          source_gt_tarball = ConcatGenotypeTsvs.genotypes_tarball,
+          source_prefix = output_prefix,
+          target_vcfs = gb_target_vcfs,
+          target_vcf_idxs = gb_target_vcf_idxs,
+          target_prefix = gb_target_prefix,
+          id_map_tsvs = gb_target_id_maps,
+          eval_interval_beds = select_first([benchmark_interval_beds]),
+          eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
+          genome_file = select_first([genome_file]),
+          total_shards = sample_bench_shards,
+          common_af_cutoff = common_af_cutoff,
+          bcftools_docker = bcftools_docker,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
   
 
   ##################
@@ -640,6 +700,7 @@ task ChooseTargetSamples {
     File target_samples = target_outfile
     File site_exclude_samples = site_excl_outfile
     Int n_unrelated_samples = length(read_lines("unrelated.samples.list"))
+    Int n_target_samples = length(read_lines(target_outfile))
   }
 
   runtime {
@@ -675,6 +736,7 @@ task PreprocessVcf {
   String no_rel_cmd = if defined(site_exclude_samples) then "--force-samples --samples-file ^" + basename(select_first([site_exclude_samples])) else ""
   String sites_outfile = out_prefix + ".sites.vcf.gz"
   String dense_outfile = out_prefix + ".dense_subset.vcf.gz"
+  String dense_sites_outfile = out_prefix + ".dense_subset.sites.vcf.gz"
 
   String mcnv_anno = if has_mcnvs then "| /opt/pancan_germline_wgs/scripts/gatksv_helpers/annotate_mcnv_freqs.py - -" else ""
 
@@ -710,7 +772,15 @@ task PreprocessVcf {
     ~{extra_commands} \
     | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC" \
     | bcftools view --threads 2 -Oz -o ~{dense_outfile}
-    tabix -p vcf -f ~{dense_outfile}    
+    tabix -p vcf -f ~{dense_outfile}
+
+    # Make a sites-only equivalent of the dense VCF for downstream benchmarking
+    bcftools view -G ~{dense_outfile} -Oz -o ~{dense_sites_outfile}
+    tabix -p vcf -f ~{dense_sites_outfile}
+
+    # For convenience, also make an empty VCF and corresponding index with matching header
+    tabix --only-header ~{dense_outfile} | bgzip -c > empty.vcf.gz
+    tabix -p vcf -f empty.vcf.gz
   >>>
 
   output {
@@ -718,6 +788,10 @@ task PreprocessVcf {
     File sites_vcf_idx = "~{sites_outfile}.tbi"
     File dense_vcf = dense_outfile
     File dense_vcf_idx = "~{dense_outfile}.tbi"
+    File dense_sites_vcf = dense_sites_outfile
+    File dense_sites_vcf_idx = "~{dense_sites_outfile}.tbi"
+    File empty_vcf = "empty.vcf.gz"
+    File empty_vcf_idx = "empty.vcf.gz.tbi"
   }
 
   runtime {

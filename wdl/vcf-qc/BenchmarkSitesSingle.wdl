@@ -45,6 +45,8 @@ workflow BenchmarkSitesSingle {
 
     Int total_shards
 
+    Boolean make_full_id_maps = false
+
     String bcftools_docker
     String g2c_analysis_docker
   }
@@ -55,7 +57,6 @@ workflow BenchmarkSitesSingle {
   Boolean do_snv = if defined(source_snv_bed) && defined(source_snv_bed_idx)
                    && defined(target_snv_bed) && defined(target_snv_bed_idx)
                    then true else false
-
   Boolean do_indel = if defined(source_indel_bed) && defined(source_indel_bed_idx)
                      && defined(target_indel_bed) && defined(target_indel_bed_idx)
                      then true else false
@@ -352,6 +353,48 @@ workflow BenchmarkSitesSingle {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
+  # Make full VID maps, if optioned
+  if ( make_full_id_maps ) {
+    # Collapse all site comparisons (not split by variant class)
+    Array[File] all_ppv_shards = select_all(flatten([select_all(CompareSnvPpv.all_sites_bed),
+                                                     select_all(CompareIndelPpv.all_sites_bed),
+                                                     select_all(CompareSvPpv.all_sites_bed)]))
+    call Utils.ConcatTextFiles as CollapseAllPpvSites {
+      input:
+        shards = all_ppv_shards,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = ppv_prefix + ".all_sites.bed.gz",
+        docker = bcftools_docker
+    }
+    Array[File] all_sens_shards = select_all(flatten([select_all(CompareSnvSens.all_sites_bed),
+                                                     select_all(CompareIndelSens.all_sites_bed),
+                                                     select_all(CompareSvSens.all_sites_bed)]))
+    call Utils.ConcatTextFiles as CollapseAllSensSites {
+      input:
+        shards = all_sens_shards,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = sens_prefix + ".all_sites.bed.gz",
+        docker = bcftools_docker
+    }
+
+    # Extract consensus list mapping variant IDs between the two datasets
+    call MakeVidMap as MakePpvVidMap {
+      input:
+        benchmark_bed = CollapseAllPpvSites.merged_file,
+        out_prefix = ppv_prefix
+    }
+    call MakeVidMap as MakeSensVidMap {
+      input:
+        benchmark_bed = CollapseAllSensSites.merged_file,
+        out_prefix = sens_prefix
+    }
+  }
 
   output {
     File? common_snv_ppv_bed = CollapseCommonSnvPpvSites.merged_file
@@ -364,6 +407,8 @@ workflow BenchmarkSitesSingle {
     File sensitivity_by_size = SumSensBySize.merged_distrib
     File ppv_by_freq = SumPpvByFreq.merged_distrib
     File sensitivity_by_freq = SumSensByFreq.merged_distrib
+    File? ppv_variant_id_map = MakePpvVidMap.vid_map
+    File? sensitivity_variant_id_map = MakeSensVidMap.vid_map
   }
 }
 
@@ -509,3 +554,43 @@ task CompareSites {
     preemptible: 3
   }
 }
+
+
+task MakeVidMap {
+  input {
+    File benchmark_bed
+    String out_prefix
+
+    Float mem_gb = 3.5
+    String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
+  }
+
+  Int disk_gb = ceil(2 * size(benchmark_bed, "GB")) + 10
+  String out_fname = "~{out_prefix}.variant_id_map.tsv.gz"
+
+  command <<<
+    set -eu -o pipefail
+
+    zcat ~{benchmark_bed} \
+    | fgrep -v "#" \
+    | awk -v FS="\t" \
+      '{ if ($10!="NA") printf "%s\t%s\t%f\n", $4, $9, $11 }' \
+    | sort -nk3,3 \
+    | awk -v FS="\t" -v OFS="\t" '!seen[$1]++' \
+    | gzip -c \
+    > ~{out_fname}
+  >>>
+
+  output {
+    File vid_map = out_fname
+  }
+
+  runtime {
+    docker: linux_docker
+    memory: "~{mem_gb} GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+

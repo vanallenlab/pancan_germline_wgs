@@ -182,6 +182,28 @@ task ConcatGenotypeTsvs {
 }
 
 
+# Make an empty text file as a placeholder
+task MakeDummyFile {
+  input {}
+
+  command <<<
+    touch "dummy.txt"
+  >>>
+
+  output {
+    File empty_file = "dummy.txt"
+  }
+
+  runtime {
+    docker: "marketplace.gcr.io/google/ubuntu1804"
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk 15 HDD"
+    preemptible: 3
+  }
+}
+
+
 # Divide a BED-style intervals file into shards balanced on total genomic footprint
 task ShardIntervals {
   input {
