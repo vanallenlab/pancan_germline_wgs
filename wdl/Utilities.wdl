@@ -426,6 +426,42 @@ task ParseIntervals {
 }
 
 
+task ShardTextFile {
+  input {
+    File input_file
+    Int n_splits
+    String out_prefix
+    Boolean shuffle = false
+    Float mem_gb = 3.5
+    String g2c_analysis_docker
+  }
+
+  Int disk_gb = ceil(3 * size(input_file, "GB")) + 10
+  String shuffle_cmd = if shuffle then "--shuffle" else ""
+
+  command <<<
+    set -eu -o pipefail
+
+    /opt/pancan_germline_wgs/scripts/utilities/evenSplitter.R \
+      -S ~{n_splits} \
+      ~{shuffle_cmd} \
+      ~{input_file} \
+      ~{out_prefix}
+  >>>
+
+  output {
+    Array[File] shards = glob("~{out_prefix}*")
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "~{mem_gb} GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
 task ShardVcf {
   input {
     File vcf

@@ -560,12 +560,14 @@ task MakeVidMap {
   input {
     File benchmark_bed
     String out_prefix
+    Boolean invert = false
 
     Float mem_gb = 3.5
     String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
   }
 
   Int disk_gb = ceil(2 * size(benchmark_bed, "GB")) + 10
+  String invert_cmd = if invert then "| awk -v OFS=\"\t\" '{ print $2, $1, $3 }' " else ""
   String out_fname = "~{out_prefix}.variant_id_map.tsv.gz"
 
   command <<<
@@ -576,6 +578,7 @@ task MakeVidMap {
     | awk -v FS="\t" \
       '{ if ($10!="NA") printf "%s\t%s\t%f\n", $4, $9, $11 }' \
     | sort -nk3,3 \
+    ~{invert_cmd} \
     | awk -v FS="\t" -v OFS="\t" '!seen[$1]++' \
     | gzip -c \
     > ~{out_fname}

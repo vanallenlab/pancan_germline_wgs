@@ -15,6 +15,7 @@ version 1.0
 
 import "BenchmarkSites.wdl" as SiteBench
 import "QcTasks.wdl" as QcTasks
+import "Utilities.wdl" as Utils
 
 
 workflow BenchmarkSamplesSingle {
@@ -37,6 +38,7 @@ workflow BenchmarkSamplesSingle {
     File genome_file
 
     Int total_shards = 2500
+    Int min_samples_per_shard = 10
     Float common_af_cutoff = 0.01
 
     String bcftools_docker
@@ -44,10 +46,12 @@ workflow BenchmarkSamplesSingle {
   }
 
   # Subset target VCF to overlapping samples
+  call QcTasks.MakeHeaderFiller {}
   call SubsetTargetVcf {
     input:
       vcf = target_vcf,
       vcf_idx = target_vcf_idx,
+      supp_header = MakeHeaderFiller.supp_vcf_header,
       id_map_tsv = id_map_tsv,
       source_sample_id_list = source_sample_id_list,
       bcftools_docker = bcftools_docker
@@ -100,10 +104,33 @@ workflow BenchmarkSamplesSingle {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
-  # TODO:
-  # 5. Compare .tsvs from 4 to equivalent .tsvs generated from target/input callset while linking through variant ID map from #3
+  # Shard the cleaned ID map to optimally parallelize GT benchmarking tasks
+  Int n_tasks_per_shard = 2 * length(eval_interval_beds)
+  Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
+  Int n_sample_shards = if n_naive_sample_splits < total_shards then n_naive_sample_splits else total_shards
+  # call Utils.ShardTextFile as ShardSamples {
+  #   input:
+  #     input_file = SubsetTargetVcf.filtered_id_map,
+  #     n_splits = n_sample_shards,
+  #     out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
+  #     shuffle = true,
+  #     g2c_analysis_docker = g2c_analysis_docker
+  # }
+
+  # # Scatter over samples and perform benchmarking on each
+  # scatter ( k in range(length(ShardSamples.shards)) ) {
+  #   # TODO:
+  #   # 5. Compare .tsvs from 4 to equivalent .tsvs generated from target/input callset while linking through variant ID map from #3
+  #   call BenchmarkGenotypes as BenchGtPpv {
+  #     input:
+  #       variant_id_map = BenchmarkSites.ppv_variant_id_maps
+  #   }
+
+  #   # TODO: need to add sensitivity here
+  # }
+
   # 6. Collapse outputs of 5 across all samples and compute summary metrics (medians?)
-  
+
   output {}
 }
 
@@ -113,6 +140,7 @@ task SubsetTargetVcf {
   input {
     File vcf
     File vcf_idx
+    File supp_header
     File id_map_tsv
     File source_sample_id_list
     String bcftools_docker
@@ -138,18 +166,14 @@ task SubsetTargetVcf {
     join -j 1 -t $'\t' source.samples.list id_map.tsv \
     | sort -k2,2 \
     | join -1 2 -2 1 -t $'\t' - target.samples.list \
+    | awk -v OFS="\t" '{ print $2, $1 }' \
     > ~{filtered_map_fname}
 
     # Subset input VCF to overlapping samples
     cut -f2 ~{filtered_map_fname} | sort -V | uniq > target.keep.list
-    bcftools view \
-      --no-update \
-      --samples-file target.keep.list \
-      --force-samples \
-      ~{vcf} \
-    | bcftools view \
-      --no-update \
-      --include 'GT="alt" | FILTER="MULTIALLELIC"' \
+    bcftools annotate -h ~{supp_header} ~{vcf} \
+    | bcftools view --no-update --samples-file target.keep.list --force-samples \
+    | bcftools view --no-update --include 'GT="alt" | FILTER="MULTIALLELIC"' \
       -Oz -o ~{filtered_dense_vcf_fname}
     tabix -p vcf -f ~{filtered_dense_vcf_fname}
 
@@ -170,10 +194,40 @@ task SubsetTargetVcf {
     File filtered_id_map = filtered_map_fname
 
     Int n_samples_in_original_vcf = length(read_lines("target.samples.list"))
+    Int n_overlapping_samples = length(read_lines("target.keep.list"))
   }
 
   runtime {
     docker: bcftools_docker
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Compare genotypes between callsets for a list of samples
+task BenchmarkGenotypes {
+  input {
+    File variant_id_map
+    File sample_id_map
+    File source_gt_tarball
+    File target_gt_tarball
+    String g2c_analysis_docker
+  }
+
+  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball])) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # TODO: finish this
+
+  >>>
+
+  runtime {
+    docker: g2c_analysis_docker
     memory: "3.5 GB"
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"

@@ -80,8 +80,35 @@ def find_exact_hits(hits_g):
     return hits_g
 
 
+def expand_insertions(feat, hits_g, prefix, expand=True):
+    """
+    Helper function to expand insertions so that their interval size is at least
+    as large as their reported SVLEN
+    """
+    
+    if not expand:
+        return feat
+
+    vid = prefix + feat.name
+    vsc = hits_g.nodes[vid].get('vsc')
+
+    if vsc not in vsc_matches['INS']:
+        return feat
+
+    rep_size = hits_g.nodes[vid].get('size', 0)
+    int_size = feat.length
+    if rep_size > int_size:
+        int_mid = np.mean([feat.start, feat.end])
+        half_size = rep_size / 2
+        feat.start = int(np.max([0, np.floor(int_mid - half_size)]))
+        feat.end = int(np.ceil(int_mid + half_size))
+
+    return feat
+
+
 def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10, 
-                      max_size_diff=3.0, max_bkpt_rel=0.5, pad=1):
+                      max_size_diff=3.0, max_bkpt_rel=0.5, pad=1,
+                      expand_ins=True):
     """
     Search for matching variants between two pbt.BedTool objects based on overlap
     """
@@ -92,9 +119,15 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
     big_nids = [nid for nid in hits_g.nodes() 
                 if hits_g.nodes[nid].get('size', 0) >= min_size]
     a_bt = a_bt.filter(lambda x: 'a_' + x[3] in big_nids).\
-                cut(range(6)).slop(b=pad, g=genome)
+                cut(range(6)).\
+                slop(b=pad, g=genome).\
+                each(expand_insertions, hits_g=hits_g, prefix='a_', 
+                     expand=expand_ins)
     b_bt = b_bt.filter(lambda x: 'b_' + x[3] in big_nids).\
-                cut(range(6)).slop(b=pad, g=genome)
+                cut(range(6)).\
+                slop(b=pad, g=genome).\
+                each(expand_insertions, hits_g=hits_g, prefix='b_', 
+                     expand=expand_ins)
 
     # Find overlaps, filter, and add qualifying edges to graph
     for ovr in a_bt.intersect(b_bt, wao=True, f=ro, r=True):
@@ -105,8 +138,8 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
 
         # Get left variant info
         nid_a = 'a_' + ovr[3]
-        start_a = hits_g.nodes[nid_a].get('pos')
-        end_a = hits_g.nodes[nid_a].get('end')
+        start_a = int(ovr[1])
+        end_a = int(ovr[2])
         size_a = hits_g.nodes[nid_a].get('size', 0)
         vsc_a = hits_g.nodes[nid_a].get('vsc')
         af_a = hits_g.nodes[nid_a].get('af')
@@ -135,13 +168,13 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
             continue
 
         # Compute Euclidean distance between variants and update hits graph
-        e_d = node_distance([start_a, start_b], [end_a, end_b], [af_a, af_b])
+        e_d = node_distance([start_a, start_b], [end_a, end_b], [af_a, af_b], [vsc_a, vsc_b])
         hits_g.add_edge(nid_a, nid_b, dist=e_d)
 
     return hits_g
 
 
-def node_distance(starts, ends, afs):
+def node_distance(starts, ends, afs, vscs):
     """
     Compute the distance between two variants
 
@@ -150,6 +183,7 @@ def node_distance(starts, ends, afs):
     B. normalized left breakpoint distance (distance between starts / total bp spanned by both variants)
     C. normalized right breakpoint distance (distance between ends / total bp spanned by both variants)
     D. allele frequency difference
+    E. exact match between variant subclasses (0 if exact match, 1 if else)
     """
 
     bp_span = np.abs(np.max(ends) - np.min(starts))
@@ -162,7 +196,10 @@ def node_distance(starts, ends, afs):
 
     af_d = np.abs(afs[0] - afs[1])
 
-    return np.sqrt(((1 - ovr_jac) ** 2) + (lbp_d ** 2) + (rbp_d ** 2) + (af_d ** 2))
+    vscs = [x.lower() for x in vscs]
+    vsc_d = int(vscs[0] != vscs[1])
+
+    return np.sqrt(((1 - ovr_jac) ** 2) + (lbp_d ** 2) + (rbp_d ** 2) + (af_d ** 2) + (vsc_d ** 2))
 
 
 def get_distances(hits_g, node_id):
@@ -429,6 +466,11 @@ def main():
                         'or "both". Does not alter variant coordinates or size ' +
                         'estimates; helps for 0bp/1bp SV intervals like insertions ' +
                         '[default: 0]')
+    parser.add_argument('--no-expand-insertions', action='store_true', 
+                        help='Do not expand insertions for --mode "overlap". ' +
+                        'By default, any insertion variant with reported interval ' +
+                        'smaller than its reported variant size will have its ' +
+                        'interval uniformly expanded to equal its reported size.')
     parser.add_argument('--one-to-many', action='store_true', help='Do not prune ' +
                         'overlaps to require strict one-to-one matches between ' +
                         '-a and -b. Instead, report the best match for each ' +
@@ -469,7 +511,8 @@ def main():
                                  args.min_overlap_var_size, 
                                  args.max_overlap_size_diff,
                                  args.max_overlap_bkpt_rel_dist, 
-                                 args.overlap_pad)
+                                 args.overlap_pad,
+                                 not args.no_expand_insertions)
 
     # Process candidate matches to generate 1:1 mapping of hits, unless specified otherwise
     if not args.one_to_many:

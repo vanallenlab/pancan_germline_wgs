@@ -136,7 +136,7 @@ task GetSampleIdsFromGtTarball {
     String outfile_name = "ids_in_tarball.list"
   }
 
-  Int disk_gb = ceil(2.5 * size(gt_tarball, "GB")) + 10
+  Int disk_gb = ceil(4 * size(gt_tarball, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
@@ -149,7 +149,7 @@ task GetSampleIdsFromGtTarball {
     | xargs -I {} basename {} \
     | sed 's/\.gt\.tsv\.gz//g' \
     | sort \
-    > ids_in_tarball.list
+    > ~{outfile_name} || true
   >>>
 
   output {
