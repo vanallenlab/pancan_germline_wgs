@@ -576,7 +576,7 @@ task MakeVidMap {
     zcat ~{benchmark_bed} \
     | fgrep -v "#" \
     | awk -v FS="\t" \
-      '{ if ($10!="NA") printf "%s\t%s\t%f\n", $4, $9, $11 }' \
+      '{ if ($10=="NA") $11=100; printf "%s\t%s\t%f\n", $4, $9, $11 }' \
     | sort -nk3,3 \
     ~{invert_cmd} \
     | awk -v FS="\t" -v OFS="\t" '!seen[$1]++' \

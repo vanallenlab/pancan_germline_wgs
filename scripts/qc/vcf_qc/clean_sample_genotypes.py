@@ -149,16 +149,13 @@ def main():
         # Clean GT + CN
         new_gt = clean_gts(gt, cn)
 
-        # Convert variant info to variant ID 
+        # Convert variant info to variant ID
         if svlen != '.':
             varlen = int(svlen)
         else:
             varlen = np.abs(len(alt) - len(ref))
         vc, vsc = classify_variant(ref, alt, varlen)
-        if vc == 'sv':
-            vid = '_'.join([str(x) for x in [chrom, pos, vsc, varlen]])
-        else:
-            vid = '_'.join([str(x) for x in [chrom, pos, ref, alt]])
+        vid = name_variant(chrom, pos, ref, alt, vc, vsc, varlen)
 
         # Update compressed distribution, if optioned
         if metrics is not None:

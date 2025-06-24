@@ -94,6 +94,19 @@ workflow BenchmarkSamples {
   }
   File source_sv_bed = select_first([CollapseSourceSvs.merged_file, MakeEmptyBenchBed.empty_bed])
 
+  # Collapse all source site metrics
+  call Utils.ConcatTextFiles as CollapseAllSourceVars {
+  input:
+    shards = select_all([source_snv_bed, source_indel_bed, source_sv_bed]),
+    concat_command = "zcat",
+    sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+    compression_command = "bgzip -c",
+    input_has_header = true,
+    output_filename = source_prefix + ".all_sites.bed.gz",
+    docker = bcftools_docker
+  }
+
+
   # Determine sample IDs present in GT tarball
   call GetSampleIdsFromGtTarball {
     input:

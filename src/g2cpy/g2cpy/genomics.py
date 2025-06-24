@@ -13,6 +13,7 @@ Genomics-related helper functions
 
 import subprocess
 from re import sub
+from zlib import adler32
 
 
 def bgzip(filename, return_new_fn=False):
@@ -145,6 +146,20 @@ def make_tabix_index(filename):
     """
 
     subprocess.run(['tabix', '-f', filename])
+
+
+def name_variant(chrom, pos, ref, alt, vc, vsc, varlen):
+    """
+    Determine a variant's unique G2C identifier based on its information
+    """
+
+    if vc == 'snv':
+        vid = '_'.join([str(x) for x in [chrom, pos, ref, alt]])
+    else:
+        vhash_str = ''.join([str(x) for x in [chrom, vsc, pos, ref, varlen, alt]])
+        vhash = '{:08x}'.format(adler32(vhash_str.encode('utf-8')))[:8]
+        vid = '_'.join([str(x) for x in [chrom, pos, vsc, vhash]])
+    return vid
 
 
 def is_multiallelic(record):

@@ -17,7 +17,7 @@ import gzip
 import numpy as np
 import subprocess
 from Bio import bgzf
-from g2cpy import classify_variant
+from g2cpy import classify_variant, name_variant
 from os import remove
 from re import sub
 from sys import stdin
@@ -177,10 +177,7 @@ def main():
         vc_seen[vc] = True
 
         # Assign simple VID
-        if vc == 'sv':
-            vid = '_'.join([str(x) for x in [chrom, pos, vsc, varlen]])
-        else:
-            vid = '_'.join([str(x) for x in [chrom, pos, ref, alt]])
+        vid = name_variant(chrom, pos, ref, alt, vc, vsc, varlen)
 
         # Set size to arbitrarily large value for gross interchromosomal 
         # translocations with undefined sizes

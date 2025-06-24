@@ -20,6 +20,7 @@ import "Utilities.wdl" as Utils
 
 workflow BenchmarkSamplesSingle {
   input {
+    File source_all_sites_bed
     File? source_snv_bed
     File? source_indel_bed
     File? source_sv_bed
@@ -66,6 +67,7 @@ workflow BenchmarkSamplesSingle {
       common_af_cutoff = common_af_cutoff,
       g2c_analysis_docker = g2c_analysis_docker
   }
+  # TODO: concatenate target site metrics
 
   # Run site-level benchmarking to determine mapping of 
   # matching variant IDs between source & target
@@ -212,19 +214,79 @@ task BenchmarkGenotypes {
   input {
     File variant_id_map
     File sample_id_map
+    Boolean invert_sample_map = false
+    String output_prefix
+
     File source_gt_tarball
     File target_gt_tarball
+
+    File source_site_metrics
+    Float common_af_cutoff = 0.01
+    
     String g2c_analysis_docker
   }
 
-  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball])) + 10
+  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 10
 
   command <<<
     set -eu -o pipefail
 
-    # TODO: finish this
+    # Prep variant ID lists & metric files
+    zcat ~{variant_id_map} | cut -f1 | sort -V | uniq > source.vids.list
+    zcat ~{source_site_metrics} | head -n1 | fgrep "#" > site_metrics.header || true
+    zcat ~{source_site_metrics} | fgrep -wf source.vids.list \
+    | cat site_metrics.header - | bgzip -c \
+    > source.metrics.bed.gz || true
+    rm ~{source_site_metrics}
+    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list
 
+    # Prep sample lists
+    if ~{invert_sample_map}; then
+      awk -v FS="\t" -v OFS="\t" '{ print $2, $1 }' ~{sample_id_map} > sample.map.tsv
+    else
+      cp ~{sample_id_map} sample.map.tsv
+    fi
+    cut -f1 sample.map.tsv > source.samples.list
+    cut -f2 sample.map.tsv > target.samples.list
+
+    # Unpack source GTs and subset to samples of interest
+    mkdir source_gts_raw
+    tar -xzvf ~{source_gt_tarball} -C source_gts_raw/
+    mkdir source_gts/
+    while read sid; do
+      find source_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      | xargs -I {} zcat {} | fgrep -wf source.vids.list \
+      | gzip -c > source_gts/$sid.gt.tsv.gz || true
+    done < source.samples.list
+    rm -rf source_gts_raw ~{source_gt_tarball}
+
+    # Unpack target GTs and subset to samples of interest
+    mkdir target_gts_raw
+    tar -xzvf ~{target_gt_tarball} -C target_gts_raw/
+    mkdir target_gts/
+    while read sid; do
+      find target_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      | xargs -I {} zcat {} | fgrep -wf target.vids.list \
+      | gzip -c > target_gts/$sid.gt.tsv.gz || true
+    done < target.samples.list
+    rm -rf target_gts_raw ~{target_gt_tarball}
+
+    # Benchmark genotypes
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_genotypes.R \
+      --variant-map ~{variant_id_map} \
+      --source-site-metrics source.metrics.bed.gz \
+      --sample-map sample.map.tsv \
+      --source-gt-dir source_gts/ \
+      --target-gt-dir target_gts/ \
+      --gt-tsv-suffix ".gt.sub.tsv.gz" \
+      --common-af ~{common_af_cutoff} \
+      --out-prefix ~{output_prefix}
+    gzip -f ~{output_prefix}.gt_comparison.distrib.tsv
   >>>
+
+  output {
+    File gt_bench_distrib = "~{output_prefix}.gt_comparison.distrib.tsv.gz"
+  }
 
   runtime {
     docker: g2c_analysis_docker
