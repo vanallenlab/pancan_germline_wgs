@@ -26,7 +26,8 @@ load.vid.map <- function(vid.map.in, sites.bed.in, common.af=0.01){
   colnames(vid.map) <- c("source_vid", "target_vid")
   bed <- read.table(sites.bed.in, header=T, sep="\t", comment.char="")
   bed$freq <- remap(as.character(bed$af < common.af),
-                    c("TRUE" = "rare", "FALSE" = "common"))
+                    c("TRUE" = paste("lt", format(common.af, scientific=T), sep=""),
+                      "FALSE" = paste("ge", format(common.af, scientific=T), sep="")))
   merge(vid.map, bed[, c("vid", "class", "subclass", "freq")],
         by.x="source_vid", by.y="vid", all.x=T, all.y=F, sort=F)
 }

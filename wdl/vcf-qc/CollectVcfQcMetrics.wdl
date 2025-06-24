@@ -62,6 +62,7 @@ workflow CollectVcfQcMetrics {
     Array[String]? benchmark_interval_bed_names    # Descriptive names for each set of evaluation intervals
     File? genome_file                              # BEDTools-style .genome file
     Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site and sample benchmarking
+    Int min_samples_per_bench_shard = 10           # Minimum number of samples per shard to allow for sample benchmarking
 
     String output_prefix
 
@@ -363,8 +364,12 @@ workflow CollectVcfQcMetrics {
   Int n_gt_benchmark_datasets = length(sample_benchmark_dataset_names)
   Boolean do_sample_bench = (n_gt_benchmark_datasets > 0)
   Int half_bench_shards = ceil(benchmarking_shards / 2)
-  Int site_bench_shards = if do_sample_bench then half_bench_shards else benchmarking_shards
-  Int sample_bench_shards = if do_site_bench then half_bench_shards else benchmarking_shards
+  Int site_bench_shards = if do_sample_bench 
+                          then ceil(half_bench_shards / (n_site_benchmark_datasets + 0.01))
+                          else ceil(benchmarking_shards / (n_site_benchmark_datasets + 0.01))
+  Int sample_bench_shards = if do_site_bench 
+                            then ceil(half_bench_shards / (n_gt_benchmark_datasets + 0.01))
+                            else ceil(benchmarking_shards / (n_gt_benchmark_datasets + 0.01))
 
   # Compute site-level benchmarking metrics
   if ( n_site_benchmark_datasets > 0 ) {
@@ -464,13 +469,14 @@ workflow CollectVcfQcMetrics {
           eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
           genome_file = select_first([genome_file]),
           total_shards = sample_bench_shards,
+          min_samples_per_shard = min_samples_per_bench_shard,
           common_af_cutoff = common_af_cutoff,
           bcftools_docker = bcftools_docker,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
   }
-  
+
 
   ##################
   ### OUTPUT CLEANUP
@@ -533,6 +539,9 @@ workflow CollectVcfQcMetrics {
     Array[Array[File]]? site_benchmark_sensitivity_by_sizes = BenchmarkSites.sensitivity_by_sizes
     Array[Array[File]]? site_benchmark_ppv_by_freqs = BenchmarkSites.ppv_by_freqs
     Array[Array[File]]? site_benchmark_sensitivity_by_freqs = BenchmarkSites.sensitivity_by_freqs
+
+    Array[Array[File]]? sample_benchmark_ppv_distribs = BenchmarkSamples.ppv_distribs
+    Array[Array[File]]? sample_benchmark_sensitivity_distribs = BenchmarkSamples.sensitivity_distribs
   }
 }
 

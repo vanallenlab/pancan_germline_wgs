@@ -45,9 +45,9 @@ def load_site_metrics(metrics_in, common_af = 0.01):
             if int(ac) == 1:
                 fc = 'singleton'
             elif float(af) < common_af:
-                fc = 'rare'
+                fc = 'lt{:.2e}'.format(common_af)
             else:
-                fc = 'common'
+                fc = 'ge{:.2e}'.format(common_af)
 
             metrics[vid] = {'vc' : vc, 'vsc' : vsc, 'fc' : fc}
 

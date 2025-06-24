@@ -46,6 +46,8 @@ workflow BenchmarkSamplesSingle {
     String g2c_analysis_docker
   }
 
+  Int n_eval_intervals = length(eval_interval_beds)
+
   # Subset target VCF to overlapping samples
   call QcTasks.MakeHeaderFiller {}
   call SubsetTargetVcf {
@@ -67,7 +69,6 @@ workflow BenchmarkSamplesSingle {
       common_af_cutoff = common_af_cutoff,
       g2c_analysis_docker = g2c_analysis_docker
   }
-  # TODO: concatenate target site metrics
 
   # Run site-level benchmarking to determine mapping of 
   # matching variant IDs between source & target
@@ -107,33 +108,82 @@ workflow BenchmarkSamplesSingle {
   }
 
   # Shard the cleaned ID map to optimally parallelize GT benchmarking tasks
-  Int n_tasks_per_shard = 2 * length(eval_interval_beds)
+  Int n_tasks_per_shard = 2 * n_eval_intervals
   Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
   Int n_sample_shards = if n_naive_sample_splits < total_shards then n_naive_sample_splits else total_shards
-  # call Utils.ShardTextFile as ShardSamples {
-  #   input:
-  #     input_file = SubsetTargetVcf.filtered_id_map,
-  #     n_splits = n_sample_shards,
-  #     out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
-  #     shuffle = true,
-  #     g2c_analysis_docker = g2c_analysis_docker
-  # }
+  call Utils.ShardTextFile as ShardSamples {
+    input:
+      input_file = SubsetTargetVcf.filtered_id_map,
+      n_splits = n_sample_shards,
+      out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
+      shuffle = true,
+      g2c_analysis_docker = g2c_analysis_docker
+  }
 
-  # # Scatter over samples and perform benchmarking on each
-  # scatter ( k in range(length(ShardSamples.shards)) ) {
-  #   # TODO:
-  #   # 5. Compare .tsvs from 4 to equivalent .tsvs generated from target/input callset while linking through variant ID map from #3
-  #   call BenchmarkGenotypes as BenchGtPpv {
-  #     input:
-  #       variant_id_map = BenchmarkSites.ppv_variant_id_maps
-  #   }
+  # Keep benchmarking results separate for each evaluation interval set
+  scatter ( i in range(n_eval_intervals) ) {
 
-  #   # TODO: need to add sensitivity here
-  # }
+    String ei_prefix = if defined(eval_interval_bed_names)
+                       then flatten(select_all([eval_interval_bed_names]))[i]
+                       else "eval_interval_~{i}"
+    String ppv_prefix = "~{ei_prefix}.~{source_prefix}.~{target_prefix}"
+    String sens_prefix = "~{ei_prefix}.~{target_prefix}.~{source_prefix}"
+    
+    # Scatter over samples and perform benchmarking on each
+    scatter ( k in range(length(ShardSamples.shards)) ) {
 
-  # 6. Collapse outputs of 5 across all samples and compute summary metrics (medians?)
+      # Benchmark PPV (source -> target)
+      call BenchmarkGenotypes as BenchGtPpv {
+        input:
+          variant_id_map = select_all(BenchmarkSites.ppv_variant_id_maps)[i],
+          sample_id_map = ShardSamples.shards[k],
+          invert_sample_map = false,
+          output_prefix = "~{ppv_prefix}.~{k}",
+          source_gt_tarball = source_gt_tarball,
+          target_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
+          source_site_metrics = source_all_sites_bed,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
 
-  output {}
+      # Benchmark sensitivity (target -> source)
+      call BenchmarkGenotypes as BenchGtSens {
+        input:
+          variant_id_map = select_all(BenchmarkSites.sensitivity_variant_id_maps)[i],
+          sample_id_map = ShardSamples.shards[k],
+          invert_sample_map = true,
+          output_prefix = "~{sens_prefix}.~{k}",
+          source_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
+          target_gt_tarball = source_gt_tarball,
+          source_site_metrics = TargetVcfToBed.all_sites,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+
+    }
+
+    # Collapse PPV benchmarking across all shards
+    call QcTasks.SumCompressedDistribs as SumPpvDistrib {
+      input:
+        distrib_tsvs = BenchGtPpv.gt_bench_distrib,
+        out_prefix = ppv_prefix + ".gt_comparison.distrib",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+
+    # Collapse sensitivity benchmarking across all shards
+    call QcTasks.SumCompressedDistribs as SumSensDistrib {
+      input:
+        distrib_tsvs = BenchGtSens.gt_bench_distrib,
+        out_prefix = sens_prefix + ".gt_comparison.distrib",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+
+  output {
+    # One file per evaluation interval set in each output array
+    Array[File] ppv_distribs = SumPpvDistrib.merged_distrib
+    Array[File] sensitivity_distribs = SumSensDistrib.merged_distrib
+  }
 }
 
 

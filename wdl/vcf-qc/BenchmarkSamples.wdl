@@ -35,6 +35,7 @@ workflow BenchmarkSamples {
     File genome_file
 
     Int total_shards = 2500
+    Int min_samples_per_shard = 10
     Float common_af_cutoff = 0.01
 
     String bcftools_docker
@@ -42,7 +43,8 @@ workflow BenchmarkSamples {
   }
 
   Int n_targets = length(target_vcfs)
-  Int n_shards_per_vcf = floor(total_shards / n_targets)
+  Int n_shards_per_vcf = ceil(total_shards / n_targets)
+  Int n_eval_intervals = length(eval_interval_beds)
 
   call QcTasks.MakeEmptyBenchBed {
     input:
@@ -106,7 +108,6 @@ workflow BenchmarkSamples {
     docker = bcftools_docker
   }
 
-
   # Determine sample IDs present in GT tarball
   call GetSampleIdsFromGtTarball {
     input:
@@ -118,6 +119,7 @@ workflow BenchmarkSamples {
   scatter ( i in range(n_targets) ) {
     call BenchSingle.BenchmarkSamplesSingle as BenchmarkTask {
       input:
+        source_all_sites_bed = CollapseAllSourceVars.merged_file,
         source_snv_bed = source_snv_bed,
         source_indel_bed = source_indel_bed,
         source_sv_bed = source_sv_bed,
@@ -131,14 +133,45 @@ workflow BenchmarkSamples {
         eval_interval_beds = eval_interval_beds,
         eval_interval_bed_names = eval_interval_bed_names,
         genome_file = genome_file,
-        total_shards = total_shards,
+        total_shards = n_shards_per_vcf,
+        min_samples_per_shard = min_samples_per_shard,
         common_af_cutoff = common_af_cutoff,
         bcftools_docker = bcftools_docker,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
 
-  output {}
+  # Pool benchmarking results across VCFs per evalulation interval set
+  scatter ( k in range(n_eval_intervals) ) {
+
+    String ei_prefix = if defined(eval_interval_bed_names)
+                       then flatten(select_all([eval_interval_bed_names]))[k]
+                       else "eval_interval_~{k}"
+    String ppv_prefix = "~{ei_prefix}.~{source_prefix}.~{target_prefix}"
+    String sens_prefix = "~{ei_prefix}.~{target_prefix}.~{source_prefix}"
+
+    # Collapse PPV benchmarking across all target VCFs
+    call QcTasks.SumCompressedDistribs as SumPpvDistrib {
+      input:
+        distrib_tsvs = BenchmarkTask.ppv_distribs[k],
+        out_prefix = ppv_prefix + ".gt_comparison.distrib",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+
+    # Collapse sensitivity benchmarking across all target VCFs
+    call QcTasks.SumCompressedDistribs as SumSensDistrib {
+      input:
+        distrib_tsvs = BenchmarkTask.sensitivity_distribs[k],
+        out_prefix = sens_prefix + ".gt_comparison.distrib",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+
+  output {
+    # One file per evaluation interval set in each output array
+    Array[File] ppv_distribs = SumPpvDistrib.merged_distrib
+    Array[File] sensitivity_distribs = SumSensDistrib.merged_distrib
+  }
 }
 
 
