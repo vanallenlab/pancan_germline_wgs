@@ -27,6 +27,15 @@ task BenchmarkGenotypes {
     String g2c_analysis_docker
   }
 
+  parameter_meta {
+    source_gt_tarball: {
+      localization_optional: true
+    }
+    target_gt_tarball: {
+      localization_optional: true
+    }
+  }
+
   String gt_report_cmd = if report_by_gt then "--report-by-genotype" else ""
   Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 10
 
@@ -53,27 +62,34 @@ task BenchmarkGenotypes {
 
     # Unpack source GTs and subset to samples of interest
     mkdir source_gts_raw
-    tar -xzvf ~{source_gt_tarball} -C source_gts_raw/
+    gsutil -m cp ~{source_gt_tarball} source_gt_tarball.tar.gz
+    tar -xzvf source_gt_tarball.tar.gz -C source_gts_raw/
     mkdir source_gts/
     while read sid; do
-      find source_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      find source_gts_raw/ -name "$sid.gt.tsv.gz" \
       | xargs -I {} zcat {} | fgrep -wf source.vids.list \
-      | gzip -c > source_gts/$sid.gt.tsv.gz || true
+      | gzip -c > source_gts/$sid.gt.sub.tsv.gz || true
     done < source.samples.list
-    rm -rf source_gts_raw ~{source_gt_tarball}
+    rm -rf source_gts_raw source_gt_tarball.tar.gz
+    echo "Contents of source_gts:"
+    ls -lh source_gts/
 
     # Unpack target GTs and subset to samples of interest
     mkdir target_gts_raw
-    tar -xzvf ~{target_gt_tarball} -C target_gts_raw/
+    gsutil -m cp ~{target_gt_tarball} target_gt_tarball.tar.gz
+    tar -xzvf target_gt_tarball.tar.gz -C target_gts_raw/
     mkdir target_gts/
     while read sid; do
-      find target_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      find target_gts_raw/ -name "$sid.gt.tsv.gz" \
       | xargs -I {} zcat {} | fgrep -wf target.vids.list \
-      | gzip -c > target_gts/$sid.gt.tsv.gz || true
+      | gzip -c > target_gts/$sid.gt.sub.tsv.gz || true
     done < target.samples.list
-    rm -rf target_gts_raw ~{target_gt_tarball}
+    rm -rf target_gts_raw target_gt_tarball.tar.gz
+    echo "Contents of target_gts:"
+    ls -lh source_gts/
 
     # Benchmark genotypes
+    echo "Now benchmarking..."
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_genotypes.R \
       --variant-map ~{variant_id_map} \
       --source-site-metrics source.metrics.bed.gz \
