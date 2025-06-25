@@ -84,7 +84,7 @@ workflow BenchmarkSitesSingle {
 
     # Compare SNVs, if provided
     if ( do_snv ) {
-      call PrepSites as PrepSourceSnvs {
+      call QcTasks.PrepSites as PrepSourceSnvs {
         input:
           beds = select_all([source_snv_bed]),
           bed_idxs = select_all([source_snv_bed_idx]),
@@ -95,7 +95,7 @@ workflow BenchmarkSitesSingle {
           g2c_analysis_docker = g2c_analysis_docker
       }
 
-      call PrepSites as PrepTargetSnvs {
+      call QcTasks.PrepSites as PrepTargetSnvs {
         input:
           beds = select_all([target_snv_bed]),
           bed_idxs = select_all([target_snv_bed_idx]),
@@ -132,7 +132,7 @@ workflow BenchmarkSitesSingle {
 
     # Compare indels, if provided
     if ( do_indel ) {
-      call PrepSites as PrepSourceIndels {
+      call QcTasks.PrepSites as PrepSourceIndels {
         input:
           beds = select_all([source_indel_bed, source_sv_bed]),
           bed_idxs = select_all([source_indel_bed_idx, source_sv_bed_idx]),
@@ -143,7 +143,7 @@ workflow BenchmarkSitesSingle {
           g2c_analysis_docker = g2c_analysis_docker
       }
 
-      call PrepSites as PrepTargetIndels {
+      call QcTasks.PrepSites as PrepTargetIndels {
         input:
           beds = select_all([target_indel_bed, target_sv_bed]),
           bed_idxs = select_all([target_indel_bed_idx, target_sv_bed_idx]),
@@ -180,7 +180,7 @@ workflow BenchmarkSitesSingle {
 
     # Compare SVs, if provided
     if ( do_sv ) {
-      call PrepSites as PrepSourceSvs {
+      call QcTasks.PrepSites as PrepSourceSvs {
         input:
           beds = select_all([source_sv_bed, source_indel_bed]),
           bed_idxs = select_all([source_sv_bed_idx, source_indel_bed_idx]),
@@ -191,7 +191,7 @@ workflow BenchmarkSitesSingle {
           g2c_analysis_docker = g2c_analysis_docker
       }
 
-      call PrepSites as PrepTargetSvs {
+      call QcTasks.PrepSites as PrepTargetSvs {
         input:
           beds = select_all([target_sv_bed, target_indel_bed]),
           bed_idxs = select_all([target_sv_bed_idx, target_indel_bed_idx]),
@@ -409,90 +409,6 @@ workflow BenchmarkSitesSingle {
     File sensitivity_by_freq = SumSensByFreq.merged_distrib
     File? ppv_variant_id_map = MakePpvVidMap.vid_map
     File? sensitivity_variant_id_map = MakeSensVidMap.vid_map
-  }
-}
-
-
-# Preps a sites.bed file for site comparison by generating:
-# 1. A strict "query" set, which only includes variants with POS within an 
-# eval interval, >50% coverage by all eval intervals, and size within [min_size, max_size]
-# 2. A lenient "ref" set, which includes any variant overlapping any eval_interval
-# and inclusive of all variants with size within [min_size / 3, 3 * max_size]
-task PrepSites {
-  input {
-    Array[File] beds
-    Array[File] bed_idxs
-    File eval_interval_bed
-
-    Int min_size = 0
-    Int max_size = 1000000000
-    Float lenient_size_scalar = 3.0
-    Float strict_interval_coverage = 0.5
-    
-    String prefix
-
-    Int disk_gb = 25
-    
-    String g2c_analysis_docker
-  }
-
-  parameter_meta {
-    beds: {
-      localization_optional: true
-    }
-  }
-
-  Int loose_min_size = floor(min_size / lenient_size_scalar)
-  Int loose_max_size = ceil(lenient_size_scalar * max_size)
-
-  command <<<
-    set -eu -o pipefail
-
-    # Link all bed indexes to pwd
-    while read bed_idx; do
-      ln -s $bed_idx .
-    done < ~{write_lines(bed_idxs)}
-
-    # Save header line for first BED
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    tabix --only-header -p bed -R ~{eval_interval_bed} ~{beds[0]} > header.bed
-
-    # Loop over each bed and use tabix to remotely extract only the variants needed
-    while read bed_uri; do
-      export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-      tabix -p bed -R ~{eval_interval_bed} $bed_uri
-    done < ~{write_lines(beds)} \
-    | awk -v FS="\t" -v min_size=~{loose_min_size} -v max_size=~{loose_max_size} \
-      '{ if ($7>=min_size && $7<=max_size) print }' \
-    | sort -Vk1,1 -k2,2n -k3,3n | uniq \
-    | cat header.bed - | bgzip -c \
-    > ~{prefix}.ref.bed.gz
-
-    # Further filter the lenient "ref" set to produce a strict "query" set
-    if [ $( zcat ~{prefix}.ref.bed.gz | fgrep -v "#" | wc -l ) -gt 0 ]; then
-      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
-        -i ~{prefix}.ref.bed.gz \
-        -t ~{eval_interval_bed} \
-        -f ~{strict_interval_coverage} \
-        -m ~{min_size} \
-        -M ~{max_size} \
-        -o ~{prefix}.query.bed.gz
-    else
-      cp ~{prefix}.ref.bed.gz ~{prefix}.query.bed.gz
-    fi
-  >>>
-
-  output {
-    File ref_bed = "~{prefix}.ref.bed.gz"
-    File query_bed = "~{prefix}.query.bed.gz"
-  }
-
-  runtime {
-    docker: g2c_analysis_docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk ~{disk_gb} HDD"
-    preemptible: 3
   }
 }
 

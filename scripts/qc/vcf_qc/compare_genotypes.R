@@ -50,11 +50,11 @@ load.gts <- function(gt.tsv.in, prefix, elig.vids=NULL){
 }
 
 # Benchmark source & target genotypes
-benchmark.gts <- function(source.gts, target.gts, vid.map){
+benchmark.gts <- function(source.gts, target.gts, vid.map, report.by.gt=FALSE){
   # Compute concordance for all genotypes
   hits <- merge(merge(vid.map, source.gts, all=F, sort=F),
                 target.gts, all.x=T, all.y=F, sort=F)
-  hits$zygosity <- classify.gt.zygosity(hits$source_gt)
+  hits$zygosity <- if(report.by.gt){hits$source_gt}else{classify.gt.zygosity(hits$source_gt)}
   hits$match <- "none"
   hits$match[which(!is.na(hits$target_gt))] <- "carrier"
   hits$match[which(hits$source_gt == hits$target_gt)] <- "gt"
@@ -115,6 +115,9 @@ parser$add_argument("--target-gt-dir", metavar="path", default="./",
 parser$add_argument("--gt-tsv-suffix", metavar="string", default=".gt.tsv.gz",
                     help=paste("File suffix to assume when searching for sample",
                                "genotype .tsvs; will be appended with sample ID"))
+parser$add_argument("--report-by-genotype", action="store_true",
+                    help=paste("Split summary results by genotype [default:",
+                               "summarize by zygosity]"))
 parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
                     help="Allele frequency threshold for common variants")
 args <- parser$parse_args()
@@ -126,6 +129,7 @@ args <- parser$parse_args()
 #              "source_gt_dir" = "~/Downloads/gt_bench_dev_data/",
 #              "target_gt_dir" = "~/Downloads/gt_bench_dev_data/",
 #              "gt_tsv_suffix" = ".gt.tsv.gz",
+#              "report_by_genotype" = TRUE,
 #              "common_af" = 0.01,
 #              "out_prefix" = "~/scratch/gt_comparison_dev")
 
@@ -147,10 +151,12 @@ res.df <- as.data.frame(do.call("rbind", lapply(1:nrow(sid.map), function(sidx){
                                args$gt_tsv_suffix, sep=""),
                          prefix="target",
                          elig.vids=vid.map$target_vid)
-  sample.res <- benchmark.gts(source.gts, target.gts, vid.map)
+  sample.res <- benchmark.gts(source.gts, target.gts, vid.map,
+                              args$report_by_genotype)
   cbind(rep(source.sid, nrow(sample.res)), sample.res)
 })))
-colnames(res.df) <- c("#sample", "class", "subclass", "freq_bin", "zygosity",
+colnames(res.df) <- c("#sample", "class", "subclass", "freq_bin",
+                      if(args$report_by_genotype){"genotype"}else{"zygosity"},
                       "no_match", "carrier_match", "gt_match")
 
 # Write results to compressed distribution .tsv

@@ -11,6 +11,7 @@ version 1.0
 
 import "BenchmarkSamples.wdl" as BenchSamples
 import "BenchmarkSites.wdl" as BenchSites
+import "BenchmarkTwins.wdl" as BenchTwins
 import "QcTasks.wdl" as QcTasks
 import "Utilities.wdl" as Utils
 
@@ -71,6 +72,12 @@ workflow CollectVcfQcMetrics {
     String linux_docker
   }
 
+  Int n_site_benchmark_datasets = length(site_benchmark_dataset_names)
+  Boolean do_site_bench = (n_site_benchmark_datasets > 0)
+
+  Int n_gt_benchmark_datasets = length(sample_benchmark_dataset_names)
+  Boolean do_sample_bench = (n_gt_benchmark_datasets > 0)
+
   #####################
   ### SAMPLE MANAGEMENT
   #####################
@@ -94,6 +101,7 @@ workflow CollectVcfQcMetrics {
         docker = g2c_analysis_docker
     }
   }
+  Boolean has_trios = select_first([CleanFam.n_trios, 0]) > 0
 
   # Clean input twins file to retain only complete pairs
   if ( defined(twins_tsv) ) {
@@ -104,6 +112,7 @@ workflow CollectVcfQcMetrics {
         docker = g2c_analysis_docker
     }
   }
+  Boolean has_twins = select_first([CleanTwins.n_twins, 0]) > 0
 
   # Define list of samples to use for sample-specific analyses
   call ChooseTargetSamples {
@@ -213,6 +222,15 @@ workflow CollectVcfQcMetrics {
     }
   }
 
+  # Declare or create dummy files for default fills later  
+  call QcTasks.MakeDummyFile as MakeEmptyFile {}
+  call QcTasks.MakeEmptyBenchBed {
+    input:
+      docker = bcftools_docker
+  }
+  File empty_vcf = flatten(PreprocessVcf.empty_vcf)[0]
+  File empty_vcf_idx = flatten(PreprocessVcf.empty_vcf_idx)[0]
+
   ###########################
   ### BASIC METRIC COLLECTION
   ###########################
@@ -256,6 +274,26 @@ workflow CollectVcfQcMetrics {
     # TODO: implement this
   }
 
+  # Collect site-level metrics for dense subset if needed
+  if ( has_twins || do_sample_bench ) {
+    
+    # Convert VCF to BED for subset of sites in samples to be benchmarked
+    Array[File] dense_sites_vcf_shards = flatten(PreprocessVcf.dense_sites_vcf)
+    Array[File] dense_sites_vcf_shard_idxs = flatten(PreprocessVcf.dense_sites_vcf_idx)
+    Array[Pair[File, File]] dense_sites_vcf_info = zip(dense_sites_vcf_shards, dense_sites_vcf_shard_idxs)
+
+    scatter ( i in range(length(dense_sites_vcf_info)) ) {
+      call QcTasks.CollectSiteMetrics as DenseSiteMetrics {
+        input:
+          vcf = dense_sites_vcf_info[i].left,
+          vcf_idx = dense_sites_vcf_info[i].right,
+          n_samples = ChooseTargetSamples.n_target_samples,
+          common_af_cutoff = common_af_cutoff,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
+
   # Collapse all SNV sites
   Array[File] all_snv_beds = select_all(CollectSiteMetrics.snv_sites)
   if ( length(all_snv_beds) > 0 ) {
@@ -268,7 +306,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".all_snvs.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse common SNV sites
@@ -283,7 +321,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".common_snvs.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse all indel sites
@@ -298,7 +336,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".all_indels.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse common indel sites
@@ -313,7 +351,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".common_indels.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse all SV sites
@@ -328,7 +366,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".all_svs.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse common SV sites
@@ -343,7 +381,7 @@ workflow CollectVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".common_svs.bed.gz",
         docker = bcftools_docker
-      }
+    }
   }
 
   # Collapse sample genotypes and split into one file per sample
@@ -354,15 +392,28 @@ workflow CollectVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
-  #########################
-  ### EXTERNAL BENCHMARKING
-  #########################
+  # Collapse all sites for dense subset
+  Array[File] all_dense_sites_beds = select_all(flatten(select_all([DenseSiteMetrics.snv_sites,
+                                                                    DenseSiteMetrics.indel_sites,
+                                                                    DenseSiteMetrics.sv_sites])))
+  if ( length(all_dense_sites_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseDenseSiteMetrics {
+      input:
+        shards = all_dense_sites_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".dense_all_sites.bed.gz",
+        docker = bcftools_docker
+    }
+  }
+
+  ################
+  ### BENCHMARKING
+  ################
 
   # Divide benchmarking shard quota evenly between site and sample benchmarking
-  Int n_site_benchmark_datasets = length(site_benchmark_dataset_names)
-  Boolean do_site_bench = (n_site_benchmark_datasets > 0)
-  Int n_gt_benchmark_datasets = length(sample_benchmark_dataset_names)
-  Boolean do_sample_bench = (n_gt_benchmark_datasets > 0)
   Int half_bench_shards = ceil(benchmarking_shards / 2)
   Int site_bench_shards = if do_sample_bench 
                           then ceil(half_bench_shards / (n_site_benchmark_datasets + 0.01))
@@ -373,12 +424,6 @@ workflow CollectVcfQcMetrics {
 
   # Compute site-level benchmarking metrics
   if ( n_site_benchmark_datasets > 0 ) {
-
-    call QcTasks.MakeEmptyBenchBed {
-      input:
-        docker = bcftools_docker
-    }
-
     scatter ( site_bench_idx in range(n_site_benchmark_datasets) ) {
 
       File sb_target_snv_bed = if length(snv_site_benchmark_beds) > site_bench_idx 
@@ -417,28 +462,6 @@ workflow CollectVcfQcMetrics {
 
   # Compute sample-level benchmarking metrics
   if ( n_gt_benchmark_datasets > 0 ) {
-
-    call QcTasks.MakeDummyFile as MakeEmptyFile {}
-
-    File empty_vcf = flatten(PreprocessVcf.empty_vcf)[0]
-    File empty_vcf_idx = flatten(PreprocessVcf.empty_vcf_idx)[0]
-
-    # Convert VCF to BED for subset of sites in samples to be benchmarked
-    Array[File] dense_sites_vcf_shards = flatten(PreprocessVcf.dense_sites_vcf)
-    Array[File] dense_sites_vcf_shard_idxs = flatten(PreprocessVcf.dense_sites_vcf_idx)
-    Array[Pair[File, File]] dense_sites_vcf_info = zip(dense_sites_vcf_shards, dense_sites_vcf_shard_idxs)
-
-    scatter ( i in range(length(dense_sites_vcf_info)) ) {
-      call QcTasks.CollectSiteMetrics as GtBenchmarkSiteMetrics {
-        input:
-          vcf = dense_sites_vcf_info[i].left,
-          vcf_idx = dense_sites_vcf_info[i].right,
-          n_samples = ChooseTargetSamples.n_target_samples,
-          common_af_cutoff = common_af_cutoff,
-          g2c_analysis_docker = g2c_analysis_docker
-      }
-    }
-
     scatter ( gt_bench_idx in range(n_gt_benchmark_datasets) ) {
 
       Array[File] gb_target_vcfs = if length(sample_benchmark_id_maps) > gt_bench_idx
@@ -456,9 +479,10 @@ workflow CollectVcfQcMetrics {
 
       call BenchSamples.BenchmarkSamples {
         input:
-          source_snv_beds = GtBenchmarkSiteMetrics.snv_sites,
-          source_indel_beds = GtBenchmarkSiteMetrics.indel_sites,
-          source_sv_beds = GtBenchmarkSiteMetrics.sv_sites,
+          source_all_sites_bed = CollapseDenseSiteMetrics.merged_file,
+          source_snv_beds = select_first([DenseSiteMetrics.snv_sites, MakeEmptyBenchBed.empty_bed]),
+          source_indel_beds = select_first([DenseSiteMetrics.indel_sites, MakeEmptyBenchBed.empty_bed]),
+          source_sv_beds = select_first([DenseSiteMetrics.sv_sites, MakeEmptyBenchBed.empty_bed]),
           source_gt_tarball = ConcatGenotypeTsvs.genotypes_tarball,
           source_prefix = output_prefix,
           target_vcfs = gb_target_vcfs,
@@ -474,6 +498,23 @@ workflow CollectVcfQcMetrics {
           bcftools_docker = bcftools_docker,
           g2c_analysis_docker = g2c_analysis_docker
       }
+    }
+  }
+
+  # Perform genotype benchmarking between twins/technical replicates, if available
+  if ( has_twins ) {
+    call BenchTwins.BenchmarkTwins {
+      input:
+        all_sites_bed = select_first([CollapseDenseSiteMetrics.merged_file, MakeEmptyBenchBed.empty_bed]),
+        gt_tarball = ConcatGenotypeTsvs.genotypes_tarball,
+        twins_tsv = select_first([CleanTwins.complete_twins_tsv, MakeEmptyFile.empty_file]),
+        output_prefix = "~{output_prefix}.twins_techreps",
+        eval_interval_beds = select_first([benchmark_interval_beds]),
+        eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
+        genome_file = select_first([genome_file]),
+        common_af_cutoff = common_af_cutoff,
+        bcftools_docker = bcftools_docker,
+        g2c_analysis_docker = g2c_analysis_docker
     }
   }
 
@@ -542,6 +583,7 @@ workflow CollectVcfQcMetrics {
 
     Array[Array[File]]? sample_benchmark_ppv_distribs = BenchmarkSamples.ppv_distribs
     Array[Array[File]]? sample_benchmark_sensitivity_distribs = BenchmarkSamples.sensitivity_distribs
+    Array[File]? twin_genotype_benchmark_distribs = BenchmarkTwins.gt_benchmarking_distribs
   }
 }
 
@@ -583,6 +625,7 @@ task CleanFam {
 
   output {
     File trios_fam = "~{fam_out_fname}"
+    Int n_trios = length(read_lines("~{fam_out_fname}"))
     File probands_list = "~{proband_out_fname}"
     File trio_samples_list = "~{trio_samples_out_fname}"
   }
@@ -641,6 +684,7 @@ task CleanTwins {
 
   output {
     File complete_twins_tsv = "~{twins_out_fname}"
+    Int n_twins = length(read_lines("~{twins_out_fname}"))
     File duplicate_samples_list = "~{duplicate_out_fname}"
     File twin_samples_list = "~{twin_samples_out_fname}"
   }

@@ -18,6 +18,7 @@ import "Utilities.wdl" as Utils
 
 workflow BenchmarkSamples {
   input {
+    File? source_all_sites_bed
     Array[File?] source_snv_beds
     Array[File?] source_indel_beds
     Array[File?] source_sv_beds
@@ -96,17 +97,21 @@ workflow BenchmarkSamples {
   }
   File source_sv_bed = select_first([CollapseSourceSvs.merged_file, MakeEmptyBenchBed.empty_bed])
 
-  # Collapse all source site metrics
-  call Utils.ConcatTextFiles as CollapseAllSourceVars {
-  input:
-    shards = select_all([source_snv_bed, source_indel_bed, source_sv_bed]),
-    concat_command = "zcat",
-    sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-    compression_command = "bgzip -c",
-    input_has_header = true,
-    output_filename = source_prefix + ".all_sites.bed.gz",
-    docker = bcftools_docker
+  # Collapse all source site metrics unless already provided
+  if ( !defined(source_all_sites_bed) ) {
+    call Utils.ConcatTextFiles as CollapseAllSourceVars {
+      input:
+        shards = select_all([source_snv_bed, source_indel_bed, source_sv_bed]),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = source_prefix + ".all_sites.bed.gz",
+        docker = bcftools_docker
+    }
   }
+  File source_all_sites = select_first([source_all_sites_bed, CollapseAllSourceVars.merged_file])
+  
 
   # Determine sample IDs present in GT tarball
   call GetSampleIdsFromGtTarball {
@@ -119,7 +124,7 @@ workflow BenchmarkSamples {
   scatter ( i in range(n_targets) ) {
     call BenchSingle.BenchmarkSamplesSingle as BenchmarkTask {
       input:
-        source_all_sites_bed = CollapseAllSourceVars.merged_file,
+        source_all_sites_bed = source_all_sites,
         source_snv_bed = source_snv_bed,
         source_indel_bed = source_indel_bed,
         source_sv_bed = source_sv_bed,
@@ -155,6 +160,7 @@ workflow BenchmarkSamples {
       input:
         distrib_tsvs = BenchmarkTask.ppv_distribs[k],
         out_prefix = ppv_prefix + ".gt_comparison.distrib",
+        n_key_columns = 5,
         g2c_analysis_docker = g2c_analysis_docker
     }
 
@@ -163,6 +169,7 @@ workflow BenchmarkSamples {
       input:
         distrib_tsvs = BenchmarkTask.sensitivity_distribs[k],
         out_prefix = sens_prefix + ".gt_comparison.distrib",
+        n_key_columns = 5,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }

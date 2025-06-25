@@ -9,6 +9,98 @@
 version 1.0
 
 
+# Compare genotypes between callsets for a list of samples
+task BenchmarkGenotypes {
+  input {
+    File variant_id_map
+    File sample_id_map
+    Boolean invert_sample_map = false
+    File source_site_metrics
+    String output_prefix
+
+    File source_gt_tarball
+    File target_gt_tarball
+
+    Boolean report_by_gt = false
+    Float common_af_cutoff = 0.01
+    
+    String g2c_analysis_docker
+  }
+
+  String gt_report_cmd = if report_by_gt then "--report-by-genotype" else ""
+  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # Prep variant ID lists & metric files
+    zcat ~{variant_id_map} | cut -f1 | sort -V | uniq > source.vids.list
+    zcat ~{source_site_metrics} | head -n1 | fgrep "#" > site_metrics.header || true
+    zcat ~{source_site_metrics} | fgrep -wf source.vids.list \
+    | cat site_metrics.header - | bgzip -c \
+    > source.metrics.bed.gz || true
+    rm ~{source_site_metrics}
+    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list
+
+    # Prep sample lists
+    if ~{invert_sample_map}; then
+      awk -v FS="\t" -v OFS="\t" '{ print $2, $1 }' ~{sample_id_map} > sample.map.tsv
+    else
+      cp ~{sample_id_map} sample.map.tsv
+    fi
+    cut -f1 sample.map.tsv > source.samples.list
+    cut -f2 sample.map.tsv > target.samples.list
+
+    # Unpack source GTs and subset to samples of interest
+    mkdir source_gts_raw
+    tar -xzvf ~{source_gt_tarball} -C source_gts_raw/
+    mkdir source_gts/
+    while read sid; do
+      find source_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      | xargs -I {} zcat {} | fgrep -wf source.vids.list \
+      | gzip -c > source_gts/$sid.gt.tsv.gz || true
+    done < source.samples.list
+    rm -rf source_gts_raw ~{source_gt_tarball}
+
+    # Unpack target GTs and subset to samples of interest
+    mkdir target_gts_raw
+    tar -xzvf ~{target_gt_tarball} -C target_gts_raw/
+    mkdir target_gts/
+    while read sid; do
+      find target_gts_raw/ -name "$sid.gt.sub.tsv.gz" \
+      | xargs -I {} zcat {} | fgrep -wf target.vids.list \
+      | gzip -c > target_gts/$sid.gt.tsv.gz || true
+    done < target.samples.list
+    rm -rf target_gts_raw ~{target_gt_tarball}
+
+    # Benchmark genotypes
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_genotypes.R \
+      --variant-map ~{variant_id_map} \
+      --source-site-metrics source.metrics.bed.gz \
+      --sample-map sample.map.tsv \
+      --source-gt-dir source_gts/ \
+      --target-gt-dir target_gts/ \
+      --gt-tsv-suffix ".gt.sub.tsv.gz" \
+      ~{gt_report_cmd} \
+      --common-af ~{common_af_cutoff} \
+      --out-prefix ~{output_prefix}
+    gzip -f ~{output_prefix}.gt_comparison.distrib.tsv
+  >>>
+
+  output {
+    File gt_bench_distrib = "~{output_prefix}.gt_comparison.distrib.tsv.gz"
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
 task CollectSampleGenotypeMetrics {
   input {
     File vcf
@@ -199,6 +291,90 @@ task MakeDummyFile {
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk 15 HDD"
+    preemptible: 3
+  }
+}
+
+
+# Preps a sites.bed file for site comparison by generating:
+# 1. A strict "query" set, which only includes variants with POS within an 
+# eval interval, >50% coverage by all eval intervals, and size within [min_size, max_size]
+# 2. A lenient "ref" set, which includes any variant overlapping any eval_interval
+# and inclusive of all variants with size within [min_size / 3, 3 * max_size]
+task PrepSites {
+  input {
+    Array[File] beds
+    Array[File] bed_idxs
+    File eval_interval_bed
+
+    Int min_size = 0
+    Int max_size = 1000000000
+    Float lenient_size_scalar = 3.0
+    Float strict_interval_coverage = 0.5
+    
+    String prefix
+
+    Int disk_gb = 25
+    
+    String g2c_analysis_docker
+  }
+
+  parameter_meta {
+    beds: {
+      localization_optional: true
+    }
+  }
+
+  Int loose_min_size = floor(min_size / lenient_size_scalar)
+  Int loose_max_size = ceil(lenient_size_scalar * max_size)
+
+  command <<<
+    set -eu -o pipefail
+
+    # Link all bed indexes to pwd
+    while read bed_idx; do
+      ln -s $bed_idx .
+    done < ~{write_lines(bed_idxs)}
+
+    # Save header line for first BED
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    tabix --only-header -p bed -R ~{eval_interval_bed} ~{beds[0]} > header.bed
+
+    # Loop over each bed and use tabix to remotely extract only the variants needed
+    while read bed_uri; do
+      export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+      tabix -p bed -R ~{eval_interval_bed} $bed_uri
+    done < ~{write_lines(beds)} \
+    | awk -v FS="\t" -v min_size=~{loose_min_size} -v max_size=~{loose_max_size} \
+      '{ if ($7>=min_size && $7<=max_size) print }' \
+    | sort -Vk1,1 -k2,2n -k3,3n | uniq \
+    | cat header.bed - | bgzip -c \
+    > ~{prefix}.ref.bed.gz
+
+    # Further filter the lenient "ref" set to produce a strict "query" set
+    if [ $( zcat ~{prefix}.ref.bed.gz | fgrep -v "#" | wc -l ) -gt 0 ]; then
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/enforce_strict_intervals.py \
+        -i ~{prefix}.ref.bed.gz \
+        -t ~{eval_interval_bed} \
+        -f ~{strict_interval_coverage} \
+        -m ~{min_size} \
+        -M ~{max_size} \
+        -o ~{prefix}.query.bed.gz
+    else
+      cp ~{prefix}.ref.bed.gz ~{prefix}.query.bed.gz
+    fi
+  >>>
+
+  output {
+    File ref_bed = "~{prefix}.ref.bed.gz"
+    File query_bed = "~{prefix}.query.bed.gz"
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }
