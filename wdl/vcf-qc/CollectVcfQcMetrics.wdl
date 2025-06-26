@@ -390,9 +390,10 @@ workflow CollectVcfQcMetrics {
   }
 
   # Collapse all sites for dense subset
-  Array[File] all_dense_sites_beds = select_all(flatten(select_all([DenseSiteMetrics.snv_sites,
-                                                                    DenseSiteMetrics.indel_sites,
-                                                                    DenseSiteMetrics.sv_sites])))
+  Array[File] dense_snv_site_shards = select_all(select_first([DenseSiteMetrics.snv_sites, [empty_bed]]))
+  Array[File] dense_indel_site_shards = select_all(select_first([DenseSiteMetrics.indel_sites, [empty_bed]]))
+  Array[File] dense_sv_site_shards = select_all(select_first([DenseSiteMetrics.sv_sites, [empty_bed]]))
+  Array[File] all_dense_sites_beds = flatten([dense_snv_site_shards, dense_indel_site_shards, dense_sv_site_shards])
   if ( length(all_dense_sites_beds) > 0 ) {
     call Utils.ConcatTextFiles as CollapseDenseSiteMetrics {
       input:

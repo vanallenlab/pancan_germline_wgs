@@ -583,6 +583,44 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
 
 
+########################################################
+# Build ancestry & case:control labels for QC plotting #
+########################################################
+
+# Note: this only needs to be run once for the entire cohort across all workspaces
+
+# Reaffirm staging directory
+staging_dir=staging/ancestry_phenotype_maps
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Localize most up-to-date sample QC manifest & cleaned twins
+gsutil -m cp \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+  $staging_dir/
+
+# Extract ancestry map
+cidx=$( zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+        | head -n1 | sed 's/\t/\n/g' \
+        | awk -v FS="\t" '{ if ($1=="intake_qc_pop") print NR }' )
+zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+| cut -f1,$cidx | grep -ve '^G2C_id' | sort -Vk1,1 \
+> $staging_dir/dfci-g2c.v1.qc_ancestry.tsv
+
+# Extract case|control map, reassigning unknowns to controls
+cidx=$( zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+        | head -n1 | sed 's/\t/\n/g' \
+        | awk -v FS="\t" '{ if ($1=="batching_pheno") print NR }' )
+zcat $staging_dir/dfci-g2c.sample_meta.gatkhc_posthoc_outliers.tsv.gz \
+| cut -f1,$cidx | grep -ve '^G2C_id' | sort -Vk1,1 \
+> $staging_dir/dfci-g2c.v1.qc_phenotype.tsv
+
+# Copy ID maps to reference directory
+gsutil -m cp \
+  $staging_dir/dfci-g2c.v1.qc_ancestry.tsv \
+  $staging_dir/dfci-g2c.v1.qc_phenotype.tsv \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
+
+
 ##############################
 # Collect initial QC metrics #
 ##############################
@@ -632,12 +670,12 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:375d930",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:11cd85d",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc.\$CONTIG",
-  "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 7.5,
+  "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 11.5,
   "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
   "CollectVcfQcMetrics.sample_benchmark_dataset_names": ["external_srwgs", "external_lrwgs"],
   "CollectVcfQcMetrics.sample_benchmark_id_maps": [["$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.1KGP_id_map.tsv",
@@ -688,10 +726,8 @@ code/scripts/manage_chromshards.py \
   --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectVcfQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
-  --no-cleanup \
-  --hard-reset \
   --outer-gate 30 \
-  --max-attempts 1
+  --max-attempts 4
 
 
 ##########################################

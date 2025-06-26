@@ -20,6 +20,7 @@ workflow PlotVcfQcMetrics {
     Array[File] size_distribution_tsvs
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
+    Array[File] sample_genotype_distribution_tsvs
 
     Array[File]? ref_size_distribution_tsvs
     Array[File]? ref_af_distribution_tsvs
@@ -30,6 +31,10 @@ workflow PlotVcfQcMetrics {
     Array[File]? common_snv_beds
     Array[File]? common_indel_beds
     Array[File]? common_sv_beds
+
+    # Optional two-column .tsvs mapping IDs to labels; used in some plots
+    File? sample_ancestry_labels
+    File? sample_phenotype_labels
 
     # Expected organization of site benchmarking inputs:
     # Outer array: one entry per benchmarking dataset
@@ -208,6 +213,18 @@ workflow PlotVcfQcMetrics {
                                                    select_first([common_sv_beds])[0]]))
   }
 
+  # If necessary, collapse sample genotype distributions
+  if ( length(sample_genotype_distribution_tsvs) > 1 ) {
+      call QcTasks.SumCompressedDistribs as SumGtDistribs {
+        input:
+          distrib_tsvs = sample_genotype_distribution_tsvs,
+          out_prefix = output_prefix + ".genotype_distribution",
+          n_key_columns = 4,
+          g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+  File gt_distrib = select_first([SumGtDistribs.merged_distrib, sample_genotype_distribution_tsvs[0]])
+
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_sb_datasets) ) {
@@ -260,6 +277,16 @@ workflow PlotVcfQcMetrics {
       g2c_analysis_docker = g2c_analysis_docker
   }
 
+  # Generate sample-level plots
+  call PlotSampleMetrics {
+    input:
+      gt_distrib = gt_distrib,
+      ancestry_labels = sample_ancestry_labels,
+      phenotype_labels = sample_phenotype_labels,
+      output_prefix = output_prefix,
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
   # Plot site benchmarking, if provided
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_sb_datasets) ) {
@@ -295,6 +322,7 @@ workflow PlotVcfQcMetrics {
   output {
     # For now, just outputting individual tarballs
     File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
+    File sample_metrics_tarball = PlotSampleMetrics.sample_metric_plots_tarball
     Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
   }
 }
@@ -412,6 +440,65 @@ task PlotSiteMetrics {
 
   output {
     File site_metric_plots_tarball = "~{output_prefix}.site_metrics.tar.gz"
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 2
+    max_retries: 1
+  }
+}
+
+
+task PlotSampleMetrics {
+  input {
+    File gt_distrib
+    File? ancestry_labels
+    File? phenotype_labels
+
+    String output_prefix
+
+    Float mem_gb = 7.5
+    Int n_cpu = 4
+    Int? disk_gb
+
+    String g2c_analysis_docker
+  }
+
+  String pop_opt = if defined(ancestry_labels) then "--ancestry-labels ~{basename(ancestry_labels)}" else ""
+  String pheno_opt = if defined(phenotype_labels) then "--phenotype-labels ~{basename(phenotype_labels)}" else ""
+
+  Int default_disk_gb = ceil(2 * size(gt_distrib, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    mkdir ~{output_prefix}.sample_metrics
+
+    # Relocate sample descriptive labels if necessary
+    if ~{defined(ancestry_labels)}; then
+      ln -s ~{default="" ancestry_labels} ./
+    fi
+    if ~{defined(phenotype_labels)}; then
+      ln -s ~{default="" phenotype_labels} ./
+    fi
+
+    # Plot variation per genome
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_variants_per_sample.R \
+      --genotype-dist-tsv ~{gt_distrib} \
+      ~{pop_opt} \
+      ~{pheno_opt} \
+      --out-prefix ~{output_prefix}.sample_metrics/~{output_prefix}
+
+    # Compress outputs
+    tar -czvf ~{output_prefix}.sample_metrics.tar.gz ~{output_prefix}.sample_metrics/
+  >>>
+
+  output {
+    File sample_metric_plots_tarball = "~{output_prefix}.sample_metrics.tar.gz"
   }
 
   runtime {

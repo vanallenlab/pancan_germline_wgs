@@ -332,7 +332,8 @@ qc.grid <- function(qc.df, primary.variable, top.axes=TRUE, x.tick.len=-0.025,
                 max.x.ticks=4, x.tick.len=x.tick.len, xlims=xlims, y.axis=FALSE,
                 bw.adj=0.5, yaxs="i", hill.overlap=-0.1, hill.bottom=0.1,
                 border.lwd=1, fill=ridge.fill, fancy.light.fill=ridge.light,
-                border=ridge.border, fancy.median.color=median.color,
+                border=ridge.border, fancy.quartile.color=median.color,
+                fancy.quartile.lend="butt", fancy.quartile.lwd=1,
                 parmar=c(0.1, inner.margin+0.1, top.y.margin, inner.margin+0.1))
     }else{
       prep.plot.area(0:1, 0:1, rep(0, 4))
