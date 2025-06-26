@@ -70,6 +70,7 @@ workflow CollectVcfQcMetrics {
 
     String bcftools_docker
     String g2c_analysis_docker
+    String g2c_analysis_docker_dev # Remove once test is successful
     String linux_docker
   }
 
@@ -530,7 +531,7 @@ workflow CollectVcfQcMetrics {
         output_prefix = "~{output_prefix}.trios",
         common_af_cutoff = common_af_cutoff,
         bcftools_docker = bcftools_docker,
-        g2c_analysis_docker = g2c_analysis_docker
+        g2c_analysis_docker = g2c_analysis_docker_dev
     }
   }
 

@@ -157,10 +157,10 @@ def main():
                 continue
 
         # Assign variant to AF bin
-        if 'AF' in record.info.keys():
-            freq = float(record.info['AF'][0])
-        elif 'CN_NONREF_FREQ' in record.info.keys():
+        if 'CN_NONREF_FREQ' in record.info.keys():
             freq = float(record.info['CN_NONREF_FREQ'])
+        elif 'AF' in record.info.keys():
+            freq = float(record.info.get('AF', (0,) )[0])
         else:
             freq = 0
         if freq < args.common_af:
