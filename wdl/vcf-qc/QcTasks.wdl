@@ -49,7 +49,7 @@ task BenchmarkGenotypes {
     | cat site_metrics.header - | bgzip -c \
     > source.metrics.bed.gz || true
     rm ~{source_site_metrics}
-    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list
+    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list || true
 
     # Prep sample lists
     if ~{invert_sample_map}; then

@@ -146,6 +146,13 @@ workflow BenchmarkSamples {
     }
   }
 
+  # BenchmarkTask is scattered per input VCF, and each BenchmarkTask call
+  # outputs an array with one element per eval interval set. Since we want 
+  # to collapse across input VCFs to produce one composite file per eval 
+  # interval, we need to transpose the results from BenchmarkTask
+  Array[Array[File]] ppv_distribs_t = transpose(BenchmarkTask.ppv_distribs)
+  Array[Array[File]] sens_distribs_t = transpose(BenchmarkTask.sensitivity_distribs)
+
   # Pool benchmarking results across VCFs per evalulation interval set
   scatter ( k in range(n_eval_intervals) ) {
 
@@ -158,7 +165,7 @@ workflow BenchmarkSamples {
     # Collapse PPV benchmarking across all target VCFs
     call QcTasks.SumCompressedDistribs as SumPpvDistrib {
       input:
-        distrib_tsvs = BenchmarkTask.ppv_distribs[k],
+        distrib_tsvs = ppv_distribs_t[k],
         out_prefix = ppv_prefix + ".gt_comparison.distrib",
         n_key_columns = 5,
         g2c_analysis_docker = g2c_analysis_docker
@@ -167,7 +174,7 @@ workflow BenchmarkSamples {
     # Collapse sensitivity benchmarking across all target VCFs
     call QcTasks.SumCompressedDistribs as SumSensDistrib {
       input:
-        distrib_tsvs = BenchmarkTask.sensitivity_distribs[k],
+        distrib_tsvs = sens_distribs_t[k],
         out_prefix = sens_prefix + ".gt_comparison.distrib",
         n_key_columns = 5,
         g2c_analysis_docker = g2c_analysis_docker
