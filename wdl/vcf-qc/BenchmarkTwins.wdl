@@ -74,7 +74,7 @@ workflow BenchmarkTwins {
         source_gt_tarball = gt_tarball,
         target_gt_tarball = gt_tarball,
         source_site_metrics = SliceSites.query_bed,
-        report_by_gt = true,
+        report_by_gt = false,
         common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }
@@ -89,7 +89,7 @@ workflow BenchmarkTwins {
         source_gt_tarball = gt_tarball,
         target_gt_tarball = gt_tarball,
         source_site_metrics = SliceSites.query_bed,
-        report_by_gt = true,
+        report_by_gt = false,
         common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }

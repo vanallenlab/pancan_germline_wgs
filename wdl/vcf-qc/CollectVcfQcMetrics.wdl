@@ -11,6 +11,7 @@ version 1.0
 
 import "BenchmarkSamples.wdl" as BenchSamples
 import "BenchmarkSites.wdl" as BenchSites
+import "BenchmarkTrios.wdl" as BenchTrios
 import "BenchmarkTwins.wdl" as BenchTwins
 import "QcTasks.wdl" as QcTasks
 import "Utilities.wdl" as Utils
@@ -230,6 +231,7 @@ workflow CollectVcfQcMetrics {
   }
   File empty_vcf = flatten(PreprocessVcf.empty_vcf)[0]
   File empty_vcf_idx = flatten(PreprocessVcf.empty_vcf_idx)[0]
+  File empty_bed = MakeEmptyBenchBed.empty_bed
 
   ###########################
   ### BASIC METRIC COLLECTION
@@ -242,6 +244,10 @@ workflow CollectVcfQcMetrics {
   Array[File] dense_vcf_shards = flatten(PreprocessVcf.dense_vcf)
   Array[File] dense_vcf_shard_idxs = flatten(PreprocessVcf.dense_vcf_idx)
   Array[Pair[File, File]] dense_vcf_info = zip(dense_vcf_shards, dense_vcf_shard_idxs)
+
+  Array[File] dense_sites_vcf_shards = flatten(PreprocessVcf.dense_sites_vcf)
+  Array[File] dense_sites_vcf_shard_idxs = flatten(PreprocessVcf.dense_sites_vcf_idx)
+  Array[Pair[File, File]] dense_sites_vcf_info = zip(dense_sites_vcf_shards, dense_sites_vcf_shard_idxs)
 
   # Collect site-level metrics for all preprocessed shards
   scatter ( i in range(length(site_vcf_info)) ) {
@@ -269,19 +275,10 @@ workflow CollectVcfQcMetrics {
         site_metrics = CollectSiteMetrics.all_sites,
         g2c_analysis_docker = g2c_analysis_docker
     }
-
-    # Compute trio metrics
-    # TODO: implement this
   }
 
   # Collect site-level metrics for dense subset if needed
   if ( has_twins || do_sample_bench ) {
-    
-    # Convert VCF to BED for subset of sites in samples to be benchmarked
-    Array[File] dense_sites_vcf_shards = flatten(PreprocessVcf.dense_sites_vcf)
-    Array[File] dense_sites_vcf_shard_idxs = flatten(PreprocessVcf.dense_sites_vcf_idx)
-    Array[Pair[File, File]] dense_sites_vcf_info = zip(dense_sites_vcf_shards, dense_sites_vcf_shard_idxs)
-
     scatter ( i in range(length(dense_sites_vcf_info)) ) {
       call QcTasks.CollectSiteMetrics as DenseSiteMetrics {
         input:
@@ -428,13 +425,13 @@ workflow CollectVcfQcMetrics {
 
       File sb_target_snv_bed = if length(snv_site_benchmark_beds) > site_bench_idx 
                                then select_all(snv_site_benchmark_beds)[site_bench_idx] 
-                               else MakeEmptyBenchBed.empty_bed
+                               else empty_bed
       File sb_target_indel_bed = if length(indel_site_benchmark_beds) > site_bench_idx
                                  then select_all(indel_site_benchmark_beds)[site_bench_idx]
-                                 else MakeEmptyBenchBed.empty_bed
+                                 else empty_bed
       File sb_target_sv_bed = if length(sv_site_benchmark_beds) > site_bench_idx
                               then select_all(sv_site_benchmark_beds)[site_bench_idx]
-                              else MakeEmptyBenchBed.empty_bed
+                              else empty_bed
       String sb_target_prefix = if defined(site_benchmark_dataset_names) 
                                 then select_all(site_benchmark_dataset_names)[site_bench_idx] 
                                 else ""
@@ -480,9 +477,9 @@ workflow CollectVcfQcMetrics {
       call BenchSamples.BenchmarkSamples {
         input:
           source_all_sites_bed = CollapseDenseSiteMetrics.merged_file,
-          source_snv_beds = select_first([DenseSiteMetrics.snv_sites, MakeEmptyBenchBed.empty_bed]),
-          source_indel_beds = select_first([DenseSiteMetrics.indel_sites, MakeEmptyBenchBed.empty_bed]),
-          source_sv_beds = select_first([DenseSiteMetrics.sv_sites, MakeEmptyBenchBed.empty_bed]),
+          source_snv_beds = select_first([DenseSiteMetrics.snv_sites, empty_bed]),
+          source_indel_beds = select_first([DenseSiteMetrics.indel_sites, empty_bed]),
+          source_sv_beds = select_first([DenseSiteMetrics.sv_sites, empty_bed]),
           source_gt_tarball = ConcatGenotypeTsvs.genotypes_tarball,
           source_prefix = output_prefix,
           target_vcfs = gb_target_vcfs,
@@ -505,7 +502,7 @@ workflow CollectVcfQcMetrics {
   if ( has_twins ) {
     call BenchTwins.BenchmarkTwins {
       input:
-        all_sites_bed = select_first([CollapseDenseSiteMetrics.merged_file, MakeEmptyBenchBed.empty_bed]),
+        all_sites_bed = select_first([CollapseDenseSiteMetrics.merged_file, empty_bed]),
         gt_tarball = ConcatGenotypeTsvs.genotypes_tarball,
         twins_tsv = select_first([CleanTwins.complete_twins_tsv, MakeEmptyFile.empty_file]),
         output_prefix = "~{output_prefix}.twins_techreps",
@@ -518,6 +515,24 @@ workflow CollectVcfQcMetrics {
     }
   }
 
+  # Perform trio-based Mendelian benchmarking, if available
+  if ( has_trios ) {
+    call BenchTrios.BenchmarkTrios {
+      input:
+        vcfs = dense_vcf_shards,
+        vcf_idxs = dense_vcf_shard_idxs,
+        sites_bed = select_first([CollapseDenseSiteMetrics.merged_file]),
+        trios_fam = select_first([CleanFam.trios_fam]),
+        trios_samples_list = select_first([CleanFam.trio_samples_list]),
+        eval_interval_beds = select_first([benchmark_interval_beds]),
+        eval_interval_bed_names = select_first([benchmark_interval_bed_names]),
+        genome_file = select_first([genome_file]),
+        output_prefix = "~{output_prefix}.trios",
+        common_af_cutoff = common_af_cutoff,
+        bcftools_docker = bcftools_docker,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
 
   ##################
   ### OUTPUT CLEANUP
@@ -584,6 +599,7 @@ workflow CollectVcfQcMetrics {
     Array[Array[File]]? sample_benchmark_ppv_distribs = BenchmarkSamples.ppv_distribs
     Array[Array[File]]? sample_benchmark_sensitivity_distribs = BenchmarkSamples.sensitivity_distribs
     Array[File]? twin_genotype_benchmark_distribs = BenchmarkTwins.gt_benchmarking_distribs
+    Array[File]? trio_mendelian_violation_distribs = BenchmarkTrios.trio_benchmarking_distribs
   }
 }
 
@@ -620,7 +636,8 @@ task CleanFam {
 
     # Write list of all samples in complete trios
     awk -v OFS="\n" '{ print $2, $3, $4 }' "~{fam_out_fname}" \
-    | sort -V > "~{trio_samples_out_fname}"
+    | sort -V | uniq \
+    > "~{trio_samples_out_fname}"
   >>>
 
   output {
@@ -810,7 +827,7 @@ task PreprocessVcf {
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
     ~{extra_commands} \
-    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,FORMAT/RD_CN,^FILTER/PASS,FILTER/MULTIALLELIC" \
+    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC" \
     | bcftools view -G --threads 2 \
       --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
       -Oz -o ~{sites_outfile}
@@ -823,7 +840,7 @@ task PreprocessVcf {
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
     ~{extra_commands} \
-    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC" \
+    | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC,^FORMAT/GT,FORMAT/RD_CN" \
     | bcftools view --threads 2 -Oz -o ~{dense_outfile}
     tabix -p vcf -f ~{dense_outfile}
 
