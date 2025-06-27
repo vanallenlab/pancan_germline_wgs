@@ -18,6 +18,8 @@ task ConcatTextFiles {
     Boolean input_has_header = false
     String output_filename
 
+    Float mem_gb = 1.75
+    Int n_cpu = 1
     String docker
   }
 
@@ -45,8 +47,8 @@ task ConcatTextFiles {
 
   runtime {
     docker: docker
-    memory: "1.75 GB"
-    cpu: 1
+    memory: "~{mem_gb} GB"
+    cpu: n_cpu
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
   }

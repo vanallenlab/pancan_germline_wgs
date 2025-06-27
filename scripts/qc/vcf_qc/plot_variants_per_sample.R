@@ -152,7 +152,7 @@ plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
       pop.labs <- names(pop.pal)
     }
     yaxis.legend(pop.labs, x=par("usr")[2], y.positions=rev(pop.labs.at),
-                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal)
+                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal, lwd=4)
   }
 
   return(c(r2, nrow(h.df)))

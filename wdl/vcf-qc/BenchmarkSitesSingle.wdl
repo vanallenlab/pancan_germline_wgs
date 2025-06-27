@@ -240,6 +240,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = ppv_prefix + ".common_sites.snvs.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -253,6 +255,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = sens_prefix + ".common_sites.snvs.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -268,6 +272,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = ppv_prefix + ".common_sites.indels.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -281,6 +287,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = sens_prefix + ".common_sites.indels.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -296,6 +304,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = ppv_prefix + ".common_sites.svs.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -309,6 +319,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = sens_prefix + ".common_sites.svs.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
       }
   }
@@ -367,6 +379,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = ppv_prefix + ".all_sites.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
     }
     Array[File] all_sens_shards = select_all(flatten([select_all(CompareSnvSens.all_sites_bed),
@@ -380,6 +394,8 @@ workflow BenchmarkSitesSingle {
         compression_command = "bgzip -c",
         input_has_header = true,
         output_filename = sens_prefix + ".all_sites.bed.gz",
+        mem_gb = 3.75,
+        n_cpu = 2,
         docker = bcftools_docker
     }
 

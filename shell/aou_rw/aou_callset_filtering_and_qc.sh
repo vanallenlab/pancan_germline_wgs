@@ -670,7 +670,7 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:11cd85d",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:b2a31f9",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
@@ -727,7 +727,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectVcfQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
-  --max-attempts 6
+  --max-attempts 5
 
 
 ##########################################
