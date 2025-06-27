@@ -47,16 +47,20 @@ workflow BenchmarkSamples {
   Int n_shards_per_vcf = ceil(total_shards / n_targets)
   Int n_eval_intervals = length(eval_interval_beds)
 
+  Array[File] source_snv_beds_nonull = select_all(source_snv_beds)
+  Array[File] source_indel_beds_nonull = select_all(source_indel_beds)
+  Array[File] source_sv_beds_nonull = select_all(source_sv_beds)
+
   call QcTasks.MakeEmptyBenchBed {
     input:
       docker = bcftools_docker
   }
 
   # Collapse source SNV sites
-  if ( length(source_snv_beds) > 0 ) {
+  if ( length(source_snv_beds_nonull) > 0 ) {
     call Utils.ConcatTextFiles as CollapseSourceSnvs {
       input:
-        shards = select_all(source_snv_beds),
+        shards = source_snv_beds_nonull,
         concat_command = "zcat",
         sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
         compression_command = "bgzip -c",
@@ -68,10 +72,10 @@ workflow BenchmarkSamples {
   File source_snv_bed = select_first([CollapseSourceSnvs.merged_file, MakeEmptyBenchBed.empty_bed])
 
   # Collapse source indel sites
-  if ( length(source_indel_beds) > 0 ) {
+  if ( length(source_indel_beds_nonull) > 0 ) {
     call Utils.ConcatTextFiles as CollapseSourceIndels {
       input:
-        shards = select_all(source_indel_beds),
+        shards = source_indel_beds_nonull,
         concat_command = "zcat",
         sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
         compression_command = "bgzip -c",
@@ -83,10 +87,10 @@ workflow BenchmarkSamples {
   File source_indel_bed = select_first([CollapseSourceIndels.merged_file, MakeEmptyBenchBed.empty_bed])
 
   # Collapse source SV sites
-  if ( length(source_sv_beds) > 0 ) {
+  if ( length(source_sv_beds_nonull) > 0 ) {
     call Utils.ConcatTextFiles as CollapseSourceSvs {
       input:
-        shards = select_all(source_sv_beds),
+        shards = source_sv_beds_nonull,
         concat_command = "zcat",
         sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
         compression_command = "bgzip -c",

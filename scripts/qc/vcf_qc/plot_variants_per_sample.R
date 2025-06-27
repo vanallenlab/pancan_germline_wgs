@@ -77,7 +77,9 @@ load.labels <- function(tsv.in, elig.samples=NULL){
 # Plotting Functions #
 ######################
 # Scatterplot of sample heterozygosity between two classes of variants
-plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL, parmar=c(3, 3, 1, 0.25)){
+plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
+                                title="Heterozygosity", stat.lab.hex=0.04,
+                                pt.cex=0.65, parmar=c(2, 2.5, 1, 3.5)){
   # Compute heterozygosity for all samples for each variant class
   samples <- unique(gt.counts$sample)
   h.df <- as.data.frame(do.call("cbind", lapply(c(vc1, vc2), function(vc){
@@ -106,30 +108,75 @@ plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL, parmar=c(3, 3, 1,
   if(is.null(pop)){
     pw.col <- rep("black", nrow(h.df))
   }else{
+    n.pops <- length(unique(pop))
     pop <- toupper(pop)
     if(all(pop %in% names(pop.colors))){
-      pop.pal <- pop.colors
+      pop.pal <- pop.colors[sort(unique(pop))]
     }else{
-      pop.pal <- categorical.rainbow(length(unique(pop)))
+      pop.pal <- categorical.rainbow(n.pops)
       names() <- unique(pop)
     }
     pw.col <- pop.colors[pop[rownames(h.df)]]
   }
-  pw.col <- sapply(pw.col, adjustcolor, alpha=pw.params$alpha)
 
   # Prepare plotting area
-  xlims <- range(h.df[, vc1])
-  ylims <- range(h.df[, vc2])
-  prep.plot.area(xlims, ylims, parmar)
+  xlims <- ylims <- range(h.df[, c(vc1, vc2)])
+  prep.plot.area(xlims, ylims, parmar, xaxs="r", yaxs="r")
   abline(0, 1, col=annotation.color)
 
   # Add points
-  points(h.df, pch=pw.params$pch, cex=pw.params$cex, xpd=T,
+  points(h.df, pch=pw.params$pch, cex=0.75*pw.params$cex, xpd=T,
          col=sapply(pw.col, adjustcolor, alpha=pw.params$alpha))
 
-  # TODO: Add axes
+  # Add axes & title
+  clean.axis(1, label.units="percent", infinite=T, max.ticks=5,
+             title=paste(var.class.abbrevs[vc1], "s", sep=""),
+             label.line=-0.85, title.line=0)
+  clean.axis(2, label.units="percent", infinite=T, max.ticks=5,
+             title=paste(var.class.abbrevs[vc2], "s", sep=""),
+             label.line=-0.75, title.line=0.5)
+  mtext(3, text=title)
 
-  # TODO: Add title & R2
+  # Add legends
+  r2 <- cor(h.df[, vc1], h.df[, vc2])^2
+  text(x=par("usr")[1]-(stat.lab.hex*diff(par("usr")[1:2])),
+       y=par("usr")[4]-(2.5*stat.lab.hex*diff(par("usr")[3:4])),
+       pos=4, cex=5/6,
+       labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
+  if(!is.null(pop)){
+    pop.labs.at <- seq(par("usr")[1], par("usr")[2],
+                       length.out=2+n.pops)[-c(1, n.pops + 2)]
+    if(all(pop %in% names(pop.abbreviations))){
+      pop.labs <- pop.abbreviations[names(pop.pal)]
+    }else{
+      pop.labs <- names(pop.pal)
+    }
+    yaxis.legend(pop.labs, x=par("usr")[2], y.positions=rev(pop.labs.at),
+                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal)
+  }
+
+  return(c(r2, nrow(h.df)))
+}
+
+# Wrapper function to handle inter-class comparison plots
+plot.vc.comparisons <- function(gt.counts, vc1, vc2, out.prefix, pop=NULL){
+
+  ss.df <- data.frame("analysis"=character(), "measure"=character(),
+                      "value"=numeric(), "n"=numeric())
+  ss.prefix <- paste(vc1, "vs", vc2, sep="_")
+
+  # Scatterplot of heterozygosity per sample between all pairs of variant classes
+  png(paste(out.prefix, ss.prefix, "heterozygosity.png", sep="."),
+      height=2.25*300, width=2.75*300, res=300)
+  m.tmp <- plot.heterozygosity(gt.counts, vc1, vc2, pop=pop)
+  dev.off()
+
+  ss.df[1, ] <- c(paste(ss.prefix, "heterozygosity_cor", sep="."), "r2", m.tmp)
+
+  # Scatterplot of total variant counts per sample between all pairs of variant classes
+  # TODO: implement this
+
+  return(ss.df)
 }
 
 
@@ -171,8 +218,13 @@ pheno <- load.labels(args$ancestry_labels, samples)
 # Triple waterfall plot of counts per sample by class
 # TODO: implement this
 
-# Scatterplot of heterozygosity per sample between all pairs of variant classes
-# TODO: implement this
-
-# Scatterplot of total variant counts per sample between all pairs of variant classes
-# TODO: implement this
+# Inter-class comparisions across samples
+ic.ss <- lapply(list(c("snv", "indel"), c("snv", "sv"), c("indel", "sv")), function(vcs){
+  vc1 <- vcs[1]; vc2 <- vcs[2]
+  if(all(vcs %in% gt.counts$class)){
+    plot.vc.comparisons(gt.counts, vc1, vc2, args$out_prefix, pop)
+  }
+})
+if(length(ic.ss) > 0){
+  ic.ss <- as.data.frame(do.call("rbind", ic.ss))
+}
