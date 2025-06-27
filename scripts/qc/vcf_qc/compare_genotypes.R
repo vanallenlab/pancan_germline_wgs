@@ -41,7 +41,12 @@ load.sid.map <- function(sid.map.in){
 
 # Load genotypes for a single sample
 load.gts <- function(gt.tsv.in, prefix, elig.vids=NULL){
-  gts <- read.table(gt.tsv.in, header=F, sep="\t")
+  gts <- tryCatch(read.table(gt.tsv.in, header=F, sep="\t"),
+                  error=function(e){NULL},
+                  warning=function(w){NULL})
+  if(is.null(gts)){
+    return(NULL)
+  }
   colnames(gts) <- paste(prefix, c("vid", "gt"), sep="_")
   if(!is.null(elig.vids)){
     gts <- gts[which(gts[, 1] %in% elig.vids), ]
@@ -140,21 +145,30 @@ vid.map <- load.vid.map(args$variant_map, args$source_site_metrics, args$common_
 sid.map <- load.sid.map(args$sample_map)
 
 # Process each sample in parallel
-res.df <- as.data.frame(do.call("rbind", lapply(1:nrow(sid.map), function(sidx){
+all.sample.res <- lapply(1:nrow(sid.map), function(sidx){
   source.sid <- sid.map[sidx, "source_sid"]
-  target.sid <- sid.map[sidx, "target_sid"]
-  source.gts <- load.gts(paste(args$source_gt_dir, "/", source.sid,
-                               args$gt_tsv_suffix, sep=""),
-                         prefix="source",
+  source.gt.path <- paste(args$source_gt_dir, "/", source.sid,
+                          args$gt_tsv_suffix, sep="")
+  source.gts <- load.gts(source.gt.path, prefix="source",
                          elig.vids=vid.map$source_vid)
-  target.gts <- load.gts(paste(args$target_gt_dir, "/", target.sid,
-                               args$gt_tsv_suffix, sep=""),
-                         prefix="target",
+  target.sid <- sid.map[sidx, "target_sid"]
+  target.gt.path <- paste(args$target_gt_dir, "/", target.sid,
+                          args$gt_tsv_suffix, sep="")
+  target.gts <- load.gts(target.gt.path, prefix="target",
                          elig.vids=vid.map$target_vid)
-  sample.res <- benchmark.gts(source.gts, target.gts, vid.map,
-                              args$report_by_genotype)
-  cbind(rep(source.sid, nrow(sample.res)), sample.res)
-})))
+  if(!is.null(source.gts) & !is.null(target.gts)){
+    sample.res <- benchmark.gts(source.gts, target.gts, vid.map,
+                                args$report_by_genotype)
+    cbind(rep(source.sid, nrow(sample.res)), sample.res)
+  }else{
+    NULL
+  }
+})
+if(length(all.sample.res) > 0){
+  res.df <- as.data.frame(do.call("rbind", all.sample.res))
+}else{
+  res.df <- as.data.frame(matrix(nrow=0, ncol=8))
+}
 colnames(res.df) <- c("#sample", "class", "subclass", "freq_bin",
                       if(args$report_by_genotype){"genotype"}else{"zygosity"},
                       "no_match", "carrier_match", "gt_match")

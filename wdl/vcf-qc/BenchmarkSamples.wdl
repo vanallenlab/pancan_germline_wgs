@@ -25,11 +25,11 @@ workflow BenchmarkSamples {
     File source_gt_tarball
     String source_prefix
 
-  	Array[File] target_vcfs
-  	Array[File] target_vcf_idxs
+    Array[File] target_vcfs
+    Array[File] target_vcf_idxs
     String target_prefix
 
-  	Array[File] id_map_tsvs
+    Array[File] id_map_tsvs
 
     Array[File] eval_interval_beds
     Array[String]? eval_interval_bed_names
