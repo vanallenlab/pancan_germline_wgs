@@ -76,10 +76,79 @@ load.labels <- function(tsv.in, elig.samples=NULL){
 ######################
 # Plotting Functions #
 ######################
+# Wrapper for main waterfall plot
+# TODO: implement this
+
+# Helper function to handle scatterplots used for inter-class comparisons
+interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
+                               xlims=NULL, ylims=NULL, diag.lm=F,
+                               stat.lab.hex=0.04, pt.cex=0.65,
+                               parmar=c(2, 2.5, 1, 3.5)){
+  # Get pointwise plotting parameters
+  pw.params <- scatterplot.point.params(nrow(plot.df))
+  if(is.null(pop)){
+    pw.col <- rep("black", nrow(plot.df))
+  }else{
+    n.pops <- length(unique(pop))
+    pop <- toupper(pop)
+    if(all(pop %in% names(pop.colors))){
+      pop.pal <- pop.colors[sort(unique(pop))]
+    }else{
+      pop.pal <- categorical.rainbow(n.pops)
+      names() <- unique(pop)
+    }
+    pw.col <- pop.colors[pop[rownames(plot.df)]]
+  }
+
+  # Prepare plotting area
+  if(is.null(xlims)){
+    xlims <- range(plot.df[, 1])
+  }
+  if(is.null(ylims)){
+    ylims <- range(plot.df[, 2])
+  }
+  prep.plot.area(xlims, ylims, parmar, xaxs="r", yaxs="r")
+  if(diag.lm){abline(0, 1, col=annotation.color)}
+
+  # Add points
+  points(plot.df, pch=pw.params$pch, cex=0.75*pw.params$cex, xpd=T,
+         col=sapply(pw.col, adjustcolor, alpha=pw.params$alpha))
+
+  # Add axes & title
+  mtext(3, text=title)
+  clean.axis(1, label.units=label.units, infinite=T, max.ticks=5,
+             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[1]], "s", sep=""),
+                            error=function(e){"X"}),
+             label.line=-0.85, title.line=0)
+  clean.axis(2, label.units=label.units, infinite=T, max.ticks=5,
+             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[2]], "s", sep=""),
+                            error=function(e){"Y"}),
+             label.line=-0.75, title.line=0.5)
+
+  # Add title & legends
+  r2 <- cor(plot.df[, 1], plot.df[, 2])^2
+  text(x=par("usr")[1]-(stat.lab.hex*diff(par("usr")[1:2])),
+       y=par("usr")[4]-(2.5*stat.lab.hex*diff(par("usr")[3:4])),
+       pos=4, cex=5/6,
+       labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
+  if(!is.null(pop)){
+    pop.labs.at <- seq(par("usr")[3], par("usr")[4],
+                       length.out=2+n.pops)[-c(1, n.pops + 2)]
+    if(all(pop %in% names(pop.abbreviations))){
+      pop.labs <- pop.abbreviations[names(pop.pal)]
+    }else{
+      pop.labs <- names(pop.pal)
+    }
+    yaxis.legend(pop.labs, x=par("usr")[2], y.positions=rev(pop.labs.at),
+                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal, lwd=4)
+  }
+
+  return(r2)
+}
+
 # Scatterplot of sample heterozygosity between two classes of variants
 plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
-                                title="Heterozygosity", stat.lab.hex=0.04,
-                                pt.cex=0.65, parmar=c(2, 2.5, 1, 3.5)){
+                                title="Heterozygosity"){
   # Compute heterozygosity for all samples for each variant class
   samples <- unique(gt.counts$sample)
   h.df <- as.data.frame(do.call("cbind", lapply(c(vc1, vc2), function(vc){
@@ -103,59 +172,43 @@ plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
     h.df <- h.df[order(pop.idx[pop[rownames(h.df)]], h.df[, vc1], h.df[, vc2]), ]
   }
 
-  # Get pointwise plotting parameters
-  pw.params <- scatterplot.point.params(nrow(h.df))
-  if(is.null(pop)){
-    pw.col <- rep("black", nrow(h.df))
-  }else{
-    n.pops <- length(unique(pop))
-    pop <- toupper(pop)
-    if(all(pop %in% names(pop.colors))){
-      pop.pal <- pop.colors[sort(unique(pop))]
-    }else{
-      pop.pal <- categorical.rainbow(n.pops)
-      names() <- unique(pop)
-    }
-    pw.col <- pop.colors[pop[rownames(h.df)]]
-  }
-
-  # Prepare plotting area
+  # Generate plot
   xlims <- ylims <- range(h.df[, c(vc1, vc2)])
-  prep.plot.area(xlims, ylims, parmar, xaxs="r", yaxs="r")
-  abline(0, 1, col=annotation.color)
-
-  # Add points
-  points(h.df, pch=pw.params$pch, cex=0.75*pw.params$cex, xpd=T,
-         col=sapply(pw.col, adjustcolor, alpha=pw.params$alpha))
-
-  # Add axes & title
-  clean.axis(1, label.units="percent", infinite=T, max.ticks=5,
-             title=paste(var.class.abbrevs[vc1], "s", sep=""),
-             label.line=-0.85, title.line=0)
-  clean.axis(2, label.units="percent", infinite=T, max.ticks=5,
-             title=paste(var.class.abbrevs[vc2], "s", sep=""),
-             label.line=-0.75, title.line=0.5)
-  mtext(3, text=title)
-
-  # Add legends
-  r2 <- cor(h.df[, vc1], h.df[, vc2])^2
-  text(x=par("usr")[1]-(stat.lab.hex*diff(par("usr")[1:2])),
-       y=par("usr")[4]-(2.5*stat.lab.hex*diff(par("usr")[3:4])),
-       pos=4, cex=5/6,
-       labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
-  if(!is.null(pop)){
-    pop.labs.at <- seq(par("usr")[1], par("usr")[2],
-                       length.out=2+n.pops)[-c(1, n.pops + 2)]
-    if(all(pop %in% names(pop.abbreviations))){
-      pop.labs <- pop.abbreviations[names(pop.pal)]
-    }else{
-      pop.labs <- names(pop.pal)
-    }
-    yaxis.legend(pop.labs, x=par("usr")[2], y.positions=rev(pop.labs.at),
-                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal, lwd=4)
-  }
+  r2 <- interclass.scatter(h.df, pop, title, label.units="percent",
+                           xlims=xlims, ylims=ylims, diag.lm=T)
 
   return(c(r2, nrow(h.df)))
+}
+
+# Scatterplot of overall variant counts between two classes of variants
+plot.count.comparisons <- function(gt.counts, vc1, vc2, pop=NULL,
+                                title="Variant count"){
+  # Compute total number of variants for all samples for each variant class
+  samples <- unique(gt.counts$sample)
+  c.df <- as.data.frame(do.call("cbind", lapply(c(vc1, vc2), function(vc){
+    sapply(samples, function(sid){
+      sum(gt.counts[(which(gt.counts$sample == sid
+                              & gt.counts$class == vc
+                              & is.na(gt.counts$subclass))),
+                       c("het", "hom")])
+    })
+  })))
+  rownames(c.df) <- samples
+  c.df <- c.df[which(complete.cases(c.df)), ]
+  colnames(c.df) <- c(vc1, vc2)
+
+  # Reorder samples from smallest to largest pop, if optioned
+  if(!is.null(pop)){
+    pop.k <- table(pop[rownames(c.df)])
+    pop.idx <- length(pop.k):1
+    names(pop.idx) <- names(pop.k)[order(pop.k)]
+    c.df <- c.df[order(pop.idx[pop[rownames(c.df)]], c.df[, vc1], c.df[, vc2]), ]
+  }
+
+  # Generate plot
+  r2 <- interclass.scatter(c.df, pop, title, label.units="count")
+
+  return(c(r2, nrow(c.df)))
 }
 
 # Wrapper function to handle inter-class comparison plots
@@ -174,7 +227,12 @@ plot.vc.comparisons <- function(gt.counts, vc1, vc2, out.prefix, pop=NULL){
   ss.df[1, ] <- c(paste(ss.prefix, "heterozygosity_cor", sep="."), "r2", m.tmp)
 
   # Scatterplot of total variant counts per sample between all pairs of variant classes
-  # TODO: implement this
+  png(paste(out.prefix, ss.prefix, "variant_counts.png", sep="."),
+      height=2.25*300, width=2.75*300, res=300)
+  m.tmp <- plot.count.comparisons(gt.counts, vc1, vc2, pop=pop)
+  dev.off()
+
+  ss.df[2, ] <- c(paste(ss.prefix, "variant_count_cor", sep="."), "r2", m.tmp)
 
   return(ss.df)
 }
@@ -216,7 +274,7 @@ pop <- load.labels(args$ancestry_labels, samples)
 pheno <- load.labels(args$ancestry_labels, samples)
 
 # Triple waterfall plot of counts per sample by class
-# TODO: implement this
+main.waterfall(gt.counts, pop, pheno)
 
 # Inter-class comparisions across samples
 ic.ss <- lapply(list(c("snv", "indel"), c("snv", "sv"), c("indel", "sv")), function(vcs){

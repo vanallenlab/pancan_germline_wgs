@@ -38,7 +38,7 @@ task ConcatTextFiles {
       touch header.txt
     fi
 
-    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename}
+    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename} || true
   >>>
 
   output {
