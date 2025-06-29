@@ -179,7 +179,7 @@ task CollectSiteMetrics {
     String g2c_analysis_docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz")
+  String out_prefix = basename(vcf, "vcf.gz")
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
   String min_af_cmd = if defined(min_af_bin) then "--min-af-bin ~{min_af_bin}" else ""

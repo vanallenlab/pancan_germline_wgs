@@ -77,7 +77,64 @@ load.labels <- function(tsv.in, elig.samples=NULL){
 # Plotting Functions #
 ######################
 # Wrapper for main waterfall plot
-# TODO: implement this
+main.waterfall(gt.counts, out.prefix, pop=NULL, pheno=NULL){
+  # Determine number of panels and figure sizing
+  vcs <- intersect(names(var.class.names), unique(gt.counts$class))
+  n.panels <- length(vcs)
+  has.pop <- !is.null(pop)
+  has.pheno <- !is.null(pheno)
+  bottom.tracks <- sum(c(has.pop, has.pheno))
+  samples <- unique(gt.counts$sample)
+
+  # Compute each sample's total variant counts
+  total.counts <- as.data.frame(do.call("cbind", lapply(vcs, function(vc){
+    sapply(samples, function(sid){
+      s.v <- as.numeric(gt.counts[which(gt.counts$sample == sid
+                      & gt.counts$class == vc
+                      & is.na(gt.counts$subclass)), c("het", "hom")])
+      if(length(s.v) == 0){0}else{sum(s.v, na.rm=T)}
+    })
+  })))
+  colnames(total.counts) <- vcs
+  rownames(total.counts) <- samples
+
+  # Determine sample order as follows:
+  # 1. Group samples on X axis by population from most to least total variants
+  # 2. Order samples within each group first by phenotype (largest to smallest N)
+  # 3. Order samples within `2` from most to least variation
+  if(has.pop){
+    pop <- pop[samples]
+    pops <- unique(pop)
+    pop.m <- sapply(pops, function(p){
+      median(apply(total.counts[names(pop[which(pop == p)]), ], 1, sum))
+      })
+    pop.rank <- 1:length(pop.m)
+    names(pop.rank) <- names(pop.m)[order(pop.m, decreasing=TRUE)]
+  }
+  if(has.pheno){
+    pheno <- pheno[samples]
+    pheno.k <- table(pheno)
+    pheno.rank <- 1:length(pheno.k)
+    names(pheno.rank) <- names(pheno.k)[order(pheno.k, decreasing=TRUE)]
+  }
+  s.z <- apply(apply(total.counts, 2, scale), 1, mean)
+  s.rank <- 1:length(samples)
+  names(s.rank) <- rownames(total.counts)[order(s.z, decreasing=T)]
+  order.df <- data.frame("counts" = s.rank, row.names=names(s.rank))
+  if(has.pop){
+    order.df$pop <- pop.rank[pop[rownames(order.df)]]
+  }
+  if(has.pheno){
+    order.df$pheno <- pheno.rank[pheno[rownames(order.df)]]
+  }
+  order.df <- order.df[, intersect(c("pop", "pheno", "counts"),
+                                   colnames(order.df))]
+  samples.sorted <- rownames(order.df)[do.call(order, order.df)]
+
+  # Define plot parameters
+  # Target dimensions for 3 rows + 2 marker fields: 7.5" wide x 4.6" tall
+  # TODO: finish this
+}
 
 # Helper function to handle scatterplots used for inter-class comparisons
 interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
@@ -271,10 +328,10 @@ samples <- unique(gt.counts$sample)
 
 # Load sample ancestry and phenotypes, if optioned
 pop <- load.labels(args$ancestry_labels, samples)
-pheno <- load.labels(args$ancestry_labels, samples)
+pheno <- load.labels(args$phenotype_labels, samples)
 
 # Triple waterfall plot of counts per sample by class
-main.waterfall(gt.counts, pop, pheno)
+main.waterfall(gt.counts, args$out_prefix, pop, pheno)
 
 # Inter-class comparisions across samples
 ic.ss <- lapply(list(c("snv", "indel"), c("snv", "sv"), c("indel", "sv")), function(vcs){

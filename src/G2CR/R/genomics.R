@@ -28,7 +28,7 @@
 #' @export classify.gt.zygosity
 #' @export
 classify.gt.zygosity <- function(gt){
-  sapply(gt, function(g){
+  sapply(as.character(gt), function(g){
     n.alleles <- length(unique(setdiff(unlist(strsplit(g, "[/|]")), ".")))
     remap(as.character(n.alleles > 1),
           c("TRUE" = "het", "FALSE" = "hom"))
