@@ -513,7 +513,7 @@ task MakeVidMap {
     ~{invert_cmd} \
     | awk -v FS="\t" -v OFS="\t" '!seen[$1]++' \
     | gzip -c \
-    > ~{out_fname}
+    > ~{out_fname} || true
   >>>
 
   output {

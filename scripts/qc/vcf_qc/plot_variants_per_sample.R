@@ -76,8 +76,65 @@ load.labels <- function(tsv.in, elig.samples=NULL){
 ######################
 # Plotting Functions #
 ######################
+# Helper function to plot a single count waterfall; called within main.waterfall()
+plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
+                                 samples.sorted=NULL, pop.space.wex=0.02,
+                                 pheno.space.wex=0.005, parmar=c(0.25, 2.75, 0.5, 0.15)){
+  # Format plotting data
+  counts <- gt.counts[which(gt.counts$class == vc
+                            & is.na(gt.counts$subclass)),
+                      c("sample", "hom", "het")]
+  rownames(counts) <- counts$sample
+  if(!is.null(samples.sorted)){
+    counts <- counts[samples.sorted, ]
+  }
+  counts$sample <- NULL
+  s.feats <- data.frame("order" = 1:nrow(counts), row.names=rownames(counts))
+  s.feats$pop <- if(is.null(pop)){NA}else{pop[rownames(counts)]}
+  s.feats$pheno <- if(is.null(pop)){NA}else{pheno[rownames(counts)]}
+  pop.breaks.x <- which(sapply(2:nrow(s.feats), function(r){
+    s.feats$pop[r] != s.feats$pop[r-1]
+  }))
+  pheno.breaks.x <- which(sapply(2:nrow(s.feats), function(r){
+    (s.feats$pop[r] == s.feats$pop[r-1]
+     & s.feats$pheno[r] != s.feats$pheno[r-1])
+  }))
+  n.samples <- length(rownames(counts))
+
+  # Get plot parameters
+  xlims <- c(-0.01*n.samples,
+             n.samples * (1 + (pop.space.wex * (length(pop.breaks.x) - 1))
+                          + (pheno.space.wex * (length(pheno.breaks.x) - 1))))
+  ylims <- c(0, max(apply(counts, 1, sum, na.rm=T)))
+  hom.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=-0.01)
+  het.col <- adjust.color.hsb(var.class.colors[vc], s=0.025, b=0.075)
+
+  # Prep plot area
+  prep.plot.area(xlims, ylims, parmar)
+
+  # Add bars
+  prev.x <- 0
+  for(i in 1:n.samples){
+    if(i %in% pop.breaks.x){
+      prev.x <- prev.x + (pop.space.wex * n.samples)
+    }else if(i %in% pheno.breaks.x){
+      prev.x <- prev.x + (pheno.space.wex* n.samples)
+    }
+    rect(xleft=prev.x, xright=prev.x+1, ybottom=c(0, counts[i, 1]),
+         ytop=cumsum(as.numeric(counts[i, 1:2])),
+         col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.2)
+    prev.x <- prev.x + 1
+  }
+
+  # Add axis
+  clean.axis(2, title=paste(var.class.abbrevs[vc], "s", sep=""),
+             label.units="count", infinite.positive=T, max.ticks=4,
+             title.line=0.75)
+}
+
 # Wrapper for main waterfall plot
-main.waterfall(gt.counts, out.prefix, pop=NULL, pheno=NULL){
+main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
+                           pop.space.wex=0.03, pheno.space.wex=0.005){
   # Determine number of panels and figure sizing
   vcs <- intersect(names(var.class.names), unique(gt.counts$class))
   n.panels <- length(vcs)
@@ -90,8 +147,8 @@ main.waterfall(gt.counts, out.prefix, pop=NULL, pheno=NULL){
   total.counts <- as.data.frame(do.call("cbind", lapply(vcs, function(vc){
     sapply(samples, function(sid){
       s.v <- as.numeric(gt.counts[which(gt.counts$sample == sid
-                      & gt.counts$class == vc
-                      & is.na(gt.counts$subclass)), c("het", "hom")])
+                                        & gt.counts$class == vc
+                                        & is.na(gt.counts$subclass)), c("het", "hom")])
       if(length(s.v) == 0){0}else{sum(s.v, na.rm=T)}
     })
   })))
@@ -107,7 +164,7 @@ main.waterfall(gt.counts, out.prefix, pop=NULL, pheno=NULL){
     pops <- unique(pop)
     pop.m <- sapply(pops, function(p){
       median(apply(total.counts[names(pop[which(pop == p)]), ], 1, sum))
-      })
+    })
     pop.rank <- 1:length(pop.m)
     names(pop.rank) <- names(pop.m)[order(pop.m, decreasing=TRUE)]
   }
@@ -132,8 +189,21 @@ main.waterfall(gt.counts, out.prefix, pop=NULL, pheno=NULL){
   samples.sorted <- rownames(order.df)[do.call(order, order.df)]
 
   # Define plot parameters
-  # Target dimensions for 3 rows + 2 marker fields: 7.5" wide x 4.6" tall
-  # TODO: finish this
+  # Target dimensions for 3 rows + 2 marker fields: 6.8" wide x 4.2" tall
+  pdf.width <- 6.8
+  pdf.height <- (3*0.42*n.panels) + (bottom.tracks*0.42/2)
+
+  # Generate waterfall plot
+  pdf(paste(out.prefix, "variants_per_genome.waterfall.pdf", sep="."),
+      height=pdf.height, width=pdf.width)
+  layout(matrix(1:(n.panels+(bottom.tracks > 0)), byrow=T, ncol=1),
+         heights=c(rep(3, n.panels), if(bottom.tracks > 0){1}))
+  sapply(vcs, function(vc){
+    plot.count.waterfall(gt.counts, vc, pop, pheno, samples.sorted,
+                         pop.space.wex, pheno.space.wex)
+  })
+  dev.off()
+
 }
 
 # Helper function to handle scatterplots used for inter-class comparisons
@@ -239,15 +309,15 @@ plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
 
 # Scatterplot of overall variant counts between two classes of variants
 plot.count.comparisons <- function(gt.counts, vc1, vc2, pop=NULL,
-                                title="Variant count"){
+                                   title="Variant count"){
   # Compute total number of variants for all samples for each variant class
   samples <- unique(gt.counts$sample)
   c.df <- as.data.frame(do.call("cbind", lapply(c(vc1, vc2), function(vc){
     sapply(samples, function(sid){
       sum(gt.counts[(which(gt.counts$sample == sid
-                              & gt.counts$class == vc
-                              & is.na(gt.counts$subclass))),
-                       c("het", "hom")])
+                           & gt.counts$class == vc
+                           & is.na(gt.counts$subclass))),
+                    c("het", "hom")])
     })
   })))
   rownames(c.df) <- samples
