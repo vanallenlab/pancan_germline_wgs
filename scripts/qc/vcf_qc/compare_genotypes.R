@@ -139,7 +139,8 @@ args <- parser$parse_args()
 #              "out_prefix" = "~/scratch/gt_comparison_dev")
 
 # Load input data
-vid.map <- load.vid.map(args$variant_map, args$source_site_metrics, args$common_af)
+vid.map <- tryCatch(load.vid.map(args$variant_map, args$source_site_metrics, args$common_af),
+                    error=function(e){NULL})
 
 # Load sample map
 sid.map <- load.sid.map(args$sample_map)
@@ -156,7 +157,7 @@ all.sample.res <- lapply(1:nrow(sid.map), function(sidx){
                           args$gt_tsv_suffix, sep="")
   target.gts <- load.gts(target.gt.path, prefix="target",
                          elig.vids=vid.map$target_vid)
-  if(!is.null(source.gts) & !is.null(target.gts)){
+  if(!is.null(source.gts) & !is.null(target.gts) & !is.null(vid.map)){
     sample.res <- benchmark.gts(source.gts, target.gts, vid.map,
                                 args$report_by_genotype)
     cbind(rep(source.sid, nrow(sample.res)), sample.res)

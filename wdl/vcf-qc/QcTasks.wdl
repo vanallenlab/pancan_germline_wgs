@@ -51,55 +51,72 @@ task BenchmarkGenotypes {
     rm ~{source_site_metrics}
     zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list || true
 
-    # Prep sample lists
-    if ~{invert_sample_map}; then
-      awk -v FS="\t" -v OFS="\t" '{ print $2, $1 }' ~{sample_id_map} > sample.map.tsv
+    # If there are no source or target variants, there's no need to run the rest of this task
+    if [ $( cat source.vids.list | wc -l ) -eq 0 ] || \
+       [ $( cat target.vids.list | wc -l ) -eq 0 ]; then
+
+      if ~{report_by_gt}; then
+        echo -e "#sample\tclass\tsubclass\tfreq_bin\tgenotype\tno_match\tcarrier_match\tgt_match" \
+        > ~{output_prefix}.gt_comparison.distrib.tsv
+      else
+        echo -e "#sample\tclass\tsubclass\tfreq_bin\tzygosity\tno_match\tcarrier_match\tgt_match" \
+        > ~{output_prefix}.gt_comparison.distrib.tsv
+      fi
+
     else
-      cp ~{sample_id_map} sample.map.tsv
+
+      # Prep sample lists
+      if ~{invert_sample_map}; then
+        awk -v FS="\t" -v OFS="\t" '{ print $2, $1 }' ~{sample_id_map} > sample.map.tsv
+      else
+        cp ~{sample_id_map} sample.map.tsv
+      fi
+      cut -f1 sample.map.tsv > source.samples.list
+      cut -f2 sample.map.tsv > target.samples.list
+
+      # Unpack source GTs and subset to samples of interest
+      mkdir source_gts_raw
+      gsutil -m cp ~{source_gt_tarball} source_gt_tarball.tar.gz
+      tar -xzvf source_gt_tarball.tar.gz -C source_gts_raw/
+      mkdir source_gts/
+      while read sid; do
+        find source_gts_raw/ -name "$sid.gt.tsv.gz" \
+        | xargs -I {} zcat {} | fgrep -wf source.vids.list \
+        | gzip -c > source_gts/$sid.gt.sub.tsv.gz || true
+      done < source.samples.list
+      rm -rf source_gts_raw source_gt_tarball.tar.gz
+      echo "Contents of source_gts:"
+      ls -lh source_gts/
+
+      # Unpack target GTs and subset to samples of interest
+      mkdir target_gts_raw
+      gsutil -m cp ~{target_gt_tarball} target_gt_tarball.tar.gz
+      tar -xzvf target_gt_tarball.tar.gz -C target_gts_raw/
+      mkdir target_gts/
+      while read sid; do
+        find target_gts_raw/ -name "$sid.gt.tsv.gz" \
+        | xargs -I {} zcat {} | fgrep -wf target.vids.list \
+        | gzip -c > target_gts/$sid.gt.sub.tsv.gz || true
+      done < target.samples.list
+      rm -rf target_gts_raw target_gt_tarball.tar.gz
+      echo "Contents of target_gts:"
+      ls -lh source_gts/
+
+      # Benchmark genotypes
+      echo "Now benchmarking..."
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_genotypes.R \
+        --variant-map ~{variant_id_map} \
+        --source-site-metrics source.metrics.bed.gz \
+        --sample-map sample.map.tsv \
+        --source-gt-dir source_gts/ \
+        --target-gt-dir target_gts/ \
+        --gt-tsv-suffix ".gt.sub.tsv.gz" \
+        ~{gt_report_cmd} \
+        --common-af ~{common_af_cutoff} \
+        --out-prefix ~{output_prefix}
+
     fi
-    cut -f1 sample.map.tsv > source.samples.list
-    cut -f2 sample.map.tsv > target.samples.list
-
-    # Unpack source GTs and subset to samples of interest
-    mkdir source_gts_raw
-    gsutil -m cp ~{source_gt_tarball} source_gt_tarball.tar.gz
-    tar -xzvf source_gt_tarball.tar.gz -C source_gts_raw/
-    mkdir source_gts/
-    while read sid; do
-      find source_gts_raw/ -name "$sid.gt.tsv.gz" \
-      | xargs -I {} zcat {} | fgrep -wf source.vids.list \
-      | gzip -c > source_gts/$sid.gt.sub.tsv.gz || true
-    done < source.samples.list
-    rm -rf source_gts_raw source_gt_tarball.tar.gz
-    echo "Contents of source_gts:"
-    ls -lh source_gts/
-
-    # Unpack target GTs and subset to samples of interest
-    mkdir target_gts_raw
-    gsutil -m cp ~{target_gt_tarball} target_gt_tarball.tar.gz
-    tar -xzvf target_gt_tarball.tar.gz -C target_gts_raw/
-    mkdir target_gts/
-    while read sid; do
-      find target_gts_raw/ -name "$sid.gt.tsv.gz" \
-      | xargs -I {} zcat {} | fgrep -wf target.vids.list \
-      | gzip -c > target_gts/$sid.gt.sub.tsv.gz || true
-    done < target.samples.list
-    rm -rf target_gts_raw target_gt_tarball.tar.gz
-    echo "Contents of target_gts:"
-    ls -lh source_gts/
-
-    # Benchmark genotypes
-    echo "Now benchmarking..."
-    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/compare_genotypes.R \
-      --variant-map ~{variant_id_map} \
-      --source-site-metrics source.metrics.bed.gz \
-      --sample-map sample.map.tsv \
-      --source-gt-dir source_gts/ \
-      --target-gt-dir target_gts/ \
-      --gt-tsv-suffix ".gt.sub.tsv.gz" \
-      ~{gt_report_cmd} \
-      --common-af ~{common_af_cutoff} \
-      --out-prefix ~{output_prefix}
+    
     gzip -f ~{output_prefix}.gt_comparison.distrib.tsv
   >>>
 

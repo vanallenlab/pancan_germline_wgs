@@ -78,8 +78,9 @@ load.labels <- function(tsv.in, elig.samples=NULL){
 ######################
 # Helper function to plot a single count waterfall; called within main.waterfall()
 plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
-                                 samples.sorted=NULL, pop.space.wex=0.02,
-                                 pheno.space.wex=0.005, parmar=c(0.25, 2.75, 0.5, 0.15)){
+                                 samples.sorted=NULL, pop.space.wex=0.025,
+                                 pheno.space.wex=0.005,
+                                 parmar=c(0.25, 2.75, 0.5, 0.15)){
   # Format plotting data
   counts <- gt.counts[which(gt.counts$class == vc
                             & is.na(gt.counts$subclass)),
@@ -106,8 +107,8 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
              n.samples * (1 + (pop.space.wex * (length(pop.breaks.x) - 1))
                           + (pheno.space.wex * (length(pheno.breaks.x) - 1))))
   ylims <- c(0, max(apply(counts, 1, sum, na.rm=T)))
-  hom.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=-0.05)
-  het.col <- adjust.color.hsb(var.class.colors[vc], s=0.025, b=0.05)
+  hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.05)
+  het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.05)
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar)
@@ -122,7 +123,7 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
     }
     rect(xleft=prev.x, xright=prev.x+1, ybottom=c(0, counts[i, 1]),
          ytop=cumsum(as.numeric(counts[i, 1:2])),
-         col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.2)
+         col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.25)
     prev.x <- prev.x + 1
   }
 
@@ -132,15 +133,62 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
              title.line=0.75)
 }
 
+# Helper function to add groupwise markers to waterfall plot
+add.waterfall.markers <- function(order.df, pop.map, pheno.map, pop.space.wex=0.025, pheno.space.wex=0.005, group.labels=c("Ancestry", "Pheno."), parmar=c(1.25, 2.75, 0.25, 0.15)){
+  # Determine breaks between groups
+  s.feats <- data.frame("order" = 1:nrow(order.df), row.names=rownames(order.df))
+  s.feats$pop <- if(is.null(pop)){NA}else{pop[rownames(order.df)]}
+  s.feats$pheno <- if(is.null(pop)){NA}else{pheno[rownames(order.df)]}
+  pop.breaks.x <- which(sapply(2:nrow(s.feats), function(r){
+    s.feats$pop[r] != s.feats$pop[r-1]
+  }))
+  pheno.breaks.x <- which(sapply(2:nrow(s.feats), function(r){
+    (s.feats$pop[r] == s.feats$pop[r-1]
+     & s.feats$pheno[r] != s.feats$pheno[r-1])
+  }))
+  n.samples <- length(rownames(order.df))
+
+  # Get plot parameters
+  xlims <- c(-0.01*n.samples,
+             n.samples * (1 + (pop.space.wex * (length(pop.breaks.x) - 1))
+                          + (pheno.space.wex * (length(pheno.breaks.x) - 1))))
+  ylims <- c(ncol(order.df)-1, 0)
+  if(all(names(pop.map) %in% pop.colors)){
+    pop.pal <- pop.colors[names(pop.map)]
+  }else{
+    pop.pal <- categorical.rainbow(length(pop.map))
+    names(pop.pal) <- names(pop.map)
+  }
+  if(all(names(pheno.map) %in% cancer.colors)){
+    pheno.pal <- cancer.colors[names(pheno.map)]
+  }else{
+    pheno.pal <- greyscale.palette(length(pheno.map)+2)[2:(length(pheno.map)+1)]
+    names(pheno.pal) <- names(pheno.map)
+  }
+
+  # Prep plot area
+  prep.plot.area(xlims, ylims, parmar)
+
+  # Draw rectangles
+  strata.df <- table(order.df[, c("pop", "pheno")])
+  if(any(!is.na(order.df$pop))){
+    # TODO: finish this
+  }
+
+  # Add labels
+  axis(2, at=(1:length(group.labels))-0.5, tick=F, line=-0.9, cex.axis=4.5/6, labels=group.labels, las=2)
+}
+
 # Wrapper for main waterfall plot
 main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
-                           pop.space.wex=0.03, pheno.space.wex=0.005){
+                           pop.space.wex=0.025, pheno.space.wex=0.005){
   # Determine number of panels and figure sizing
   vcs <- intersect(names(var.class.names), unique(gt.counts$class))
   n.panels <- length(vcs)
   has.pop <- !is.null(pop)
   has.pheno <- !is.null(pheno)
   bottom.tracks <- sum(c(has.pop, has.pheno))
+  has.bottom.tracks <- bottom.tracks > 0
   samples <- unique(gt.counts$sample)
 
   # Compute each sample's total variant counts
@@ -186,24 +234,39 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
   }
   order.df <- order.df[, intersect(c("pop", "pheno", "counts"),
                                    colnames(order.df))]
-  samples.sorted <- rownames(order.df)[do.call(order, order.df)]
+  order.df <- order.df[do.call(order, order.df), ]
+  samples.sorted <- rownames(order.df)
 
   # Define plot parameters
-  # Target dimensions for 3 rows + 2 marker fields: 6.8" wide x 4.2" tall
-  pdf.width <- 6.8
-  pdf.height <- (3*0.42*n.panels) + (bottom.tracks*0.42/2)
+  # Target dimensions for 3 rows + 2 marker fields: 6.6" wide x 4" tall
+  pdf.width <- 6.6
+  pdf.height <- (3*0.4*n.panels) + (bottom.tracks*0.4/2)
 
   # Generate waterfall plot
+  needs.legend <- TRUE
   pdf(paste(out.prefix, "variants_per_genome.waterfall.pdf", sep="."),
       height=pdf.height, width=pdf.width)
-  layout(matrix(1:(n.panels+(bottom.tracks > 0)), byrow=T, ncol=1),
-         heights=c(rep(3, n.panels), if(bottom.tracks > 0){1}))
-  sapply(vcs, function(vc){
+  layout(matrix(1:(n.panels+has.bottom.tracks), byrow=T, ncol=1),
+         heights=c(rep(3, n.panels), if(has.bottom.tracks){1}))
+  for(vc in vcs){
+    waterfall.parmar <- c(0.25, 2.75, 0.5, 0.15)
+    if(!has.bottom.tracks & vc == vcs[n.panels]){
+      parmar[1] <- 1
+    }
     plot.count.waterfall(gt.counts, vc, pop, pheno, samples.sorted,
-                         pop.space.wex, pheno.space.wex)
-  })
+                         pop.space.wex, pheno.space.wex, parmar=waterfall.parmar)
+    if(needs.legend){
+      legend("topright", cex=5/6, fill=c("gray80", "gray60"),
+             legend=c("Heterozygous", "Homozygous"), bty="n", border=NA)
+      needs.legend <- FALSE
+    }
+  }
+  if(has.bottom.tracks){
+    add.waterfall.markers(order.df, pop.rank, pheno.rank, pop.space.wex, pheno.space.wex)
+  }
+  mtext(paste(prettyNum(length(samples), big.mark=","), "germline genomes"),
+        1, line=0, cex=5/6)
   dev.off()
-
 }
 
 # Helper function to handle scatterplots used for inter-class comparisons
