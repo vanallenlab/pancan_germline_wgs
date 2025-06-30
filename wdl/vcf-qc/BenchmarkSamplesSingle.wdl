@@ -203,8 +203,8 @@ task SubsetTargetVcf {
   Int disk_gb = ceil(2.5 * size(vcf, "GB")) + 10
 
   String filtered_map_fname = basename(id_map_tsv, ".tsv") + ".filtered.tsv"
-  String filtered_dense_vcf_fname = basename(vcf, ".vcf.gz") + "filtered.vcf.gz"
-  String filtered_sites_vcf_fname = basename(vcf, ".vcf.gz") + "filtered.sites.vcf.gz"
+  String filtered_dense_vcf_fname = basename(vcf, ".vcf.gz") + ".filtered.vcf.gz"
+  String filtered_sites_vcf_fname = basename(vcf, ".vcf.gz") + ".filtered.sites.vcf.gz"
 
   command <<<
     set -eu -o pipefail

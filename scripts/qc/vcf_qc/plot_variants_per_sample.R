@@ -106,8 +106,8 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
              n.samples * (1 + (pop.space.wex * (length(pop.breaks.x) - 1))
                           + (pheno.space.wex * (length(pheno.breaks.x) - 1))))
   ylims <- c(0, max(apply(counts, 1, sum, na.rm=T)))
-  hom.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=-0.01)
-  het.col <- adjust.color.hsb(var.class.colors[vc], s=0.025, b=0.075)
+  hom.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=-0.05)
+  het.col <- adjust.color.hsb(var.class.colors[vc], s=0.025, b=0.05)
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar)

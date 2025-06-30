@@ -164,7 +164,7 @@ all.sample.res <- lapply(1:nrow(sid.map), function(sidx){
     NULL
   }
 })
-if(length(all.sample.res) > 0){
+if(length(all.sample.res) > 0 & !all(sapply(all.sample.res, is.null))){
   res.df <- as.data.frame(do.call("rbind", all.sample.res))
 }else{
   res.df <- as.data.frame(matrix(nrow=0, ncol=8))
@@ -176,4 +176,3 @@ colnames(res.df) <- c("#sample", "class", "subclass", "freq_bin",
 # Write results to compressed distribution .tsv
 write.table(res.df, paste(args$out_prefix, "gt_comparison.distrib.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)
-
