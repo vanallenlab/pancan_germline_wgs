@@ -429,6 +429,7 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                           "lof" = "LoF"),
     "cancer.names" = c("pancan" = "Pan-cancer",
                        "all" = "All cancer",
+                       "case" = "Cancer",
                        "prostate" = "Prostate",
                        "breast" = "Breast",
                        "lung" = "Lung",

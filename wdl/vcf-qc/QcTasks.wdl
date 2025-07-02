@@ -51,8 +51,8 @@ task BenchmarkGenotypes {
     rm ~{source_site_metrics}
     zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list || true
 
-    # If there are no source or target variants, there's no need to run the rest of this task
-    if [ $( cat source.vids.list | wc -l ) -eq 0 ] || \
+    # If there are no source and target variants, there's no need to run the rest of this task
+    if [ $( cat source.vids.list | wc -l ) -eq 0 ] && \
        [ $( cat target.vids.list | wc -l ) -eq 0 ]; then
 
       if ~{report_by_gt}; then
@@ -116,7 +116,7 @@ task BenchmarkGenotypes {
         --out-prefix ~{output_prefix}
 
     fi
-    
+
     gzip -f ~{output_prefix}.gt_comparison.distrib.tsv
   >>>
 

@@ -207,7 +207,7 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
                       max(which(df$class == "sv")) - bar.sep)
     staple.bracket(x0=vc.x, x1=vc.x, y0=sv.bracket.y[1], y1=sv.bracket.y[2])
     text(x=vc.x+bracket.lab.buf, y=mean(sv.bracket.y)-0.1,
-         labels="Structural\nvariants\n(>49 bp)",
+         labels="Structural\nvariants\n(SVs)\n(>49 bp)",
          cex=5/6, pos=2, xpd=T)
   }
 
@@ -437,15 +437,15 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
 
   # Add legend
   if(do.snvs){
-    text(x=0.5*snv.width, y=0.95*snv.k, labels="SNVs", pos=2,
+    text(x=0, y=0.95*snv.k, labels="SNVs", pos=2,
          col=var.class.colors["snv"], xpd=T)
   }
   if(do.indels){
-    text(x=-snv.gap-snv.width, y=max(del.xy$y),
+    text(x=-log10(10)-snv.gap-snv.width, y=max(del.xy$y),
          labels="Indels", pos=2, col=var.class.colors["indel"], xpd=T)
   }
   if(do.svs){
-    text(x=-log10(50)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
+    text(x=-log10(100)-snv.gap-indel.gap-snv.width, y=max(loss.xy$y),
          labels="SVs", pos=2, col=var.class.colors["sv"], xpd=T)
   }
   if(add.ref){
