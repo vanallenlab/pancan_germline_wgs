@@ -14,6 +14,7 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
+require(DescTools, quietly=TRUE)
 require(G2CR, quietly=TRUE)
 require(viridis, quietly=TRUE)
 load.constants("all")
@@ -187,27 +188,33 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   # Add left margin labels
   axis(2, at=(1:length(k))-0.5, las=2, line=-0.9, tick=F,
        labels=var.subclass.names.short[df$subclass], cex.axis=5/6)
-  vc.x <- -0.875 * diff(par("usr")[1:2])
+  vc.x <- -0.9 * diff(par("usr")[1:2])
   bracket.lab.buf <- -0.075 * vc.x
   if(has.short.variants){
     snv.bracket.y <- c(min(which(df$class == "snv")) - 1 + bar.sep,
                        max(which(df$class == "snv")) - bar.sep)
-    staple.bracket(x0=vc.x, x1=vc.x, y0=snv.bracket.y[1], y1=snv.bracket.y[2])
+    staple.bracket(x0=vc.x, x1=vc.x, y0=snv.bracket.y[1], y1=snv.bracket.y[2],
+                   staple.len=0.35, accent.len=0.2,
+                   staple.accent.color=var.class.colors["snv"])
     text(x=vc.x+bracket.lab.buf, y=mean(snv.bracket.y)-0.1, labels="SNVs",
          cex=5/6, pos=2, xpd=T)
 
     indel.bracket.y <- c(min(which(df$class == "indel")) - 1 + bar.sep,
                          max(which(df$class == "indel")) - bar.sep)
-    staple.bracket(x0=vc.x, x1=vc.x, y0=indel.bracket.y[1], y1=indel.bracket.y[2])
+    staple.bracket(x0=vc.x, x1=vc.x, y0=indel.bracket.y[1], y1=indel.bracket.y[2],
+                   staple.len=0.35, accent.len=0.2,
+                   staple.accent.color=var.class.colors["indel"])
     text(x=vc.x+bracket.lab.buf, y=mean(indel.bracket.y)-0.1, labels="Indels\n(1-49 bp)",
          cex=5/6, pos=2, xpd=T)
   }
   if(has.svs){
     sv.bracket.y <- c(min(which(df$class == "sv")) - 1 + bar.sep,
                       max(which(df$class == "sv")) - bar.sep)
-    staple.bracket(x0=vc.x, x1=vc.x, y0=sv.bracket.y[1], y1=sv.bracket.y[2])
+    staple.bracket(x0=vc.x, x1=vc.x, y0=sv.bracket.y[1], y1=sv.bracket.y[2],
+                   staple.len=0.35, accent.len=0.2,
+                   staple.accent.color=var.class.colors["sv"])
     text(x=vc.x+bracket.lab.buf, y=mean(sv.bracket.y)-0.1,
-         labels="Structural\nvariants\n(SVs)\n(>49 bp)",
+         labels="Structural\nvariants\n(SVs;\n>49 bp)",
          cex=5/6, pos=2, xpd=T)
   }
 
@@ -563,7 +570,8 @@ plot.af.distribs <- function(af.df, breaks, ref.af.df=NULL, colors=NULL,
                x1=ref.af.dat[[i]]$x[c(FALSE, TRUE)],
                y0=ref.af.dat[[i]]$y[c(TRUE, FALSE)],
                y1=ref.af.dat[[i]]$y[c(TRUE, FALSE)],
-               col=colors[i], lend="butt", lwd=lwd/2)
+               col=MixColor(colors[i], annotation.color, 0.5),
+               lend="butt", lwd=1)
     })
   }
 

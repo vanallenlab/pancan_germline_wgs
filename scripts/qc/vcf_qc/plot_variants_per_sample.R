@@ -14,6 +14,7 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
+require(DescTools, quietly=TRUE)
 require(G2CR, quietly=TRUE)
 load.constants("all")
 
@@ -132,7 +133,7 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
                               summary.fx=RLCtools::dynamic.range)
           zyg.sub.res <- data.frame("analysis"=zyg.prefix,
                                     "measure"=c("median", "dynamic_range"),
-                     "value"=c(med.v, phi.v), "n"=length(samples))
+                                    "value"=c(med.v, phi.v), "n"=length(samples))
 
           if(!is.null(pop)){
             zyg.sub.add <- do.call("rbind", lapply(unique(pop), function(p){
@@ -143,8 +144,8 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
                                   summary.fx=RLCtools::dynamic.range)
               zyg.sub.add <- data.frame("analysis"=pop.prefix,
                                         "measure"=c("median", "dynamic_range"),
-                         "value"=c(med.v, phi.v),
-                         "n"=length(pop.samples))
+                                        "value"=c(med.v, phi.v),
+                                        "n"=length(pop.samples))
 
               if(!is.null(pheno)){
                 zyg.sub.add.pw <- do.call("rbind", lapply(unique(pheno), function(ph){
@@ -215,32 +216,61 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
      & s.feats$pheno[r] != s.feats$pheno[r-1])
   }))
   n.samples <- length(rownames(counts))
+  total.per.sample <- apply(counts, 1, sum, na.rm=T)
 
   # Get plot parameters
   pop.spacer <- n.samples * pop.space.wex
   pheno.spacer <- n.samples * pheno.space.wex
   xlims <- c(-0.01*n.samples,
              n.samples + (pop.spacer * length(pop.breaks.x)) + (pheno.spacer * length(pheno.breaks.x)))
-  ylims <- c(0, max(apply(counts, 1, sum, na.rm=T)))
+  ylims <- c(0, max(total.per.sample))
   hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.05)
   het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.05)
 
-  # Prep plot area
-  prep.plot.area(xlims, ylims, parmar)
-
-  # Add bars
+  # Determine x position for each sample
   prev.x <- 0
+  sample.xleft <- c()
   for(i in 1:n.samples){
     if(i %in% pop.breaks.x){
       prev.x <- prev.x + pop.spacer
     }else if(i %in% pheno.breaks.x){
       prev.x <- prev.x + pheno.spacer
     }
-    rect(xleft=prev.x, xright=prev.x+1, ybottom=c(0, counts[i, 1]),
-         ytop=cumsum(as.numeric(counts[i, 1:2])),
-         col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.25)
+    sample.xleft[samples.sorted[i]] <- prev.x
     prev.x <- prev.x + 1
   }
+
+  # Prep plot area
+  prep.plot.area(xlims, ylims, parmar)
+
+  # Add bars
+  sapply(samples.sorted, function(sid){
+    rect(xleft=sample.xleft[sid],
+         xright=sample.xleft[sid]+1,
+         ybottom=c(0, counts[sid, 1]),
+         ytop=cumsum(as.numeric(counts[sid, 1:2])),
+         col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.25)
+  })
+
+  # Add groupwise medians
+  unique.s.feats <- unique(s.feats[, c("pop", "pheno")])
+  sapply(1:nrow(unique.s.feats), function(i){
+    pop <- unique.s.feats$pop[i]
+    pheno <- unique.s.feats$pheno[i]
+    sids <- rownames(s.feats)[which(s.feats$pop == pop & s.feats$pheno == pheno)]
+    group.df <- data.frame("x" = sample.xleft[sids]+0.5,
+                           "k" = total.per.sample[sids],
+                           row.names=sids)
+    group.df <- group.df[order(group.df$x), ]
+    lab.x.at <- median(group.df$x)
+    lab.y.at <- max(group.df$k[which(group.df$x >= quantile(group.df$x, 0.25)
+                      & group.df$x <= quantile(group.df$x, 0.75))])
+    group.k.med <- median(group.df$k)
+    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T,
+         col=MixColor(var.class.colors[vc], "black", 2/3),
+         labels=clean.numeric.labels(round(group.k.med, 0),
+                                     acceptable.decimals=if(group.k.med <= 2000){0}else{1}))
+  })
 
   # Add axis
   clean.axis(2, title=paste(var.class.abbrevs[vc], "s", sep=""),
@@ -656,6 +686,8 @@ main.waterfall(gt.counts, args$out_prefix, pop, pheno)
 # Collect median counts per sample by class, subclass, frequency, zygosity, pop, and pheno
 count.ss <- gather.count.sumstats(gt.counts, samples, pop, pheno)
 
+# TODO: maybe add Sankey diagrams here
+
 # Inter-class comparisions across samples
 ic.ss <- lapply(list(c("snv", "indel"), c("snv", "sv"), c("indel", "sv")), function(vcs){
   vc1 <- vcs[1]; vc2 <- vcs[2]
@@ -671,5 +703,6 @@ if(nrow(ic.ss) > 0){
 }
 
 # Write summary statistics to output file
+colnames(count.ss)[1] <- paste("#", colnames(count.ss)[1], sep="")
 write.table(count.ss, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)
