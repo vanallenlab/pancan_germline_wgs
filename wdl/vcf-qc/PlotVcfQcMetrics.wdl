@@ -530,8 +530,8 @@ task PlotSampleMetrics {
     String g2c_analysis_docker
   }
 
-  String pop_opt = if defined(ancestry_labels) then "--ancestry-labels ~{basename(ancestry_labels)}" else ""
-  String pheno_opt = if defined(phenotype_labels) then "--phenotype-labels ~{basename(phenotype_labels)}" else ""
+  String pop_opt = if defined(ancestry_labels) then "--ancestry-labels " + select_first([ancestry_labels, ""]) else ""
+  String pheno_opt = if defined(phenotype_labels) then "--phenotype-labels " + select_first([phenotype_labels, ""])  else ""
 
   Boolean do_twins = length(eval_interval_names) > 0
 
@@ -541,14 +541,6 @@ task PlotSampleMetrics {
     set -eu -o pipefail
 
     mkdir ~{output_prefix}.sample_metrics
-
-    # Relocate sample descriptive labels if necessary
-    if ~{defined(ancestry_labels)}; then
-      ln -s ~{default="" ancestry_labels} ./
-    fi
-    if ~{defined(phenotype_labels)}; then
-      ln -s ~{default="" phenotype_labels} ./
-    fi
 
     # Plot variation per genome
     /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_variants_per_sample.R \

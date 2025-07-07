@@ -740,25 +740,43 @@ code/scripts/manage_chromshards.py \
 staging_dir=staging/initial_qc
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# Build input arrays
-for key in size_distrib af_distrib size_vs_af_distrib \
-           all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do  
+cat << EOF > $staging_dir/main_keys.list
+size_distrib
+af_distrib
+size_vs_af_distrib
+all_svs_bed
+common_snvs_bed
+common_indels_bed
+common_svs_bed
+genotype_distrib
+EOF
+
+cat << EOF > $staging_dir/bench_keys.list
+site_benchmark_ppv_by_freqs
+site_benchmark_sensitivity_by_freqs
+site_benchmark_common_snv_ppv_beds
+site_benchmark_common_indel_ppv_beds
+site_benchmark_common_sv_ppv_beds
+twin_genotype_benchmark_distribs
+EOF
+
+# Clear old input arrays
+while read key; do  
   fname=$staging_dir/$key.uris.list
   if [ -e $fname ]; then rm $fname; fi
-done
-for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
-           site_benchmark_common_snv_ppv_beds \
-           site_benchmark_common_indel_ppv_beds \
-           site_benchmark_common_sv_ppv_beds; do
+done < $staging_dir/main_keys.list
+while read key; do
   for subset in giab_easy giab_hard; do
     fname=$staging_dir/$key.$subset.uris.list
     if [ -e $fname ]; then rm $fname; fi
   done
-done
+done < $staging_dir/bench_keys.list
 for suffix in af_distribution size_distribution; do
   fname=$staging_dir/gnomAD_$suffix.list
   if [ -e $fname ]; then rm $fname; fi
 done
+
+# Build input arrays
 for k in $( seq 1 22 ) X Y; do
   
   # Localize output tracker json and get URIs for QC metrics
@@ -766,21 +784,30 @@ for k in $( seq 1 22 ) X Y; do
   gsutil cp \
     $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/chr$k/$json_fname \
     $staging_dir/
-  for key in size_distrib af_distrib size_vs_af_distrib \
-             all_svs_bed common_snvs_bed common_indels_bed common_svs_bed; do
+  while read key; do
     jq .\"CollectVcfQcMetrics.$key\" $staging_dir/$json_fname \
     | fgrep -xv "null" | tr -d '"' \
     >> $staging_dir/$key.uris.list
-  done
-  for key in site_benchmark_ppv_by_freqs site_benchmark_sensitivity_by_freqs \
-             site_benchmark_common_snv_ppv_beds \
-             site_benchmark_common_indel_ppv_beds \
-             site_benchmark_common_sv_ppv_beds; do
+  done < $staging_dir/main_keys.list
+  while read key; do
     for subset in giab_easy giab_hard; do
       jq .\"CollectVcfQcMetrics.$key\" $staging_dir/$json_fname \
       | fgrep -xv "null" | tr -d '"[]' | sed 's/,$/\n/g' \
       | sed '/^$/d' | awk '{ print $1 }' | fgrep $subset \
       >> $staging_dir/$key.$subset.uris.list
+    done
+  done < $staging_dir/bench_keys.list
+
+  # Due to delisting behavior of manage_chromshards.py, external sample benchmark
+  # results need to be parsed in a custom manner as below
+  for key in sample_benchmark_ppv_distribs sample_benchmark_sensitivity_distribs; do
+    for dset in external_srwgs external_lrwgs; do
+      for subset in giab_easy giab_hard; do
+        jq .\"CollectVcfQcMetrics.$key\" $staging_dir/$json_fname \
+        | fgrep -xv "null" | tr -d '"[]' | sed 's/,$/\n/g' \
+        | sed '/^$/d' | awk '{ print $1 }' | fgrep $dset | fgrep $subset \
+        >> $staging_dir/$key.$subset.$dset.uris.list
+      done
     done
   done
 
@@ -800,16 +827,30 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
   "PlotVcfQcMetrics.af_distribution_tsvs": $( collapse_txt $staging_dir/af_distrib.uris.list ),
   "PlotVcfQcMetrics.all_sv_beds": $( collapse_txt $staging_dir/all_svs_bed.uris.list ),
   "PlotVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
+  "PlotVcfQcMetrics.benchmark_interval_names": ["Easy", "Hard"],
   "PlotVcfQcMetrics.common_af_cutoff": 0.001,
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:b9557dc",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:b99c464",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
   "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_cohort_prefix": "gnomAD_v4.1",
   "PlotVcfQcMetrics.ref_cohort_plot_title": "gnomAD v4.1",
+  "PlotVcfQcMetrics.sample_ancestry_labels": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.qc_ancestry.tsv",
+  "PlotVcfQcMetrics.sample_phenotype_labels": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.qc_phenotype.tsv",
+  "PlotVcfQcMetrics.sample_benchmark_dataset_prefixes": ["external_srwgs", "external_lrwgs"],
+  "PlotVcfQcMetrics.sample_benchmark_dataset_titles": ["external srWGS", "external lrWGS"],
+  "PlotVcfQcMetrics.sample_benchmark_ppv_distribs": [[ $( collapse_txt $staging_dir/sample_benchmark_ppv_distribs.giab_easy.external_srwgs.uris.list ),
+                                                       $( collapse_txt $staging_dir/sample_benchmark_ppv_distribs.giab_hard.external_srwgs.uris.list ) ],
+                                                     [ $( collapse_txt $staging_dir/sample_benchmark_ppv_distribs.giab_easy.external_lrwgs.uris.list ),
+                                                       $( collapse_txt $staging_dir/sample_benchmark_ppv_distribs.giab_hard.external_lrwgs.uris.list ) ]],
+  "PlotVcfQcMetrics.sample_benchmark_sensitivity_distribs": [[ $( collapse_txt $staging_dir/sample_benchmark_sensitivity_distribs.giab_easy.external_srwgs.uris.list ),
+                                                               $( collapse_txt $staging_dir/sample_benchmark_sensitivity_distribs.giab_hard.external_srwgs.uris.list ) ],
+                                                             [ $( collapse_txt $staging_dir/sample_benchmark_sensitivity_distribs.giab_easy.external_lrwgs.uris.list ),
+                                                               $( collapse_txt $staging_dir/sample_benchmark_sensitivity_distribs.giab_hard.external_lrwgs.uris.list ) ]],
+  "PlotVcfQcMetrics.sample_genotype_distribution_tsvs": $( collapse_txt $staging_dir/genotype_distrib.uris.list ),
   "PlotVcfQcMetrics.site_benchmark_common_snv_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_snv_ppv_beds.giab_easy.uris.list ),
                                                             $( collapse_txt $staging_dir/site_benchmark_common_snv_ppv_beds.giab_hard.uris.list ) ]],
   "PlotVcfQcMetrics.site_benchmark_common_indel_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_indel_ppv_beds.giab_easy.uris.list ),
@@ -822,9 +863,10 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
                                                              $( collapse_txt $staging_dir/site_benchmark_sensitivity_by_freqs.giab_hard.uris.list ) ]],
   "PlotVcfQcMetrics.site_benchmark_dataset_prefixes": ["gnomad_v4.1"],
   "PlotVcfQcMetrics.site_benchmark_dataset_titles": ["gnomAD v4.1"],
-  "PlotVcfQcMetrics.site_benchmark_interval_names": ["Easy", "Hard"],
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
-  "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list )
+  "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list ),
+  "PlotVcfQcMetrics.twin_genotype_benchmark_distribs": [ $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_easy.uris.list ),
+                                                         $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_hard.uris.list ) ]
 }
 EOF
 
@@ -838,7 +880,7 @@ cromshell --no_turtle -t 120 -mc submit --no-validation \
 >> cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list
 
 # Monitor QC visualization workflow
-monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list )
+monitor_workflow $( tail -n1 cromshell/job_ids/dfci-g2c.v1.PlotInitialVcfQcMetrics.job_ids.list ) 10
 
 # Once workflow is complete, stage output
 cromshell -t 120 list-outputs \

@@ -44,11 +44,11 @@ workflow PrepSiteBenchDataToPlot {
     String bi_name = interval_set_names[sbi]
     String sbi_prefix = dataset_prefix + "." + bi_name
 
-    Int n_snv_beds = length(select_all(common_snv_ppv_beds[sbi]))
-    Int n_indel_beds = length(select_all(common_indel_ppv_beds[sbi]))
-    Int n_sv_beds = length(select_all(common_sv_ppv_beds[sbi]))
-    Int n_ppv_tsvs = length(select_all(ppv_by_freqs[sbi]))
-    Int n_sens_tsvs = length(select_all(sensitivity_by_freqs[sbi]))
+    Int n_snv_beds = if length(common_snv_ppv_beds) > sbi then length(select_all(common_snv_ppv_beds[sbi])) else 0
+    Int n_indel_beds = if length(common_indel_ppv_beds) > sbi then length(select_all(common_indel_ppv_beds[sbi])) else 0
+    Int n_sv_beds = if length(common_sv_ppv_beds) > sbi then length(select_all(common_sv_ppv_beds[sbi])) else 0
+    Int n_ppv_tsvs = if length(ppv_by_freqs) > sbi then length(select_all(ppv_by_freqs[sbi])) else 0
+    Int n_sens_tsvs = if length(sensitivity_by_freqs) > sbi then length(select_all(sensitivity_by_freqs[sbi])) else 0
       
     # Collapse SNV BEDs
     if (n_snv_beds > 0) {
