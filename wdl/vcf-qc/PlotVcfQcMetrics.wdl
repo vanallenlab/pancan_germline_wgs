@@ -404,18 +404,69 @@ workflow PlotVcfQcMetrics {
   ### OUTPUT CLEANUP
   ##################
 
-  # Package all stats into a single tarball
-  # TODO: implement this
-
-  # Package all plots into a second, separate tarball
-  # TODO: implement this
+  # Package all outputs into two tarballs; one for plots and one for stats
+  Array[Array[File]] all_out_tarballs_preflat = [[PlotSiteMetrics.site_metric_plots_tarball],
+                                                 [PlotSampleMetrics.sample_metric_plots_tarball],
+                                                 select_first([PlotSiteBenchmarking.site_benchmarking_plots_tarball, []]),
+                                                 select_first([PlotSampleBenchmarking.sample_benchmarking_plots_tarball, []])]
+  Array[File] all_out_tarballs = flatten(select_all(all_out_tarballs_preflat))
+  call PackageOutputs {
+    input:
+      tarballs = all_out_tarballs,
+      out_prefix = output_prefix
+  }
 
   output {
-    # For now, just outputting individual tarballs
-    File site_metrics_tarball = PlotSiteMetrics.site_metric_plots_tarball
-    File sample_metrics_tarball = PlotSampleMetrics.sample_metric_plots_tarball
-    Array[File]? site_benchmarking_tarball = PlotSiteBenchmarking.site_benchmarking_plots_tarball
-    Array[File]? sample_benchmarking_tarball = PlotSampleBenchmarking.sample_benchmarking_plots_tarball
+    File plots_tarball = PackageOutputs.plots_tarball
+    File stats_tarball = PackageOutputs.stats_tarball
+  }
+}
+
+
+task PackageOutputs {
+  input {
+    Array[File] tarballs
+    String out_prefix
+  }
+
+  Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # Make output collection directories
+    for subset in plots stats; do
+      mkdir ~{out_prefix}.$subset
+    done
+
+    # Unpack all plots
+    while read tb; do
+      tar -xzvf $tb -C ~{out_prefix}.plots/
+    done < ~{write_lines(tarballs)}
+
+    # Move all .tsvs and .txt files to stats
+    for suffix in tsv tsv.gz txt txt.gz; do
+      find ~{out_prefix}.plots -name "*.$suffix" || true
+    done | xargs -I {} mv {} ~{out_prefix}.stats/ || true
+
+    # Compress outputs
+    for subset in plots stats; do
+      tar -czvf ~{out_prefix}.$subset.tar.gz ~{out_prefix}.$subset
+    done
+  >>>
+
+  output {
+    File plots_tarball = "~{out_prefix}.plots.tar.gz"
+    File stats_tarball = "~{out_prefix}.stats.tar.gz"
+  }
+
+  runtime {
+    docker: "marketplace.gcr.io/google/ubuntu1804"
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 2
+    max_retries: 1
   }
 }
 
@@ -563,6 +614,9 @@ task PlotSampleMetrics {
       while read tsv; do
         twin_cmd="$twin_cmd --bench-tsv $tsv"
       done < ~{write_lines(twin_concordance_tsvs)}
+      while read sname; do
+        twin_cmd="$twin_cmd --set-name \"$sname\""
+      done < ~{write_lines(eval_interval_names)}
       twin_cmd="$twin_cmd --common-af ~{common_af_cutoff}"
       twin_cmd="$twin_cmd --out-prefix ~{output_prefix}.sample_metrics/~{output_prefix}"
       echo -e "Now performing twin benchmarking as follows:\n$twin_cmd"
