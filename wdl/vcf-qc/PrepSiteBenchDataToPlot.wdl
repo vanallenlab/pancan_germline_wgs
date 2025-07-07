@@ -27,6 +27,7 @@ workflow PrepSiteBenchDataToPlot {
 
     Array[Array[File?]] ppv_by_freqs = [[]]
     Array[Array[File?]] sensitivity_by_freqs = [[]]
+    Int n_key_columns = 3
 
     String bcftools_docker
     String g2c_analysis_docker
@@ -111,7 +112,7 @@ workflow PrepSiteBenchDataToPlot {
       call QcTasks.SumCompressedDistribs as SumSiteBenchPpvByAf {
         input:
           distrib_tsvs = select_all(ppv_by_freqs[sbi]),
-          n_key_columns = 3,
+          n_key_columns = n_key_columns,
           out_prefix = sbi_prefix + ".ppv_by_freq",
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -122,7 +123,7 @@ workflow PrepSiteBenchDataToPlot {
       call QcTasks.SumCompressedDistribs as SumSiteBenchSensByAf {
         input:
           distrib_tsvs = select_all(sensitivity_by_freqs[sbi]),
-          n_key_columns = 3,
+          n_key_columns = n_key_columns,
           out_prefix = sbi_prefix + ".sensitivity_by_freq",
           g2c_analysis_docker = g2c_analysis_docker
       }
