@@ -40,6 +40,7 @@ workflow BenchmarkSites {
     String g2c_analysis_docker
   }
 
+
   # Index SNV BEDs
   if ( defined(source_snv_bed) ){
     call Utils.MakeTabixIndex as IndexSourceSnvs {
@@ -57,6 +58,7 @@ workflow BenchmarkSites {
         docker = bcftools_docker
     }
   }
+
 
   # Index indel BEDs
   if ( defined(source_indel_bed) ){
@@ -76,6 +78,7 @@ workflow BenchmarkSites {
     }
   }
 
+
   # Index SV BEDs
   if ( defined(source_sv_bed) ){
     call Utils.MakeTabixIndex as IndexSourceSvs {
@@ -94,6 +97,8 @@ workflow BenchmarkSites {
     }
   }
 
+
+  # Main benchmarking block
   Int n_eval_beds = length(eval_interval_beds)
   Int shards_per_eval_bed = floor(total_shards / n_eval_beds)
 
@@ -133,6 +138,55 @@ workflow BenchmarkSites {
     }
   }
 
+
+  # Perform false positive run detection
+  Array[File] all_common_ppv_beds = select_all(flatten([select_all(BenchmarkTask.common_snv_ppv_bed),
+                                                        select_all(BenchmarkTask.common_indel_ppv_bed),
+                                                        select_all(BenchmarkTask.common_sv_ppv_bed)]))
+
+  call Utils.ConcatTextFiles as CollapseCommonPpvBeds {
+    input:
+      shards = all_common_ppv_beds,
+      concat_command = "zcat",
+      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+      compression_command = "bgzip -c",
+      input_has_header = true,
+      output_filename = "all_common.ppv.bed.gz",
+      docker = bcftools_docker
+  }
+  
+  call DetectBadRuns as DetectFPRuns {
+    input:
+      bed = CollapseCommonPpvBeds.merged_file,
+      output_prefix = "~{source_prefix}.~{target_prefix}.false_positive_runs",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
+
+  # Perform false negative run detection
+  Array[File] all_common_sens_beds = select_all(flatten([select_all(BenchmarkTask.common_snv_sens_bed),
+                                                        select_all(BenchmarkTask.common_indel_sens_bed),
+                                                        select_all(BenchmarkTask.common_sv_sens_bed)]))
+
+  call Utils.ConcatTextFiles as CollapseCommonSensBeds {
+    input:
+      shards = all_common_sens_beds,
+      concat_command = "zcat",
+      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+      compression_command = "bgzip -c",
+      input_has_header = true,
+      output_filename = "all_common.sens.bed.gz",
+      docker = bcftools_docker
+  }
+
+  call DetectBadRuns as DetectFNRuns {
+    input:
+      bed = CollapseCommonSensBeds.merged_file,
+      output_prefix = "~{source_prefix}.~{target_prefix}.false_negative_runs",
+      g2c_analysis_docker = g2c_analysis_docker
+  }
+
+
   output {
     Array[File] common_snv_ppv_beds = select_all(BenchmarkTask.common_snv_ppv_bed)
     Array[File] common_snv_sens_beds = select_all(BenchmarkTask.common_indel_ppv_bed)
@@ -146,6 +200,47 @@ workflow BenchmarkSites {
     Array[File] sensitivity_by_freqs = BenchmarkTask.sensitivity_by_freq
     Array[File?] ppv_variant_id_maps = BenchmarkTask.ppv_variant_id_map
     Array[File?] sensitivity_variant_id_maps = BenchmarkTask.sensitivity_variant_id_map
+    File fp_runs = DetectFPRuns.runs_bed
+    File fn_runs = DetectFNRuns.runs_bed
+  }
+}
+
+
+task DetectBadRuns {
+  input {
+    File bed
+    String output_prefix
+
+    Int min_variants = 10
+    Int min_run_length = 50000
+
+    String g2c_analysis_docker
+  }
+
+  Int disk_gb = ceil(2 * size(bed, "GB")) + 10
+  String out_fname = "~{output_prefix}.bed.gz"
+
+  command <<<
+    set -eu -o pipefail
+
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/find_problematic_intervals.py \
+      --min-vars ~{min_variants} \
+      --min-bp ~{min_run_length} \
+      ~{bed} \
+      ~{out_fname}
+  >>>
+
+  output {
+    File runs_bed = out_fname
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "3.7 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 2
+    max_retries: 1
   }
 }
 

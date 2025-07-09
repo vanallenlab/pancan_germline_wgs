@@ -242,6 +242,7 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar)
+  axis(1, at=c(-10e10, 10e10), tck=0, labels=NA, col=annotation.color)
 
   # Add bars
   sapply(samples.sorted, function(sid){
@@ -539,15 +540,17 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
        pos=4, cex=5/6,
        labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
   if(!is.null(pop)){
-    pop.labs.at <- seq(par("usr")[3], par("usr")[4],
-                       length.out=2+n.pops)[-c(1, n.pops + 2)]
+    pop.labs.at <- sort(sapply(names(pop.pal), function(p){
+      mean(plot.df[names(pop)[which(pop == p)], 2], na.rm=T)
+    }))
     if(all(pop %in% names(pop.abbreviations))){
-      pop.labs <- pop.abbreviations[names(pop.pal)]
+      pop.labs <- pop.abbreviations[names(pop.labs.at)]
     }else{
-      pop.labs <- names(pop.pal)
+      pop.labs <- names(pop.labs.at)
     }
-    yaxis.legend(pop.labs, x=par("usr")[2], y.positions=rev(pop.labs.at),
-                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal, lwd=4)
+    yaxis.legend(pop.labs, x=par("usr")[2], y.positions=pop.labs.at,
+                 sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal[names(pop.labs)],
+                 lwd=4, min.label.spacing=0.125*diff(par("usr")[3:4]))
   }
 
   return(r2)
@@ -667,7 +670,7 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("genotype_dist_tsv" = "~/scratch/gt_plot_dev/dfci-g2c.v1.initial_qc.chr22.genotype_distribution.merged.tsv.gz",
+# args <- list("genotype_dist_tsv" = "~/scratch/dfci-g2c.v1.initial_qc.genotype_distribution.merged.tsv.gz",
 #              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
 #              "out_prefix" = "~/scratch/g2c_vcf_qc_dev")

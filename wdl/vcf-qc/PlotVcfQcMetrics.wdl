@@ -586,7 +586,7 @@ task PlotSampleMetrics {
 
   Boolean do_twins = length(eval_interval_names) > 0
 
-  Int default_disk_gb = ceil(2 * size(gt_distrib, "GB")) + 10
+  Int default_disk_gb = ceil(2 * size(flatten([[gt_distrib], twin_concordance_tsvs]), "GB")) + 20
 
   command <<<
     set -eu -o pipefail
