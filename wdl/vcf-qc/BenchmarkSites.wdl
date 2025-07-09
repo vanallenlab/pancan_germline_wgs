@@ -33,6 +33,12 @@ workflow BenchmarkSites {
 
     Int total_shards = 2500
     Float common_af_cutoff
+    Int snv_error_run_min_variants = 10
+    Int indel_error_run_min_variants = 10
+    Int sv_error_run_min_variants = 10
+    Int snv_error_run_min_bp = 20000
+    Int indel_error_run_min_bp = 20000
+    Int sv_error_run_min_bp = 50000
 
     Boolean make_full_id_maps = false
 
@@ -156,6 +162,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonSnvPpvBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.snv.false_positive_runs",
+        min_variants = snv_error_run_min_variants,
+        min_run_length = snv_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -175,6 +183,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonSnvSensBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.snv.false_negative_runs",
+        min_variants = snv_error_run_min_variants,
+        min_run_length = snv_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -197,6 +207,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonIndelPpvBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.indel.false_positive_runs",
+        min_variants = indel_error_run_min_variants,
+        min_run_length = indel_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -216,6 +228,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonIndelSensBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.indel.false_negative_runs",
+        min_variants = indel_error_run_min_variants,
+        min_run_length = indel_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -238,6 +252,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonSvPpvBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.sv.false_positive_runs",
+        min_variants = sv_error_run_min_variants,
+        min_run_length = sv_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -257,6 +273,8 @@ workflow BenchmarkSites {
       input:
         bed = CollapseCommonSvSensBeds.merged_file,
         output_prefix = "~{source_prefix}.~{target_prefix}.sv.false_negative_runs",
+        min_variants = sv_error_run_min_variants,
+        min_run_length = sv_error_run_min_bp,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
