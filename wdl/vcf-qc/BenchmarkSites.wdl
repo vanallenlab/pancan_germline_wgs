@@ -139,51 +139,126 @@ workflow BenchmarkSites {
   }
 
 
-  # Perform false positive run detection
-  Array[File] all_common_ppv_beds = select_all(flatten([select_all(BenchmarkTask.common_snv_ppv_bed),
-                                                        select_all(BenchmarkTask.common_indel_ppv_bed),
-                                                        select_all(BenchmarkTask.common_sv_ppv_bed)]))
-
-  call Utils.ConcatTextFiles as CollapseCommonPpvBeds {
-    input:
-      shards = all_common_ppv_beds,
-      concat_command = "zcat",
-      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-      compression_command = "bgzip -c",
-      input_has_header = true,
-      output_filename = "all_common.ppv.bed.gz",
-      docker = bcftools_docker
+  # Detect runs of false positive/negative SNVs
+  Array[File] all_common_snv_ppv_beds = select_all(BenchmarkTask.common_snv_ppv_bed)
+  if ( length(all_common_snv_ppv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSnvPpvBeds {
+      input:
+        shards = all_common_snv_ppv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_snv.ppv.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectSnvFPRuns {
+      input:
+        bed = CollapseCommonSnvPpvBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.snv.false_positive_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
-  
-  call DetectBadRuns as DetectFPRuns {
-    input:
-      bed = CollapseCommonPpvBeds.merged_file,
-      output_prefix = "~{source_prefix}.~{target_prefix}.false_positive_runs",
-      g2c_analysis_docker = g2c_analysis_docker
+  Array[File] all_common_snv_sens_beds = select_all(BenchmarkTask.common_snv_sens_bed)
+  if ( length(all_common_snv_sens_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSnvSensBeds {
+      input:
+        shards = all_common_snv_sens_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_snv.sens.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectSnvFNRuns {
+      input:
+        bed = CollapseCommonSnvSensBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.snv.false_negative_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
 
 
-  # Perform false negative run detection
-  Array[File] all_common_sens_beds = select_all(flatten([select_all(BenchmarkTask.common_snv_sens_bed),
-                                                        select_all(BenchmarkTask.common_indel_sens_bed),
-                                                        select_all(BenchmarkTask.common_sv_sens_bed)]))
-
-  call Utils.ConcatTextFiles as CollapseCommonSensBeds {
-    input:
-      shards = all_common_sens_beds,
-      concat_command = "zcat",
-      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-      compression_command = "bgzip -c",
-      input_has_header = true,
-      output_filename = "all_common.sens.bed.gz",
-      docker = bcftools_docker
+  # Detect runs of false positive/negative indels
+  Array[File] all_common_indel_ppv_beds = select_all(BenchmarkTask.common_indel_ppv_bed)
+  if ( length(all_common_indel_ppv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonIndelPpvBeds {
+      input:
+        shards = all_common_indel_ppv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_indel.ppv.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectIndelFPRuns {
+      input:
+        bed = CollapseCommonIndelPpvBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.indel.false_positive_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+  Array[File] all_common_indel_sens_beds = select_all(BenchmarkTask.common_indel_sens_bed)
+  if ( length(all_common_indel_sens_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonIndelSensBeds {
+      input:
+        shards = all_common_indel_sens_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_indel.sens.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectIndelFNRuns {
+      input:
+        bed = CollapseCommonIndelSensBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.indel.false_negative_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
 
-  call DetectBadRuns as DetectFNRuns {
-    input:
-      bed = CollapseCommonSensBeds.merged_file,
-      output_prefix = "~{source_prefix}.~{target_prefix}.false_negative_runs",
-      g2c_analysis_docker = g2c_analysis_docker
+
+  # Detect runs of false positive/negative SVs
+  Array[File] all_common_sv_ppv_beds = select_all(BenchmarkTask.common_sv_ppv_bed)
+  if ( length(all_common_sv_ppv_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSvPpvBeds {
+      input:
+        shards = all_common_sv_ppv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_sv.ppv.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectSvFPRuns {
+      input:
+        bed = CollapseCommonSvPpvBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.sv.false_positive_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+  Array[File] all_common_sv_sens_beds = select_all(BenchmarkTask.common_sv_sens_bed)
+  if ( length(all_common_sv_sens_beds) > 0 ) {
+    call Utils.ConcatTextFiles as CollapseCommonSvSensBeds {
+      input:
+        shards = all_common_sv_sens_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = "common_sv.sens.bed.gz",
+        docker = bcftools_docker
+    }
+    call DetectBadRuns as DetectSvFNRuns {
+      input:
+        bed = CollapseCommonSvSensBeds.merged_file,
+        output_prefix = "~{source_prefix}.~{target_prefix}.sv.false_negative_runs",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
 
 
@@ -200,8 +275,8 @@ workflow BenchmarkSites {
     Array[File] sensitivity_by_freqs = BenchmarkTask.sensitivity_by_freq
     Array[File?] ppv_variant_id_maps = BenchmarkTask.ppv_variant_id_map
     Array[File?] sensitivity_variant_id_maps = BenchmarkTask.sensitivity_variant_id_map
-    File fp_runs = DetectFPRuns.runs_bed
-    File fn_runs = DetectFNRuns.runs_bed
+    Array[File] fp_runs = select_all([DetectSnvFPRuns.runs_bed, DetectIndelFPRuns.runs_bed, DetectSvFPRuns.runs_bed])
+    Array[File] fn_runs = select_all([DetectSnvFNRuns.runs_bed, DetectIndelFNRuns.runs_bed, DetectSvFNRuns.runs_bed])
   }
 }
 

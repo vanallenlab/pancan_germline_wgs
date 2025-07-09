@@ -225,7 +225,7 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
              n.samples + (pop.spacer * length(pop.breaks.x)) + (pheno.spacer * length(pheno.breaks.x)))
   ylims <- c(0, max(total.per.sample))
   hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.05)
-  het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.05)
+  het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.075)
 
   # Determine x position for each sample
   prev.x <- 0

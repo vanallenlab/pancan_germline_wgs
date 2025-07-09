@@ -273,6 +273,7 @@ workflow CollectVcfQcMetrics {
         vcf = dense_vcf_shard,
         vcf_idx = dense_vcf_shard_idx,
         site_metrics = CollectSiteMetrics.all_sites,
+        common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -596,8 +597,8 @@ workflow CollectVcfQcMetrics {
     Array[Array[File]]? site_benchmark_sensitivity_by_sizes = BenchmarkSites.sensitivity_by_sizes
     Array[Array[File]]? site_benchmark_ppv_by_freqs = BenchmarkSites.ppv_by_freqs
     Array[Array[File]]? site_benchmark_sensitivity_by_freqs = BenchmarkSites.sensitivity_by_freqs
-    Array[File]? site_benchmark_false_positive_runs = BenchmarkSites.fp_runs
-    Array[File]? site_benchmark_false_negative_runs = BenchmarkSites.fn_runs
+    Array[Array[File]]? site_benchmark_false_positive_runs = BenchmarkSites.fp_runs
+    Array[Array[File]]? site_benchmark_false_negative_runs = BenchmarkSites.fn_runs
 
     Array[Array[File]]? sample_benchmark_ppv_distribs = BenchmarkSamples.ppv_distribs
     Array[Array[File]]? sample_benchmark_sensitivity_distribs = BenchmarkSamples.sensitivity_distribs

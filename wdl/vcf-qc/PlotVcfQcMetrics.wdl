@@ -894,6 +894,7 @@ task PlotSiteMetrics {
         ~{pw_indel_cmd} \
         ~{pw_sv_cmd} \
         --combine \
+        --common-af ~{common_af_cutoff} \
         --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
     fi
 

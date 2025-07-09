@@ -141,7 +141,7 @@ def main():
     elif 'compressed' in determine_filetype(args.output):
         fout = gzip.open(args.output, 'wt', encoding='utf-8')
     else:
-        fout = open(args.input, 'w')
+        fout = open(args.output, 'w')
 
     # Processes each line in serial
     for chrom, pos, ref, alt, svlen, sid, gt, cn in indat:
@@ -213,9 +213,9 @@ def main():
                 for vsc, fc_dat in vsc_dat.items():
                     for fc, gt_dat in fc_dat.items():
                         counts = gt_dat.values()
-                    if sum(counts) > 0:
-                        outvals = [sid, vc, vsc, fc] + [str(k) for k in counts]
-                        dist_fout.write('\t'.join(outvals) + '\n')
+                        if sum(counts) > 0:
+                            outvals = [sid, vc, vsc, fc] + [str(k) for k in counts]
+                            dist_fout.write('\t'.join(outvals) + '\n')
         dist_fout.close()
 
     # Close input & output handles to clear buffer
