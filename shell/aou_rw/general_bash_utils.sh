@@ -50,6 +50,9 @@ get_workspace_number() {
     "gs://fc-secure-c61bace1-e344-452d-8902-49ddad15e5e7")
       echo 5
       ;;
+    "gs://fc-secure-a9228ba7-66a4-45eb-bf1c-6675ae2b9226")
+      echo "dev"
+      ;;
     *)
       echo "UNKNOWN"
       ;;

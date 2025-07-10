@@ -101,6 +101,8 @@ gsutil -m cp \
 # Prepare intervals #
 #####################
 
+# Note: this must be run once in each workspace
+
 # Refresh staging directory
 staging_dir=staging/PrepIntervals
 if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
@@ -206,11 +208,11 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16000,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyperFT.machine_mem_mb": 16000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
   "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
-  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.ImportGVCFsFT.machine_mem_mb": 48000,
   "GnarlyJointGenotypingPart1.intervals_already_split": true,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
@@ -222,9 +224,19 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 }
 EOF
 
+# Due to the two-stage nature of joint genotyping (see below),
+# we need to initialize the tracker .tsv where any contig with a bucket created
+# in the parent staging bucket is considered to be staged.
+# This is necessary because contigs can be effectively ~complete through this first
+# phase of joint genotyping but persistently fail due to problematic loci/shards.
+gsutil ls $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
+| xargs -I {} basename {} \
+| awk -v OFS="\t" '{ print $1, "staged" }' \
+> cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv
+
 # Joint genotype per chromosome using chromsharded manager
 # Note: all cleanup and tracking is handled by the chromshard manager, so
-# no outputs or execution buckets need to be manually staged/cleared
+# no outputs or execution buckets need to be manually staged/cleared here (see below)
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
   --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
@@ -235,8 +247,9 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 60 \
-  --submission-gate 5 \
-  --max-attempts 2
+  --submission-gate 10 \
+  --vm-gate 3500 \
+  --max-attempts 3
 
 
 ################################################

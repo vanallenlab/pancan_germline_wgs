@@ -353,7 +353,8 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
     plot.dat <- get.gt.bench.plot.data(bench.dat, vc=vc)
     ss.df <- rbind(ss.df, calc.gt.bench.ss(plot.dat, paste(ss.prefix, vc, sep=".")))
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste(metric.name, title.preps[1], clean.numeric.labels(vpg),
+    plot.title <- paste(metric.name, title.preps[1],
+                        clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
                         gsub("I", "i", paste(var.class.abbrevs[vc], "s", sep="")),
                         "/ genome\n", title.preps[2],
                         clean.numeric.labels(n.samples), ref.title, "samples")
@@ -380,7 +381,8 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
     short.ss.df <- calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all=FALSE)
     ss.df <- rbind(ss.df, short.ss.df)
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste(metric.name, title.preps[1], clean.numeric.labels(vpg),
+    plot.title <- paste(metric.name, title.preps[1],
+                        clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
                         "short variants per\ngenome", title.preps[2],
                         clean.numeric.labels(n.samples), ref.title, "samples")
     pdf(paste(out.prefix, "short_variants.by_subclass.barplot.pdf", sep="."),
@@ -406,7 +408,8 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
     sv.ss.df <- calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all=FALSE)
     ss.df <- rbind(ss.df, sv.ss.df)
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste(metric.name, title.preps[1], clean.numeric.labels(vpg),
+    plot.title <- paste(metric.name, title.preps[1],
+                        clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
                         "SVs per genome\n", title.preps[2],
                         clean.numeric.labels(n.samples), ref.title, "samples")
     pdf(paste(out.prefix, "SVs.by_subclass.barplot.pdf", sep="."),

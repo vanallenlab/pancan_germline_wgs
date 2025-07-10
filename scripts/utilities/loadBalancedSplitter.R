@@ -71,11 +71,8 @@ args <- parser$parse_args()
 #              "number_of_splits" = 5,
 #              "out_prefix" = "~/scratch/hg38.load_balanced.group")
 
-print(args)
-
 # Read data
 x <- read.table(args$input_tsv, sep="\t", header=F)
-print(x)
 n.features <- ncol(x)-1
 if(n.features == 0){stop("No features found in --input-tsv")}
 x[, -c(1)] <- apply(x[, -c(1)], 2, as.numeric)
@@ -83,7 +80,6 @@ rownames(x) <- x[, 1]
 x[, 1] <- NULL
 colnames(x) <- paste("f", 1:n.features, sep="")
 n.obs <- nrow(x)
-print(n.obs)
 
 # Proceed based on number of desired splits
 if(args$number_of_splits == 0){
