@@ -225,7 +225,7 @@ task CollectSiteMetrics {
 
     # Concatenate all site metrics for downstream 
     # compatability with CollectSampleGenotypeMetrics
-    find ./ -name "~{out_prefix}.*.sites.bed.gz" > site_beds.list
+    find ./ -name "~{out_prefix}.*.sites.bed.gz" > site_beds.list || true
     zcat $( head -n1 site_beds.list ) | head -n1 > site_metrics.header || true
     while read site_file; do
       zcat $site_file | fgrep -v "#" || true
@@ -236,6 +236,14 @@ task CollectSiteMetrics {
     | bgzip -c \
     > ~{out_prefix}.all.sites.bed.gz || true
     tabix -p bed -f ~{out_prefix}.all.sites.bed.gz
+
+    # Concatenate all common variant IDs for downstrea
+    # compatability with LD-based analyses
+    find ./ -name "~{out_prefix}.*.sites.common.bed.gz" \
+    | xargs -I {} zcat {} \
+    | grep -ve '^#' | cut -f4 \
+    | sort -V | uniq \
+    > "~{out_prefix}.common_vids.list" || true
   >>>
 
   output {
@@ -253,6 +261,7 @@ task CollectSiteMetrics {
     File? common_indel_sites_idx = out_prefix + ".indel.sites.common.bed.gz.tbi"
     File? common_sv_sites = out_prefix + ".sv.sites.common.bed.gz"
     File? common_sv_sites_idx = out_prefix + ".sv.sites.common.bed.gz.tbi"
+    File common_vids_list = out_prefix + ".common_vids.list"
     File size_distrib = out_prefix + ".size_distrib.tsv.gz"
     File af_distrib = out_prefix + ".af_distrib.tsv.gz"
     File size_vs_af_distrib = out_prefix + ".size_vs_af_distrib.tsv.gz"

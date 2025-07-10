@@ -70,6 +70,7 @@ workflow CollectVcfQcMetrics {
 
     String bcftools_docker
     String g2c_analysis_docker
+    String g2c_pipeline_docker
     String linux_docker
   }
 
@@ -218,7 +219,7 @@ workflow CollectVcfQcMetrics {
           extra_commands = extra_vcf_preprocessing_commands,
           supp_vcf_header = MakeHeaderFiller.supp_vcf_header,
           out_prefix = basename(vcf, ".vcf.gz"),
-          docker = g2c_analysis_docker
+          g2c_analysis_docker = g2c_analysis_docker
       }
     }
   }
@@ -275,6 +276,16 @@ workflow CollectVcfQcMetrics {
         site_metrics = CollectSiteMetrics.all_sites,
         common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
+    }
+
+    # Subset dense VCF to common variants 
+    # (defined from all unrelated site freqs)
+    call Utils.SubsetVcfByVids as CommonFilterDenseVcf {
+      input:
+        vcf = dense_vcf_shard,
+        vcf_idx = dense_vcf_shard_idx,
+        vids_list = CollectSiteMetrics.common_vids_list,
+        bcftools_docker = bcftools_docker
     }
   }
 
@@ -407,6 +418,29 @@ workflow CollectVcfQcMetrics {
         docker = bcftools_docker
     }
   }
+
+  # Concatenate dense common VCFs (necessary for LD comparisons)
+  call Utils.ConcatVcfs as ConcatCommonVcfs {
+    input:
+      vcfs = CommonFilterDenseVcf.subsetted_vcf,
+      vcf_idxs = CommonFilterDenseVcf.subsetted_vcf_idx,
+      out_prefix = output_prefix + ".dense.common",
+      bcftools_concat_options = "--allow-overlaps",
+      bcftools_docker = bcftools_docker
+  }
+
+  # Calculate peak LD between all pairs of variant classes
+  call CalcLd as CalcCommonLd {
+    input:
+      vcf = ConcatCommonVcfs.merged_vcf,
+      vcf_idx = ConcatCommonVcfs.merged_vcf_idx,
+      common_snvs_bed = CollapseCommonSnvs.merged_file,
+      common_indels_bed = CollapseCommonIndels.merged_file,
+      common_svs_bed = CollapseCommonSvs.merged_file,
+      out_prefix = output_prefix + ".dense.common",
+      g2c_pipeline_docker = g2c_pipeline_docker
+  }
+
 
   ################
   ### BENCHMARKING
@@ -608,6 +642,133 @@ workflow CollectVcfQcMetrics {
 }
 
 
+# Calculate peak LD R2 statistics per variant between all pairs of variants
+task CalcLd {
+  input {
+    File vcf
+    File vcf_idx
+    
+    File? common_snvs_bed
+    File? common_indels_bed
+    File? common_svs_bed
+
+    Int plink_ld_window_kb = 1000
+    Float plink_ld_window_min_r2 = 0.01
+    
+    String out_prefix
+    String g2c_pipeline_docker
+  }
+
+  Boolean has_snvs = defined(common_snvs_bed)
+  Boolean has_indels = defined(common_indels_bed)
+  Boolean has_svs = defined(common_svs_bed)
+
+  Int disk_gb_auto = ceil(20 * size(vcf, "GB")) + 10
+  Int disk_gb = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
+
+  command <<<
+    set -euo -pipefail
+
+    # Define lists of common variants for each class
+    if ~{has_snvs}; then
+      zcat ~{default="" common_snvs_bed} \
+      | grep -v '^#' | cut -f4 | sort | uniq \
+      > snvs.list || true
+    fi
+    if ~{has_indels}; then
+      zcat ~{default="" common_indels_bed} \
+      | grep -v '^#' | cut -f4 | sort | uniq \
+      > indels.list || true
+    fi
+    if ~{has_svs}; then
+      zcat ~{default="" common_svs_bed} \
+      | grep -v '^#' | cut -f4 | sort | uniq \
+      > svs.list || true
+    fi
+
+    # Compute pairwise LD for all pairs of variants
+    plink2 \
+      --r2-unphased 'yes-really' \
+      --ld-window-kb ~{plink_ld_window_kb} \
+      --ld-window-r2 ~{plink_ld_window_min_r2} \
+      --vcf ~{vcf} \
+      --out ~{out_prefix}
+
+    # Iterate over pairs of variant classes and 
+    # report the strongest R2 per variant
+    # TODO: finish implementing this
+
+  >>>
+}
+
+
+# Define lists of "target" samples to use for site-level and sample-based analyses
+task ChooseTargetSamples {
+  input {
+    File all_samples_list
+    File? probands_list
+    File? duplicate_samples_list
+    String out_prefix
+    File? sample_priority_tsv
+    Int n_samples
+    String g2c_analysis_docker
+  }
+
+  String site_excl_outfile = out_prefix + ".exclude_for_site_analysis.samples.list"
+  String target_outfile = out_prefix + ".target.samples.list"
+
+  command <<<
+    set -eu -o pipefail
+
+    # Debugging
+    echo -e "Contents of working directory:"
+    find ./
+
+    # If probands or duplicates are provided, exclude them from sample universe
+    echo -e "THIS_SAMPLE_SHOULD_NEVER_HIT" > site.exclude.samples.list
+    if ~{defined(probands_list)}; then
+      cat ~{select_first([probands_list])} >> site.exclude.samples.list || true
+    fi
+    if ~{defined(duplicate_samples_list)}; then
+      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list || true
+    fi
+    sort -V site.exclude.samples.list | uniq > ~{site_excl_outfile}
+
+    # Produce list of unrelated samples (for counting effective sample size only)
+    fgrep \
+      -xvf site.exclude.samples.list \
+      ~{all_samples_list} \
+    | sort -V | uniq \
+    > unrelated.samples.list
+
+    # Select samples to include for genotype-level analyses
+    cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R"
+    cmd="$cmd --all-samples-list \"~{all_samples_list}\" -N ~{n_samples}"
+    cmd="$cmd --out-list \"~{target_outfile}\""
+    if ~{defined(sample_priority_tsv)}; then
+      cmd="$cmd --priority-tsv \"~{select_first([sample_priority_tsv])}\""
+    fi
+    echo -e "Now selecting samples with this command:\n$cmd"
+    eval $cmd
+  >>>
+
+  output {
+    File target_samples = target_outfile
+    File site_exclude_samples = site_excl_outfile
+    Int n_unrelated_samples = length(read_lines("unrelated.samples.list"))
+    Int n_target_samples = length(read_lines(target_outfile))
+  }
+
+  runtime {
+    docker: g2c_analysis_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+  }
+}
+
+
 # Clean input .fam file to restrict to complete trios present in input VCF
 task CleanFam {
   input {
@@ -720,73 +881,6 @@ task CleanTwins {
 }
 
 
-# Define lists of "target" samples to use for site-level and sample-based analyses
-task ChooseTargetSamples {
-  input {
-    File all_samples_list
-    File? probands_list
-    File? duplicate_samples_list
-    String out_prefix
-    File? sample_priority_tsv
-    Int n_samples
-    String g2c_analysis_docker
-  }
-
-  String site_excl_outfile = out_prefix + ".exclude_for_site_analysis.samples.list"
-  String target_outfile = out_prefix + ".target.samples.list"
-
-  command <<<
-    set -eu -o pipefail
-
-    # Debugging
-    echo -e "Contents of working directory:"
-    find ./
-
-    # If probands or duplicates are provided, exclude them from sample universe
-    echo -e "THIS_SAMPLE_SHOULD_NEVER_HIT" > site.exclude.samples.list
-    if ~{defined(probands_list)}; then
-      cat ~{select_first([probands_list])} >> site.exclude.samples.list || true
-    fi
-    if ~{defined(duplicate_samples_list)}; then
-      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list || true
-    fi
-    sort -V site.exclude.samples.list | uniq > ~{site_excl_outfile}
-
-    # Produce list of unrelated samples (for counting effective sample size only)
-    fgrep \
-      -xvf site.exclude.samples.list \
-      ~{all_samples_list} \
-    | sort -V | uniq \
-    > unrelated.samples.list
-
-    # Select samples to include for genotype-level analyses
-    cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/select_qc_samples.R"
-    cmd="$cmd --all-samples-list \"~{all_samples_list}\" -N ~{n_samples}"
-    cmd="$cmd --out-list \"~{target_outfile}\""
-    if ~{defined(sample_priority_tsv)}; then
-      cmd="$cmd --priority-tsv \"~{select_first([sample_priority_tsv])}\""
-    fi
-    echo -e "Now selecting samples with this command:\n$cmd"
-    eval $cmd
-  >>>
-
-  output {
-    File target_samples = target_outfile
-    File site_exclude_samples = site_excl_outfile
-    Int n_unrelated_samples = length(read_lines("unrelated.samples.list"))
-    Int n_target_samples = length(read_lines(target_outfile))
-  }
-
-  runtime {
-    docker: g2c_analysis_docker
-    memory: "3.75 GB"
-    cpu: 2
-    disks: "local-disk 20 HDD"
-    preemptible: 3
-  }
-}
-
-
 # Update all VCF INFO required for QC metric collection, make all necessary genotype subsets
 task PreprocessVcf {
   input {
@@ -804,7 +898,7 @@ task PreprocessVcf {
     Float mem_gb = 4
     Int n_cpu = 2
     
-    String docker
+    String g2c_analysis_docker
   }
 
   String no_rel_cmd = if defined(site_exclude_samples) then "--force-samples --samples-file ^" + basename(select_first([site_exclude_samples])) else ""
@@ -838,6 +932,8 @@ task PreprocessVcf {
     tabix -p vcf -f ~{sites_outfile}
 
     # Generate dense VCF of only target samples
+    # Note that this command also reassigns all variant IDs to G2C QC standards
+    # This is required for compatability with downstream LD calculations
     bcftools view --samples-file ~{target_samples} --force-samples ~{vcf} \
     | bcftools annotate -h ~{supp_vcf_header} --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
     | bcftools view --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
@@ -845,7 +941,8 @@ task PreprocessVcf {
     ~{mcnv_anno} \
     ~{extra_commands} \
     | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC,^FORMAT/GT,FORMAT/RD_CN" \
-    | bcftools view --threads 2 -Oz -o ~{dense_outfile}
+    | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/set_g2c_qc_variant_ids.py \
+      --vcf-out ~{dense_outfile}
     tabix -p vcf -f ~{dense_outfile}
 
     # Make a sites-only equivalent of the dense VCF for downstream benchmarking
@@ -869,7 +966,7 @@ task PreprocessVcf {
   }
 
   runtime {
-    docker: docker
+    docker: g2c_analysis_docker
     memory: "~{mem_gb} GB"
     cpu: n_cpu
     disks: "local-disk ~{hdd_gb} HDD"

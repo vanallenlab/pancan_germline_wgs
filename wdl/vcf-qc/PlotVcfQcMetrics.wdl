@@ -413,7 +413,8 @@ workflow PlotVcfQcMetrics {
   call PackageOutputs {
     input:
       tarballs = all_out_tarballs,
-      out_prefix = output_prefix
+      out_prefix = output_prefix,
+      g2c_analysis_docker = g2c_analysis_docker
   }
 
   output {
@@ -427,6 +428,7 @@ task PackageOutputs {
   input {
     Array[File] tarballs
     String out_prefix
+    String g2c_analysis_docker
   }
 
   Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
@@ -448,6 +450,13 @@ task PackageOutputs {
     for suffix in tsv tsv.gz txt txt.gz; do
       find ~{out_prefix}.plots -name "*.$suffix" || true
     done | xargs -I {} mv {} ~{out_prefix}.stats/ || true
+
+    # Collapse all summary stats and generate summary barplots
+    echo -e "#analysis\tmeasure\tvalue\tn" > ss.all.tsv
+    find ~{out_prefix}.stats/ -name "*.summary_metrics.tsv" \
+    | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
+    | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> ss.all.tsv
+    # TODO: plot bars here
 
     # Compress outputs
     for subset in plots stats; do

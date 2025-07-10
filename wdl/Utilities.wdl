@@ -464,6 +464,7 @@ task ShardTextFile {
   }
 }
 
+
 task ShardVcf {
   input {
     File vcf
@@ -667,6 +668,47 @@ task StreamSliceVcf {
     cpu: n_cpu
     disks: "local-disk " + hdd_gb + " HDD"
     preemptible: 3
+  }
+}
+
+
+task SubsetVcfByVids {
+  input {
+    File vcf
+    File vcf_idx
+    File vids_list
+    String bcftools_docker
+    Int? disk_gb
+    Int n_preemptible = 3
+  }
+
+  String out_fname = basename(vcf, ".vcf.gz") + ".subset.vcf.gz"
+  Int use_disk_gb = select_first([disk_gb, ceil(3 * size(vcf, "GB")) + 20])
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools view \
+      --no-update \
+      --include "ID=@~{vids_list}" \
+      -Oz -o "~{out_fname}" \
+      ~{vcf}
+    tabix -p vcf -f "~{out_fname}"
+  >>>
+
+  output {
+    File subsetted_vcf = out_fname
+    File subsetted_vcf_idx = "~{out_fname}.tbi"
+  }
+
+  runtime {
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + use_disk_gb + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
+    preemptible: n_preemptible
+    maxRetries: 1
   }
 }
 
