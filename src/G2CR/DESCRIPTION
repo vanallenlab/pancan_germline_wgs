@@ -24,4 +24,5 @@ Suggests:
     caret,
     DescTools,
     readxl,
-    survival
+    survival,
+    zoo

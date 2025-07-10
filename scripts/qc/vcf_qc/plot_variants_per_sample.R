@@ -16,6 +16,7 @@ options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
 require(DescTools, quietly=TRUE)
 require(G2CR, quietly=TRUE)
+require(zoo, quietly=TRUE)
 load.constants("all")
 
 
@@ -194,8 +195,8 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
 # Helper function to plot a single count waterfall; called within main.waterfall()
 plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
                                  samples.sorted=NULL, pop.space.wex=0.025,
-                                 pheno.space.wex=0.005,
-                                 parmar=c(0.25, 3.25, 0.5, 0.15)){
+                                 pheno.space.wex=0.005, legend.text.cex=5/6,
+                                 parmar=c(0.25, 3.5, 0.5, 2.5)){
   # Format plotting data
   counts <- gt.counts[which(gt.counts$class == vc
                             & is.na(gt.counts$subclass)),
@@ -224,8 +225,8 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
   xlims <- c(-0.01*n.samples,
              n.samples + (pop.spacer * length(pop.breaks.x)) + (pheno.spacer * length(pheno.breaks.x)))
   ylims <- c(0, max(total.per.sample))
-  hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.05)
-  het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.075)
+  hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.03)
+  het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.06)
 
   # Determine x position for each sample
   prev.x <- 0
@@ -265,18 +266,27 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
     group.df <- group.df[order(group.df$x), ]
     lab.x.at <- median(group.df$x)
     lab.y.at <- max(group.df$k[which(group.df$x >= quantile(group.df$x, 0.25)
-                      & group.df$x <= quantile(group.df$x, 0.75))])
+                                     & group.df$x <= quantile(group.df$x, 0.75))])
     group.k.med <- median(group.df$k)
     text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T,
          col=MixColor(var.class.colors[vc], "black", 2/3),
          labels=clean.numeric.labels(round(group.k.med, 0),
-                                     acceptable.decimals=if(group.k.med <= 2000){0}else{1}))
+                                     min.label.length=if(group.k.med < 1000){1}else{3}))
   })
 
-  # Add axis
+  # Add left Y axis
   clean.axis(2, title=paste(var.class.abbrevs[vc], "s", sep=""),
              label.units="count", infinite.positive=T, max.ticks=4,
-             title.line=0.75, cex.title=7.5/6, cex.axis=1)
+             title.line=1.4, cex.title=7.5/6, cex.axis=1)
+
+  # Add right Y axis-legend hybrid
+  legend.y.at <- apply(sapply(tail(ceiling(0.01*n.samples):n.samples, 25), function(si){
+    rollmean(cumsum(c(0, as.numeric(counts[samples.sorted[si], 1:2]))), k=2)
+  }), 1, mean)
+  yaxis.legend(c("Hom.", "Het."), x=max(sample.xleft)+1, y.positions=legend.y.at,
+               sep.wex=0.005*diff(par("usr")[1:2]),
+               min.label.spacing=0.075*diff(par("usr")[3:4]),
+               colors=c(hom.col, het.col), label.cex=legend.text.cex)
 }
 
 # Helper function to add groupwise markers to waterfall plot
@@ -284,7 +294,7 @@ add.waterfall.markers <- function(order.df, pop.map, pheno.map,
                                   pop.space.wex=0.025, pheno.space.wex=0.005,
                                   group.labels=c("Ancestry", "Pheno."),
                                   rect.hex.buffer=0.125,
-                                  parmar=c(1.35, 3.25, 0.25, 0.15)){
+                                  parmar=c(1.35, 3.5, 0.25, 2.5)){
   # Determine breaks between groups
   s.feats <- data.frame("order" = 1:nrow(order.df), row.names=rownames(order.df))
   s.feats$pop <- if(is.null(pop)){NA}else{pop[rownames(order.df)]}
@@ -460,23 +470,17 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
   pdf.height <- (top.to.bottom.ratio*height.scalar*n.panels) + (bottom.tracks*height.scalar/2)
 
   # Generate waterfall plot
-  needs.legend <- TRUE
   pdf(paste(out.prefix, "variants_per_genome.waterfall.pdf", sep="."),
       height=pdf.height, width=pdf.width)
   layout(matrix(1:(n.panels+has.bottom.tracks), byrow=T, ncol=1),
          heights=c(rep(top.to.bottom.ratio, n.panels), if(has.bottom.tracks){1}))
   for(vc in vcs){
-    waterfall.parmar <- c(0.25, 3.25, 0.5, 0.15)
+    waterfall.parmar <- c(0.25, 3.5, 0.5, 2.5)
     if(!has.bottom.tracks & vc == vcs[n.panels]){
       parmar[1] <- 1.5
     }
     plot.count.waterfall(gt.counts, vc, pop, pheno, samples.sorted,
                          pop.space.wex, pheno.space.wex, parmar=waterfall.parmar)
-    if(needs.legend){
-      legend("topright", fill=c("gray80", "gray60"), cex=7/6,
-             legend=c("Heterozygous", "Homozygous"), bty="n", border=NA)
-      needs.legend <- FALSE
-    }
   }
   if(has.bottom.tracks){
     add.waterfall.markers(order.df, pop.rank, pheno.rank,
@@ -489,7 +493,7 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
 
 # Helper function to handle scatterplots used for inter-class comparisons
 interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
-                               xlims=NULL, ylims=NULL, diag.lm=F,
+                               xlims=NULL, ylims=NULL, diag.lm=F, cor.lm=F,
                                stat.lab.hex=0.04, pt.cex=0.65,
                                parmar=c(2, 2.5, 1, 3.5)){
   # Get pointwise plotting parameters
@@ -521,6 +525,7 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
   # Add points
   points(plot.df, pch=pw.params$pch, cex=0.75*pw.params$cex, xpd=T,
          col=sapply(pw.col, adjustcolor, alpha=pw.params$alpha))
+  if(cor.lm){abline(lm(plot.df[, 2] ~ plot.df[, 1]), lty=2)}
 
   # Add axes & title
   mtext(3, text=title)
@@ -535,10 +540,19 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
 
   # Add title & legends
   r2 <- cor(plot.df[, 1], plot.df[, 2])^2
-  text(x=par("usr")[1]-(stat.lab.hex*diff(par("usr")[1:2])),
-       y=par("usr")[4]-(2.5*stat.lab.hex*diff(par("usr")[3:4])),
-       pos=4, cex=5/6,
-       labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
+  ideal.quad <- head(setdiff(calc.plot.quadrant.density(plot.df[, 1], plot.df[, 2]),
+                             c("I", "III")), 1)
+  if(ideal.quad == "IV"){
+    text(x=par("usr")[2]+(stat.lab.hex*diff(par("usr")[1:2])),
+         y=par("usr")[3]+(2.5*stat.lab.hex*diff(par("usr")[3:4])),
+         pos=2, cex=5/6, xpd=T,
+         labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
+  }else{
+    text(x=par("usr")[1]-(stat.lab.hex*diff(par("usr")[1:2])),
+         y=par("usr")[4]-(2.5*stat.lab.hex*diff(par("usr")[3:4])),
+         pos=4, cex=5/6, xpd=T,
+         labels=bquote(italic(R)^2*"="*.(formatC(round(r2, 2), digits=2))))
+  }
   if(!is.null(pop)){
     pop.labs.at <- sort(sapply(names(pop.pal), function(p){
       mean(plot.df[names(pop)[which(pop == p)], 2], na.rm=T)
@@ -548,6 +562,9 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
     }else{
       pop.labs <- names(pop.labs.at)
     }
+    pop.labs.at <- smart.spacing(pop.labs.at, min.dist=0.025*diff(par("usr")[3:4]),
+                                 lower.limit=par("usr")[3], upper.limit=par("usr")[4])
+    names(pop.labs.at) <- names(pop.labs)
     yaxis.legend(pop.labs, x=par("usr")[2], y.positions=pop.labs.at,
                  sep.wex=0.05*diff(par("usr")[1:2]), colors=pop.pal[names(pop.labs)],
                  lwd=4, min.label.spacing=0.125*diff(par("usr")[3:4]))
@@ -616,7 +633,7 @@ plot.count.comparisons <- function(gt.counts, vc1, vc2, pop=NULL,
   }
 
   # Generate plot
-  r2 <- interclass.scatter(c.df, pop, title, label.units="count")
+  r2 <- interclass.scatter(c.df, pop, title, label.units="count", cor.lm=T)
 
   return(c(r2, nrow(c.df)))
 }
