@@ -146,7 +146,8 @@ pointwise.plots <- function(df, out.prefix, fname.suffix="all",
   # AF correlation plot as .png
   png(paste(out.prefix, fname.suffix, "af_cor.png", sep="."),
       height=2.25*300, width=2.6*300, res=300)
-  m.tmp <- plot.af.scatter(df, title=title, common.af=common.af, ref.prefix=ref.prefix)
+  m.tmp <- plot.af.scatter(df, title=title, common.af=common.af,
+                           ref.prefix=ref.prefix)
   dev.off()
 
   ss.df[1, ] <- c(paste(ss.prefix, "common_af_cor", sep="."), "r2", m.tmp)

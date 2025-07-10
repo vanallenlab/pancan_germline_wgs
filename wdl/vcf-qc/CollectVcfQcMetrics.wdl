@@ -47,7 +47,7 @@ workflow CollectVcfQcMetrics {
     Int n_for_sample_level_analyses = 1000         # Number of samples to use for all sample-level analyses, including trio/twin/benchmarking
 
     Array[File?] snv_site_benchmark_beds           # BED files for SNV site benchmarking; one per reference dataset or cohort
-    Array[File?] indel_site_benchmark_beds         # BED files for SNV site benchmarking; one per reference dataset or cohort
+    Array[File?] indel_site_benchmark_beds         # BED files for SNV site benchmarking; one per r`eference dataset or cohort
     Array[File?] sv_site_benchmark_beds            # BED files for SNV site benchmarking; one per reference dataset or cohort
     Array[String?] site_benchmark_dataset_names
 
@@ -419,7 +419,8 @@ workflow CollectVcfQcMetrics {
     }
   }
 
-  # Concatenate dense common VCFs (necessary for LD comparisons)
+  # Concatenate dense common VCFs
+  # Necessary for LD comparisons (need all variants in a single file)
   call Utils.ConcatVcfs as ConcatCommonVcfs {
     input:
       vcfs = CommonFilterDenseVcf.subsetted_vcf,
@@ -620,6 +621,7 @@ workflow CollectVcfQcMetrics {
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
     File genotype_distrib = SumGenotypeDistribs.merged_distrib
+    File ld_stats = CalcCommonLd.ld_stats
 
     Array[Array[File]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
     Array[Array[File]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds
@@ -653,7 +655,7 @@ task CalcLd {
     File? common_svs_bed
 
     Int plink_ld_window_kb = 1000
-    Float plink_ld_window_min_r2 = 0.01
+    Float plink_ld_window_min_r2 = 0.05
     
     String out_prefix
     String g2c_pipeline_docker
@@ -669,20 +671,23 @@ task CalcLd {
   command <<<
     set -euo -pipefail
 
+    # Write list of variant IDs present in VCF
+    bcftools query -f '%ID\n' ~{vcf} > elig_vids.list
+
     # Define lists of common variants for each class
     if ~{has_snvs}; then
       zcat ~{default="" common_snvs_bed} \
-      | grep -v '^#' | cut -f4 | sort | uniq \
+      | cut -f4 | fgrep -xf elig_vids.list \
       > snvs.list || true
     fi
     if ~{has_indels}; then
       zcat ~{default="" common_indels_bed} \
-      | grep -v '^#' | cut -f4 | sort | uniq \
+      | cut -f4 | fgrep -xf elig_vids.list \
       > indels.list || true
     fi
     if ~{has_svs}; then
       zcat ~{default="" common_svs_bed} \
-      | grep -v '^#' | cut -f4 | sort | uniq \
+      | cut -f4 | fgrep -xf elig_vids.list \
       > svs.list || true
     fi
 
@@ -694,11 +699,68 @@ task CalcLd {
       --vcf ~{vcf} \
       --out ~{out_prefix}
 
+    # Simulate synthetic LD "noise" for each variant
+    # Note that this R script appends to --out-tsv, so all 
+    # variant classes can be written to the same file without issue
+    n_samples=$( bcftools query -l ~{vcf} | wc -l )
+    if ~{has_snvs}; then
+      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+        --bed ~{default="" common_snvs_bed} \
+        --sample-size $n_samples \
+        --max-r2 ~{plink_ld_window_min_r2} \
+        --out-tsv null_r2.tsv
+    fi
+    if ~{has_indels}; then
+      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+        --bed ~{default="" common_indels_bed} \
+        --sample-size $n_samples \
+        --max-r2 ~{plink_ld_window_min_r2} \
+        --out-tsv null_r2.tsv
+    fi
+    if ~{has_svs}; then
+      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+        --bed ~{default="" common_svs_bed} \
+        --sample-size $n_samples \
+        --max-r2 ~{plink_ld_window_min_r2} \
+        --out-tsv null_r2.tsv
+    fi
+
     # Iterate over pairs of variant classes and 
     # report the strongest R2 per variant
-    # TODO: finish implementing this
-
+    for vc1 in snv indel sv; do
+      if [ -s $vc1.list ]; then
+        for vc2 in snv indel sv; do
+          if [ -s $vc2.list ]; then
+            fgrep -wf $vc1.list \
+              ~{out_prefix}.ld.vcor \
+            | fgrep -wf $vc2.list \
+            | awk -v FS="\t" -v OFS="\t" \
+              '{ if ($3!=$6) print $3, $7"\n"$6, $7 }' \
+            | cat - null_r2.tsv \
+            | fgrep -wf $vc1.list \
+            | sort -nrk2,2 -k1,1V \
+            | awk '!seen[$1]++' \
+            | awk -v OFS="\t" -v vc2=$vc2 '{ print $1, vc2, $2 }'
+          fi
+        done
+      fi
+    done \
+    | sort -Vk1,1 -k2,2V \
+    | cat <( echo -e "#vid\tother_vc\tld_r2" ) - | gzip -c \
+    > ~{out_prefix}.peak_ld_by_vc.tsv.gz
   >>>
+
+  output {
+    File ld_stats = "~{out_prefix}.peak_ld_by_vc.tsv.gz"
+  }
+
+  runtime {
+    docker: g2c_pipeline_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }  
 }
 
 

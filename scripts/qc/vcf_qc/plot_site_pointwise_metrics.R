@@ -34,11 +34,12 @@ read.bed <- function(bed.in, common_af=0, autosomes.only=T){
     df <- df[df[, 1] %in% c(1:22, paste("chr", c(1:22), sep="")), ]
   }
   keep.cols <- c("af", "freq_het", "freq_hom", "hwe")
-  df <- as.data.frame(apply(df[, keep.cols], 2, as.numeric))
-  df <- df[which(df$af >= common_af), ]
+  df[, keep.cols] <- as.data.frame(apply(df[, keep.cols], 2, as.numeric))
+  df <- df[which(df$af >= common_af), c("vid", keep.cols)]
   df <- df[complete.cases(df), ]
   df[, c("hwe.x", "hwe.y")] <- t(apply(df[, c("freq_het", "freq_hom")], 1,
                                        function(freqs){calc.hwe.xy(freqs[1], freqs[2])}))
+  rownames(df) <- df$vid; df$vid <- NULL
   return(as.data.frame(df))
 }
 
@@ -153,9 +154,104 @@ hwe.plot <- function(df, title="All variants", pt.cex=NULL, pt.pch=NULL,
   return(c(pct.pass, n.all))
 }
 
+# Generate a plot of peak LD R2 values per variant
+ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
+                    ld.bin.labels=c("None", "Weak", "Med.", "Strong"),
+                    margin.n.bins=20, right.margin.hex=0.2,
+                    bar.buffer.hex=0.015, margin.tick.hex=0.05,
+                    parmar=c(2, 2.35, 1, 1)){
+  # Retain complete data only
+  ld <- ld[which(ld$vid %in% rownames(df)), ]
+  if(vc2 == "any"){
+    ld <- ld[order(-ld$ld_r2), ]
+    ld <- ld[!duplicated(ld$vid), ]
+  }else{
+    ld <- ld[which(ld$other_vc == vc2), ]
+  }
+  rownames(ld) <- ld$vid
+  plot.df <- merge(df, ld, all=F, sort=F, by=0)[, c("af", "ld_r2")]
+  plot.df$af <- log10(plot.df$af)
+  plot.df <- plot.df[complete.cases(plot.df), ]
+
+  # Get plot parameters
+  min.af <- round(min(plot.df$af), 0)
+  pt.params <- scatterplot.point.params(nrow(plot.df), cex.start=0.3)
+  p.pal <- viridis(margin.n.bins+1, begin=0.1, end=0.95)
+  pt.cols <- p.pal[floor(margin.n.bins * plot.df$ld_r2) + 1]
+  bar.pal <- viridis(margin.n.bins, begin=0.1, end=0.95)
+  right.bar.xmax <- abs(min.af) * right.margin.hex
+  bar.x.add <- abs(min.af) * bar.buffer.hex
+  margin.tick.len <- abs(min.af) * margin.tick.hex
+  ld.bin.breaks <- c(0, ld.cutoffs, 1)
+
+  # Prep plot area
+  prep.plot.area(c(min.af, right.bar.xmax+bar.x.add), c(0, 1),
+                 parmar=parmar, xaxs="r", yaxs="r")
+  segments(x0=par("usr")[1], x1=0, y0=ld.cutoffs,
+           y1=ld.cutoffs, col=annotation.color)
+
+  # Plot points
+  points(plot.df, col=adjustcolor(pt.cols, alpha=pt.params$alpha),
+         cex=pt.params$cex, pch=pt.params$pch, xpd=T)
+
+  # Add X axis for AF
+  ax.tick.at <- 0:min.af
+  ax.tick.labs <- paste('"', paste(100 * (10^(0:-3)), "%", sep=""),
+                        '"', sep="")
+  if(length(ax.tick.at) > length(ax.tick.labs)){
+    ax.tick.labs <- c(ax.tick.labs,
+                      paste("10 ^ -",
+                            length(ax.tick.labs):length(ax.tick.at)), sep="")
+  }else{
+    ax.tick.labs <- head(ax.tick.labs, length(ax.tick.at))
+  }
+  ax.tick.labs[length(ax.tick.labs)] <-
+    paste("'' <", ax.tick.labs[length(ax.tick.labs)])
+  clean.axis(1, at=ax.tick.at, labels=ax.tick.labs, parse.labels=TRUE,
+             label.line=-0.85)
+  axis(1, at=mean(c(min.af, 0)), tick=F, line=0, labels=paste(title, "AF"))
+
+  # Add axes & title
+  if(vc2 == "any"){
+    clean.axis(2, at=ld.bin.breaks, label.line=-0.75, title.line=0.1,
+               title=bquote("Best" ~ R^2))
+    axis(3, at=mean(c(min.af, 0)), labels=paste(title, "LD"), line=-1, tick=F)
+  }else{
+    vc2.lab <- gsub("I", "i", var.class.abbrevs[vc2])
+    clean.axis(2, at=ld.bin.breaks, label.line=-0.75, title.line=0.1,
+               title=bquote("Best" ~ R^2 ~ "vs. any" ~ .(vc2.lab)))
+    axis(3, at=mean(c(min.af, 0)), tick=F, line=-1,
+         labels=paste(title, " LD vs. ", vc2.lab, "s", sep=""))
+  }
+
+  # Add marginal histogram on right Y axis
+  h <- hist(floor(margin.n.bins * plot.df$ld_r2),
+            plot=F, breaks=0:margin.n.bins)$counts
+  h.x <- h * right.bar.xmax / max(h)
+  rect(xleft=bar.x.add, xright=h.x+bar.x.add,
+       ybottom=((1:margin.n.bins)-1)/margin.n.bins,
+       ytop=(1:margin.n.bins)/margin.n.bins,
+       border=bar.pal, col=bar.pal)
+  segments(x0=bar.x.add, x1=bar.x.add+margin.tick.len,
+           y0=ld.bin.breaks, y1=ld.bin.breaks)
+  segments(x0=bar.x.add, x1=bar.x.add, y0=0, y1=1, lwd=2/3)
+  pt.bin.mem <- sapply(plot.df$ld_r2,
+                       function(v){which.max(v <= ld.bin.breaks)-1})
+  sapply(1:length(ld.bin.breaks), function(i){
+    bin.pct <- sum(pt.bin.mem == i) / nrow(plot.df)
+    text(x=bar.x.add, y=mean(ld.bin.breaks[i+(0:1)])+(0.03*diff(par("usr")[3:4])),
+         cex=5/6, labels=ld.bin.labels[i], xpd=T, pos=4)
+    text(x=bar.x.add, y=mean(ld.bin.breaks[i+(0:1)])-(0.045*diff(par("usr")[3:4])),
+         cex=4/6, xpd=T, pos=4, col="gray50",
+         labels=paste("(", round(100 * bin.pct, 1), "%)", sep=""))
+  })
+
+  return(c(mean(plot.df$ld_r2), nrow(plot.df)))
+}
+
 # Plot wrapper function for all site-level pointwise plots
-pointwise.plots <- function(df, out.prefix, fname.suffix="all",
-                            title="All variants"){
+pointwise.plots <- function(df, ld, out.prefix, fname.suffix="all",
+                            title="All variant"){
 
   ss.df <- data.frame("analysis"=character(), "measure"=character(),
                       "value"=numeric(), "n"=numeric())
@@ -164,10 +260,19 @@ pointwise.plots <- function(df, out.prefix, fname.suffix="all",
   # HWE plot as .png
   png(paste(out.prefix, fname.suffix, "hwe.png", sep="."),
       height=2.25*300, width=2.25*300, res=300)
-  m.tmp <- hwe.plot(df, title=title)
+  m.tmp <- hwe.plot(df, title=paste(title, "s", sep=""))
   dev.off()
-
   ss.df[1, ] <- c(paste(ss.prefix, "common_hwe", sep="."), "pct_pass", m.tmp)
+
+  # Peak LD vs. AF as .png (one for each other variant class)
+  for(vc2 in c("any", unique(ld$other_vc))){
+    png(paste(out.prefix, fname.suffix, vc2, "peak_ld.png", sep="."),
+        height=2.25*300, width=2.6*300, res=300)
+    m.tmp <- ld.plot(df, ld, vc2, title=title)
+    dev.off()
+    ss.df[nrow(ss.df)+1, ] <- c(paste(ss.prefix, "common_ld", vc2, sep="."),
+                                "mean_peak_r2", m.tmp)
+  }
 
   return(ss.df)
 }
@@ -178,6 +283,8 @@ pointwise.plots <- function(df, out.prefix, fname.suffix="all",
 ###########
 # Parse command line arguments and opions
 parser <- ArgumentParser(description="Plot pointwise variant metrics")
+parser$add_argument("--ld-stats", metavar=".tsv", type="character", required=TRUE,
+                    help="Peak LD R2 per variant for each other variant class")
 parser$add_argument("--snvs", metavar=".bed", type="character",
                     help="SNV site metrics from clean_site_metrics.py")
 parser$add_argument("--indels", metavar=".bed", type="character",
@@ -194,11 +301,12 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("snvs" = NULL,
-#              "indels" = NULL,
-#              "svs" = "~/scratch/YL.sv.site_metrics.dev.sv.sites.common.bed.gz",
-#              "combine" = FALSE,
-#              "common_af" = 0.01,
+# args <- list("ld_stats" = "~/scratch/renamed.common.peak_ld_by_vc.tsv.gz",
+#              "snvs" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.snv.sites.common.bed.gz",
+#              "indels" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.indel.sites.common.bed.gz",
+#              "svs" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.sv.sites.common.bed.gz",
+#              "combine" = TRUE,
+#              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/qc.test")
 
 # Ensure at least one of --snvs, --indels, or --svs is present
@@ -206,14 +314,19 @@ if(is.null(args$snvs) & is.null(args$indels) & is.null(args$svs)){
   stop("At least one of --snvs, --indels, or --svs must be provided")
 }
 
+# Load LD stats
+ld <- read.table(args$ld_stats, header=T, sep="\t", check.names=F,
+                 quote="", comment.char="")
+colnames(ld)[1] <- gsub("#", "", colnames(ld)[1])
+
 # Load & plot SNVs, if provided
 if(!is.null(args$snvs)){
   # Load SNV data
   snv.df <- read.bed(args$snvs, args$common_af)
 
   # Plot SNV metrics
-  snv.ss <- pointwise.plots(snv.df, args$out_prefix, fname.suffix="snv",
-                  title="Common SNVs")
+  snv.ss <- pointwise.plots(snv.df, ld, args$out_prefix, fname.suffix="snv",
+                            title="Common SNV")
 }else{
   snv.df <- NULL
   snv.ss <- NULL
@@ -225,8 +338,8 @@ if(!is.null(args$indels)){
   indel.df <- read.bed(args$indels, args$common_af)
 
   # Plot indel metrics
-  indel.ss <- pointwise.plots(indel.df, args$out_prefix, fname.suffix="indel",
-                  title="Common indels")
+  indel.ss <- pointwise.plots(indel.df, ld, args$out_prefix, fname.suffix="indel",
+                  title="Common indel")
 
 }else{
   indel.df <- NULL
@@ -239,8 +352,8 @@ if(!is.null(args$svs)){
   sv.df <- read.bed(args$svs, args$common_af)
 
   # Plot SV metrics
-  sv.ss <- pointwise.plots(sv.df, args$out_prefix, fname.suffix="sv",
-                  title="Common SVs")
+  sv.ss <- pointwise.plots(sv.df, ld, args$out_prefix, fname.suffix="sv",
+                  title="Common SV")
 }else{
   sv.df <- NULL
   sv.ss <- NULL
@@ -252,8 +365,8 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
   all.df <- do.call("rbind", list(snv.df, indel.df, sv.df))
 
   # Plot all metrics
-  all.ss <- pointwise.plots(all.df, args$out_prefix, fname.suffix="all",
-                  title="All common variants")
+  all.ss <- pointwise.plots(all.df, ld, args$out_prefix, fname.suffix="all",
+                  title="All common variant")
 }else{
   all.ss <- NULL
 }

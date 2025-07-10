@@ -21,6 +21,7 @@ workflow PlotVcfQcMetrics {
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
     Array[File] sample_genotype_distribution_tsvs
+    Array[File] peak_ld_stat_tsvs
 
     Array[File]? ref_size_distribution_tsvs
     Array[File]? ref_af_distribution_tsvs
@@ -68,6 +69,7 @@ workflow PlotVcfQcMetrics {
 
     String bcftools_docker
     String g2c_analysis_docker
+    String linux_docker
   }
 
   Int n_bench_intervals = length(select_first([benchmark_interval_names]))
@@ -250,6 +252,21 @@ workflow PlotVcfQcMetrics {
   }
   File gt_distrib = select_first([SumGtDistribs.merged_distrib, sample_genotype_distribution_tsvs[0]])
 
+  # If necessary, collapse peak LD stats
+  if ( length(peak_ld_stat_tsvs) > 1 ) {
+    call Utils.ConcatTextFiles as CollapseLdStats {
+      input:
+        shards = peak_ld_stat_tsvs,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2V",
+        compression_command = "gzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".peak_ld_stats.tsv.gz",
+        docker = linux_docker
+      }
+  }
+  File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsvs[0])
+
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
     scatter ( site_bench_di in range(n_sb_datasets) ) {
@@ -339,6 +356,7 @@ workflow PlotVcfQcMetrics {
       common_snvs_bed = common_snvs_bed,
       common_indels_bed = common_indels_bed,
       common_svs_bed = common_svs_bed,
+      ld_stats_tsv = ld_stats_tsv,
       output_prefix = output_prefix,
       ref_title = ref_cohort_plot_title,
       g2c_analysis_docker = g2c_analysis_docker
@@ -805,13 +823,18 @@ task PlotSiteMetrics {
     File size_distrib
     File af_distrib
     File joint_distrib
+    
     Float common_af_cutoff
+    
     File? ref_size_distrib
     File? ref_af_distrib
+    
     File? all_svs_bed
     File? common_snvs_bed
     File? common_indels_bed
     File? common_svs_bed
+
+    File ld_stats_tsv
 
     String output_prefix
     String? ref_title
@@ -824,7 +847,8 @@ task PlotSiteMetrics {
   }
 
   Array[File?] loc_inputs = [size_distrib, af_distrib, joint_distrib, all_svs_bed,
-                             common_snvs_bed, common_indels_bed, common_svs_bed]
+                             common_snvs_bed, common_indels_bed, common_svs_bed, 
+                             ld_stats_tsv]
   Int default_disk_gb = ceil(2 * size(select_all(loc_inputs), "GB")) + 20
 
   Boolean has_ref_size = defined(ref_size_distrib)
@@ -899,6 +923,7 @@ task PlotSiteMetrics {
     # Plot site-level metrics for common variants
     if ~{has_common_variants}; then
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_pointwise_metrics.R \
+        --ld-stats ~{ld_stats_tsv} \
         ~{pw_snv_cmd} \
         ~{pw_indel_cmd} \
         ~{pw_sv_cmd} \
