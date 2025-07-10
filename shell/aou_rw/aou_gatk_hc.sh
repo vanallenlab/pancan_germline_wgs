@@ -34,8 +34,8 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 
-# Install necessary packages
-. code/refs/install_packages.sh python
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
 
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
@@ -49,6 +49,9 @@ cd code/wdl/pancan_germline_wgs && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+
+# Install necessary packages
+. code/refs/install_packages.sh python
 
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
