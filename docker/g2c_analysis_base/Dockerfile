@@ -15,6 +15,13 @@ MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends git
 
+# Install plink2
+RUN curl -sSL https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_x86_64_20250515.zip -o plink2.zip && \
+    unzip plink2.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/plink2 && \
+    rm plink2.zip && \
+    plink2 --version
+
 # Clone pancan_germline_wgs repo and check out specified hash
 # Note that this is only used for pulling the version-tracked conda environment .yaml
 # It will be re-cloned when building the child image, g2c_analysis

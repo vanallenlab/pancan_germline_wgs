@@ -14,12 +14,34 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
-require(RLCtools, quietly=TRUE)
 
 
 #############
 # Functions #
 #############
+# This is a port of a function from RLCTools, which is not installed in g2c_pipeline
+simulate.gts <- function(af, n, seed=NULL, return.dosage=FALSE){
+  # Convert AF into classical HWE terms
+  af <- as.numeric(af)
+  p <- af
+  q <- 1 - af
+
+  # Genotype probabilities
+  p.hom <- p^2
+  p.het <- 2*p*q
+  p.ref <- q^2
+
+  # Sample genotypes
+  if(!is.null(seed)){
+    set.seed(seed)
+  }
+  if(return.dosage){
+    sample(0:2, n, replace=TRUE, prob=c(p.ref, p.het, p.hom))
+  }else{
+    sample(c("0/0", "0/1", "1/1"), n, replace=TRUE, prob=c(p.ref, p.het, p.hom))
+  }
+}
+
 # LD simulation procedure for a single variant
 sim.ld <- function(af, n, pos, max.r2=1, max.attempts=1000, digits=6){
   # If AF << 1 / 2*N, return perfect LD even despite max.r2
