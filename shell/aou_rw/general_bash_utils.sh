@@ -145,7 +145,7 @@ EOF
   if [ $# -ge 5 ]; then
     contig_list=$5
   else
-    contig_list=/home/jupyter/contig_lists/dfci-g2c.v1.contigs.w$WN.list
+    contig_list=/home/jupyter/contig_lists/dfci-g2c.v1.contigs.$WN.list
   fi
 
   # Make temporary directory for staging

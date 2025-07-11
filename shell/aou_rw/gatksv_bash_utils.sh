@@ -158,7 +158,7 @@ module_submission_routine_all_batches() {
   if [ $module_idx == "14A" ]; then
     batches_list="batch_info/dfci-g2c.gatk-sv.batches.list"
   else
-    batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
+    batches_list="batch_info/dfci-g2c.gatk-sv.batches.$WN.list"
   fi
 
   _count_remaining() {

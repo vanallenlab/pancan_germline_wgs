@@ -35,9 +35,6 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 
-# Ensure Cromwell/Cromshell are configured
-code/scripts/setup_cromshell.py
-
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
   -i code/refs/json/aou.cromwell_options.default.json \
@@ -51,6 +48,9 @@ cp vcf-qc/*.wdl ./ && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
 
 # Install necessary packages
 . code/refs/install_packages.sh python R
