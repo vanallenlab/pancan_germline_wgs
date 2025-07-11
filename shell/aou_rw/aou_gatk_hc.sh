@@ -164,7 +164,7 @@ while read contig; do
   # Clean up
   rm $staging_dir/gnomad.v4.1.*.*.sites.bed.gz*
 
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \
@@ -198,7 +198,7 @@ while read contig; do
           staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
         | wc -l | awk '{ printf "%i\n", $1 }' )
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
 echo " }" >> $staging_dir/contig_variable_overrides.json
@@ -243,7 +243,7 @@ code/scripts/manage_chromshards.py \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
   --name JointGenotyping \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 60 \
@@ -388,7 +388,7 @@ EOF
     -i $staging_dir/contig_variable_overrides.json \
     -u $staging_dir/$contig.overrides.json \
     -o $staging_dir/contig_variable_overrides.json
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
 # Write template .json for input
 cat << EOF > $staging_dir/PosthocCleanupPart1.inputs.template.json
@@ -412,7 +412,7 @@ code/scripts/manage_chromshards.py \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/ \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 45 \
@@ -559,7 +559,7 @@ code/scripts/manage_chromshards.py \
   --input-json-template $staging_dir/PosthocCleanupPart2.inputs.template.json \
   --contig-variable-overrides $staging_dir/PosthocCleanupPart2.contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2/ \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart2.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
@@ -594,7 +594,7 @@ code/scripts/manage_chromshards.py \
   --input-json-template $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset \
   --name ExcludeSnvOutliersFromSvCallset \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.ExcludeSnvOutliersFromSvCallset.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \

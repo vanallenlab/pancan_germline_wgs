@@ -70,7 +70,6 @@ workflow CollectVcfQcMetrics {
 
     String bcftools_docker
     String g2c_analysis_docker
-    String g2c_pipeline_docker
     String linux_docker
   }
 
@@ -439,7 +438,7 @@ workflow CollectVcfQcMetrics {
       common_indels_bed = CollapseCommonIndels.merged_file,
       common_svs_bed = CollapseCommonSvs.merged_file,
       out_prefix = output_prefix + ".dense.common",
-      g2c_pipeline_docker = g2c_pipeline_docker
+      g2c_analysis_docker = g2c_analysis_docker
   }
 
 
@@ -658,7 +657,7 @@ task CalcLd {
     Float plink_ld_window_min_r2 = 0.05
     
     String out_prefix
-    String g2c_pipeline_docker
+    String g2c_analysis_docker
   }
 
   Boolean has_snvs = defined(common_snvs_bed)
@@ -755,7 +754,7 @@ task CalcLd {
   }
 
   runtime {
-    docker: g2c_pipeline_docker
+    docker: g2c_analysis_docker
     memory: "3.75 GB"
     cpu: 2
     disks: "local-disk " + disk_gb + " HDD"

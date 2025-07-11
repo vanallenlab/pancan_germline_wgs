@@ -36,19 +36,19 @@ EOF
 get_workspace_number() {
   case "$WORKSPACE_BUCKET" in
     "gs://fc-secure-d21aa6b0-1d19-42dc-93e3-42de3578da45")
-      echo 1
+      echo "w1"
       ;;
     "gs://fc-secure-29075a92-7950-4778-aa20-874a75cd37bf")
-      echo 2
+      echo "w2"
       ;;
     "gs://fc-secure-db6876b5-357d-4339-8f79-676f87b4b2d4")
-      echo 3
+      echo "w3"
       ;;
     "gs://fc-secure-7b3256c8-9e62-4bb9-828b-a5d0e4b6ac31")
-      echo 4
+      echo "w4"
       ;;
     "gs://fc-secure-c61bace1-e344-452d-8902-49ddad15e5e7")
-      echo 5
+      echo "w5"
       ;;
     "gs://fc-secure-a9228ba7-66a4-45eb-bf1c-6675ae2b9226")
       echo "dev"

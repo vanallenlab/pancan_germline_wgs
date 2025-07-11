@@ -11,9 +11,9 @@
 FROM condaforge/mambaforge:24.9.2-0
 MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 
-# Install git
+# Install git & curl
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-upgrade --no-install-recommends git
+    apt-get -qqy install --no-upgrade --no-install-recommends git curl unzip
 
 # Install plink2
 RUN curl -sSL https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_x86_64_20250515.zip -o plink2.zip && \

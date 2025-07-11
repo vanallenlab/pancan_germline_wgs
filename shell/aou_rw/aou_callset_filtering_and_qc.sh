@@ -397,7 +397,7 @@ code/scripts/manage_chromshards.py \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $WORKSPACE_BUCKET/scratch/ \
   --name IndexAouSrwgsSnvs \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.IndexAouSrwgsSnvs.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --max-attempts 4
@@ -652,7 +652,7 @@ while read contig; do
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc,"
   echo "\"CONTIG_VCFS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.posthoc_filtered.vcf.gz\"],"
   echo "\"CONTIG_VCF_IDXS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi\"] },"
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
 echo " }" >> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
@@ -674,7 +674,6 @@ cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:0829dbd",
-  "CollectVcfQcMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:0829dbd",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
@@ -727,7 +726,7 @@ code/scripts/manage_chromshards.py \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/ \
   --name CollectInitialVcfQcMetrics \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectVcfQcMetrics.initial_qc.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
