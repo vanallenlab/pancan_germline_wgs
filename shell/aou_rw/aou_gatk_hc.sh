@@ -247,8 +247,8 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 60 \
-  --submission-gate 10 \
-  --vm-gate 3500 \
+  --submission-gate 20 \
+  --vm-gate 3000 \
   --max-attempts 3
 
 
