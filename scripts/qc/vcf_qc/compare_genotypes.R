@@ -123,6 +123,8 @@ parser$add_argument("--gt-tsv-suffix", metavar="string", default=".gt.tsv.gz",
 parser$add_argument("--report-by-genotype", action="store_true",
                     help=paste("Split summary results by genotype [default:",
                                "summarize by zygosity]"))
+parser$add_argument("--invert-sid", action="store_true",
+                    help="Report results using target sample IDs, not source IDs")
 parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
                     help="Allele frequency threshold for common variants")
 args <- parser$parse_args()
@@ -135,6 +137,7 @@ args <- parser$parse_args()
 #              "target_gt_dir" = "~/Downloads/gt_bench_dev_data/",
 #              "gt_tsv_suffix" = ".gt.tsv.gz",
 #              "report_by_genotype" = TRUE,
+#              "invert_sid" = FALSE,
 #              "common_af" = 0.01,
 #              "out_prefix" = "~/scratch/gt_comparison_dev")
 
@@ -160,7 +163,8 @@ all.sample.res <- lapply(1:nrow(sid.map), function(sidx){
   if(!is.null(source.gts) & !is.null(target.gts) & !is.null(vid.map)){
     sample.res <- benchmark.gts(source.gts, target.gts, vid.map,
                                 args$report_by_genotype)
-    cbind(rep(source.sid, nrow(sample.res)), sample.res)
+    cbind(rep(if(args$invert_sid){target.sid}else{source.sid}, nrow(sample.res)),
+          sample.res)
   }else{
     NULL
   }

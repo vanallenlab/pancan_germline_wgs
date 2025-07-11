@@ -37,6 +37,7 @@ task BenchmarkGenotypes {
   }
 
   String gt_report_cmd = if report_by_gt then "--report-by-genotype" else ""
+  String invert_sid_cmd = if invert_sample_map then "--invert-sid" else ""
   Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 10
 
   command <<<
@@ -112,6 +113,7 @@ task BenchmarkGenotypes {
         --target-gt-dir target_gts/ \
         --gt-tsv-suffix ".gt.sub.tsv.gz" \
         ~{gt_report_cmd} \
+        ~{invert_sid_cmd} \
         --common-af ~{common_af_cutoff} \
         --out-prefix ~{output_prefix}
 
