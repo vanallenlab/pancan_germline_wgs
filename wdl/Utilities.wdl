@@ -259,6 +259,8 @@ task GetContigsFromVcfHeader {
   command <<<
     set -eu -o pipefail
 
+    ln -s ~{vcf_idx} .
+
     tabix -H ~{vcf} \
     | fgrep "##contig" \
     | sed 's/ID=/\t/g' \
@@ -368,7 +370,6 @@ task McnvHeaderCheck {
     set -eu -o pipefail
 
     ln -s ~{vcf_idx} .
-
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools view --header-only ~{vcf} > header.vcf
@@ -573,7 +574,6 @@ task StreamSamplesFromVcfHeader {
     set -eu -o pipefail
 
     ln -s ~{vcf_idx} .
-
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools query -l ~{vcf} > ~{out_filename}

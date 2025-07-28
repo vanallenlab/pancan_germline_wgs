@@ -357,37 +357,24 @@ task PrepSites {
     Float strict_interval_coverage = 0.5
     
     String prefix
-
-    Int disk_gb = 25
     
     String g2c_analysis_docker
-  }
-
-  parameter_meta {
-    beds: {
-      localization_optional: true
-    }
   }
 
   Int loose_min_size = floor(min_size / lenient_size_scalar)
   Int loose_max_size = ceil(lenient_size_scalar * max_size)
 
+  Int disk_gb = ceil(2 * size(beds, "GB")) + 10
+
   command <<<
     set -eu -o pipefail
 
-    # Link all bed indexes to pwd
-    while read bed_idx; do
-      ln -s $bed_idx .
-    done < ~{write_lines(bed_idxs)}
-
     # Save header line for first BED
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     tabix --only-header -p bed -R ~{eval_interval_bed} ~{beds[0]} > header.bed
 
-    # Loop over each bed and use tabix to remotely extract only the variants needed
-    while read bed_uri; do
-      export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-      tabix -p bed -R ~{eval_interval_bed} $bed_uri
+    # Loop over each bed and use tabix to extract only the variants needed
+    while read bed_path; do
+      tabix -p bed -R ~{eval_interval_bed} $bed_path
     done < ~{write_lines(beds)} \
     | awk -v FS="\t" -v min_size=~{loose_min_size} -v max_size=~{loose_max_size} \
       '{ if ($7>=min_size && $7<=max_size) print }' \
