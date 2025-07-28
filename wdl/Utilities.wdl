@@ -353,6 +353,9 @@ task MakeTabixIndex {
 
 
 # Checks a VCF header for fields indicating that it might contain mCNVs
+# Functionally equivalent to StreamedMcnvHeaderCheck, but localizes entire VCF
+# Unable to disable localization_optional in parameter_meta so we must 
+# have two versions of roughly the same function
 task McnvHeaderCheck {
   input {
     File vcf
@@ -360,17 +363,10 @@ task McnvHeaderCheck {
     String docker
   }
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
+  Int disk_gb = ceil(1.5 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
-
-    ln -s ~{vcf_idx} .
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     bcftools view --header-only ~{vcf} > header.vcf
 
@@ -394,7 +390,7 @@ task McnvHeaderCheck {
     docker: docker
     memory: "3.75 GB"
     cpu: 2
-    disks: "local-disk 15 HDD"
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }
@@ -550,6 +546,57 @@ task SplitIntervalList {
     docker: linux_docker
     preemptible: n_preemptible
     maxRetries: 1
+  }
+}
+
+
+# Checks a VCF header for fields indicating that it might contain mCNVs
+# Functionally equivalent to McnvHeaderCheck, but uses htslib remote streaming
+# Unable to disable localization_optional in parameter_meta so we must 
+# have two versions of roughly the same function
+task StreamedMcnvHeaderCheck {
+  input {
+    File vcf
+    File vcf_idx
+    String docker
+  }
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    ln -s ~{vcf_idx} .
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    bcftools view --header-only ~{vcf} > header.vcf
+
+    # Check for header rows potentially indicative of MCNVs
+    touch mcnv.header.vcf
+    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
+    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
+    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
+    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
+      echo "true" > has_mcnvs.txt
+    else
+      echo "false" > has_mcnvs.txt
+    fi
+  >>>
+
+  output {
+    Boolean has_mcnvs = read_boolean("has_mcnvs.txt")
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 15 HDD"
+    preemptible: 3
   }
 }
 
