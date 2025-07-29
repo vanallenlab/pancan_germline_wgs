@@ -369,10 +369,12 @@ task PrepSites {
   command <<<
     set -eu -o pipefail
 
-    # Link bed indexes to working directory
-    while read idx_path; do
-      ln -s $idx_path ./
-    done < ~{write_lines(bed_idxs)}
+    # Link bed indexes if necessary
+    while read bed_path idx_path; do
+      if [ "$idx_path" != "$bed_path.tbi" ]; then
+        ln -s "$idx_path" "$bed_path.tbi"
+        fi
+    done < <( paste ~{write_lines(beds)} ~{write_lines(bed_idxs)} )
 
     # Save header line for first BED
     tabix --only-header -p bed -R ~{eval_interval_bed} ~{beds[0]} > header.bed
