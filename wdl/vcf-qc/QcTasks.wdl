@@ -373,7 +373,7 @@ task PrepSites {
     while read bed_path idx_path; do
       if [ "$idx_path" != "$bed_path.tbi" ]; then
         ln -s "$idx_path" "$bed_path.tbi"
-        fi
+      fi
     done < <( paste ~{write_lines(beds)} ~{write_lines(bed_idxs)} )
 
     # Save header line for first BED

@@ -59,7 +59,10 @@ def startup_report(inputs):
 
     for key, val in inputs.items():
         if val is not None:
-            print('  - {}: {}'.format(key, val))
+            if isinstance(val, bool):
+                print('  - {} enabled'.format(key))
+            else:
+                print('  - {}: {}'.format(key, val))
     print('')
 
 
@@ -379,7 +382,7 @@ def main():
                         'Active VM gate' : args.vm_gate,
                         'Max cycles' : max_cycles,
                         'Dry run' : args.dry_run,
-                        'Quiet' : args.quiet})
+                        'Quiet mode' : args.quiet})
 
     # If --status-tsv is provided and exists, load this file as a dict
     if args.status_tsv is not None \

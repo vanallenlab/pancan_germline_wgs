@@ -178,7 +178,7 @@ ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
   pt.params <- scatterplot.point.params(nrow(plot.df), cex.start=0.3)
   p.pal <- viridis(margin.n.bins+1, begin=0.1, end=0.95)
   pt.cols <- p.pal[floor(margin.n.bins * plot.df$ld_r2) + 1]
-  bar.pal <- viridis(margin.n.bins, begin=0.1, end=0.95)
+  bar.pal <- greyscale.palette(margin.n.bins, buffer=margin.n.bins/2)
   right.bar.xmax <- abs(min.af) * right.margin.hex
   bar.x.add <- abs(min.af) * bar.buffer.hex
   margin.tick.len <- abs(min.af) * margin.tick.hex
@@ -242,7 +242,7 @@ ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
     text(x=bar.x.add, y=mean(ld.bin.breaks[i+(0:1)])+(0.03*diff(par("usr")[3:4])),
          cex=5/6, labels=ld.bin.labels[i], xpd=T, pos=4)
     text(x=bar.x.add, y=mean(ld.bin.breaks[i+(0:1)])-(0.045*diff(par("usr")[3:4])),
-         cex=4/6, xpd=T, pos=4, col="gray50",
+         cex=4/6, xpd=T, pos=4,
          labels=paste("(", round(100 * bin.pct, 1), "%)", sep=""))
   })
 
