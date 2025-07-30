@@ -807,7 +807,7 @@ task ChooseTargetSamples {
     cmd="$cmd --all-samples-list \"~{all_samples_list}\" -N ~{n_samples}"
     cmd="$cmd --out-list \"~{target_outfile}\""
     if ~{defined(sample_priority_tsv)}; then
-      cmd="$cmd --priority-tsv \"~{select_first([sample_priority_tsv])}\""
+      cmd="$cmd --priority-tsv \"~{default="" sample_priority_tsv}\""
     fi
     echo -e "Now selecting samples with this command:\n$cmd"
     eval $cmd
