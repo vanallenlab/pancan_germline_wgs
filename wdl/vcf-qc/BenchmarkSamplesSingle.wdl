@@ -110,7 +110,8 @@ workflow BenchmarkSamplesSingle {
   # Shard the cleaned ID map to optimally parallelize GT benchmarking tasks
   Int n_tasks_per_shard = 2 * n_eval_intervals
   Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
-  Int n_sample_shards = if n_naive_sample_splits < total_shards then n_naive_sample_splits else total_shards
+  Int n_floored_sample_splits = if n_naive_sample_splits <= 1 then 1 else n_naive_sample_splits
+  Int n_sample_shards = if n_naive_sample_splits < total_shards then n_floored_sample_splits else total_shards
   call Utils.ShardTextFile as ShardSamples {
     input:
       input_file = SubsetTargetVcf.filtered_id_map,
