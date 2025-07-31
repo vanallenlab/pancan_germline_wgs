@@ -12,7 +12,7 @@ version 1.0
 
 
 import "BenchmarkSitesSingle.wdl" as BenchSingle
-import "Utilities.wdl" as Utils
+import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkSites {

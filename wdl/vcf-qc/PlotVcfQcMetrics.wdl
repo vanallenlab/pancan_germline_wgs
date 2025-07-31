@@ -12,7 +12,7 @@ version 1.0
 
 import "PrepSiteBenchDataToPlot.wdl" as PSB
 import "QcTasks.wdl" as QcTasks
-import "Utilities.wdl" as Utils
+import "../Utilities.wdl" as Utils
 
 
 workflow PlotVcfQcMetrics {

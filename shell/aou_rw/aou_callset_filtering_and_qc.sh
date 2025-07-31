@@ -44,8 +44,7 @@ mv code/refs/json/aou.cromwell_options.default.json2 \
 
 # Create dependencies .zip for workflow submissions
 cd code/wdl/pancan_germline_wgs && \
-cp vcf-qc/*.wdl ./ && \
-zip g2c.dependencies.zip *.wdl && \
+zip -r g2c.dependencies.zip * && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
 

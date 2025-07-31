@@ -15,7 +15,7 @@ version 1.0
 
 import "BenchmarkSites.wdl" as SiteBench
 import "QcTasks.wdl" as QcTasks
-import "Utilities.wdl" as Utils
+import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkSamplesSingle {
@@ -112,14 +112,17 @@ workflow BenchmarkSamplesSingle {
   Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
   Int n_floored_sample_splits = if n_naive_sample_splits <= 1 then 1 else n_naive_sample_splits
   Int n_sample_shards = if n_naive_sample_splits < total_shards then n_floored_sample_splits else total_shards
-  call Utils.ShardTextFile as ShardSamples {
-    input:
-      input_file = SubsetTargetVcf.filtered_id_map,
-      n_splits = n_sample_shards,
-      out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
-      shuffle = true,
-      g2c_analysis_docker = g2c_analysis_docker
+  if ( n_sample_shards > 1 ) {
+    call Utils.ShardTextFile as ShardSamples {
+      input:
+        input_file = SubsetTargetVcf.filtered_id_map,
+        n_splits = n_sample_shards,
+        out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
+        shuffle = true,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
+  Array[File] sample_shards = select_first([ShardSamples.shards, [SubsetTargetVcf.filtered_id_map]])
 
   # Keep benchmarking results separate for each evaluation interval set
   scatter ( i in range(n_eval_intervals) ) {
@@ -131,13 +134,13 @@ workflow BenchmarkSamplesSingle {
     String sens_prefix = "~{ei_prefix}.~{target_prefix}.~{source_prefix}"
     
     # Scatter over samples and perform benchmarking on each
-    scatter ( k in range(length(ShardSamples.shards)) ) {
+    scatter ( k in range(length(sample_shards)) ) {
 
       # Benchmark PPV (source -> target)
       call QcTasks.BenchmarkGenotypes as BenchGtPpv {
         input:
           variant_id_map = select_all(BenchmarkSites.ppv_variant_id_maps)[i],
-          sample_id_map = ShardSamples.shards[k],
+          sample_id_map = sample_shards[k],
           invert_sample_map = false,
           output_prefix = "~{ppv_prefix}.~{k}",
           source_gt_tarball = source_gt_tarball,
@@ -151,7 +154,7 @@ workflow BenchmarkSamplesSingle {
       call QcTasks.BenchmarkGenotypes as BenchGtSens {
         input:
           variant_id_map = select_all(BenchmarkSites.sensitivity_variant_id_maps)[i],
-          sample_id_map = ShardSamples.shards[k],
+          sample_id_map = sample_shards[k],
           invert_sample_map = true,
           output_prefix = "~{sens_prefix}.~{k}",
           source_gt_tarball = MakeTargetGtTarball.genotypes_tarball,

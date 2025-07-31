@@ -12,6 +12,8 @@
 
 # Note that this code is designed to be run *locally* (not on RW)
 
+set -eu -o pipefail
+
 # Set up local working directory
 WRKDIR=`mktemp -d`
 cd $WRKDIR

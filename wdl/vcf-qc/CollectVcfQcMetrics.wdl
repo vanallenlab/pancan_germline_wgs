@@ -14,7 +14,7 @@ import "BenchmarkSites.wdl" as BenchSites
 import "BenchmarkTrios.wdl" as BenchTrios
 import "BenchmarkTwins.wdl" as BenchTwins
 import "QcTasks.wdl" as QcTasks
-import "Utilities.wdl" as Utils
+import "../Utilities.wdl" as Utils
 
 
 workflow CollectVcfQcMetrics {

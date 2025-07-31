@@ -10,7 +10,7 @@ version 1.0
 
 
 import "QcTasks.wdl" as QcTasks
-import "Utilities.wdl" as Utils
+import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkTwins {

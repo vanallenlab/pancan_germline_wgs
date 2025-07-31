@@ -55,9 +55,6 @@ target.splits <- args$options$targetSplits
 #######################
 #####Sanity check input
 #######################
-# n.modes.set <- length(which(!sapply(c(min.lines,max.lines,target.lines,
-#                                        min.splits,max.splits,target.splits),
-#                                     is.null)))
 n.modes.set <- length(which(!sapply(c(target.lines, target.splits), is.null)))
 
 if(n.modes.set < 1 ){
@@ -131,7 +128,10 @@ if(!quiet){
 #Set start and stop lines for splits
 splits.df$start <- NA
 splits.df$end <- cumsum(splits.df$lines)
-splits.df$start <- c(1,splits.df$end[1:(nrow(splits.df)-1)]+1)
+splits.df$start[1] <- 1
+if(nlines > 1){
+  splits.df$start <- c(1,splits.df$end[1:(nrow(splits.df)-1)]+1)
+}
 
 #Iterate over splits and write to file
 apply(splits.df, 1, function(vals){
