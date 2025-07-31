@@ -5,6 +5,11 @@
 
 # Generic WDL tasks used for VCF quality control
 
+# Note that due to discrepancies in how cromshell and Dockstore handle
+# resolve relative imports, some functions here were duplicated 
+# from Utilities.wdl in the parent wdl/ subdirectory; this was 
+# deemed the "least bad" solution to this problem given our constraints
+
 
 version 1.0
 
@@ -318,6 +323,131 @@ task ConcatGenotypeTsvs {
 }
 
 
+task ConcatTextFiles {
+  input {
+    Array[File] shards
+    String concat_command = "cat"
+    String? sort_command
+    String? compression_command
+    Boolean input_has_header = false
+    String output_filename
+
+    Float mem_gb = 1.75
+    Int n_cpu = 1
+    String docker
+  }
+
+  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
+  String sort = if defined(sort_command) then " | " + select_first([sort_command, ""]) else ""
+  String compress = if defined(compression_command) then " | " + select_first([compression_command, ""]) else ""
+  String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
+
+  command <<<
+    set -eu -o pipefail
+
+    if [ "~{input_has_header}" == "true" ]; then
+      ~{concat_command} ~{shards[0]} \
+      | head -n1 > header.txt || true
+    else
+      touch header.txt
+    fi
+
+    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename} || true
+  >>>
+
+  output {
+    File merged_file = "~{output_filename}"
+  }
+
+  runtime {
+    docker: docker
+    memory: "~{mem_gb} GB"
+    cpu: n_cpu
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
+# Duplicated from Utilities.wdl
+task ConcatVcfs {
+  input {
+    Array[File] vcfs
+    Array[File] vcf_idxs
+    String out_prefix
+
+    String bcftools_concat_options = ""
+
+    Float mem_gb = 3.5
+    Int cpu_cores = 2
+    Int? disk_gb
+
+    String bcftools_docker
+  }
+
+  String out_filename = out_prefix + ".vcf.gz"
+
+  Int default_disk_gb = ceil(2.5 * size(vcfs, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools concat \
+      ~{bcftools_concat_options} \
+      --file-list ~{write_lines(vcfs)} \
+      -O z \
+      -o ~{out_filename} \
+      --threads ~{cpu_cores}
+
+    tabix -p vcf -f ~{out_filename}
+  >>>
+
+  output {
+    File merged_vcf = "~{out_filename}"
+    File merged_vcf_idx = "~{out_filename}.tbi"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: mem_gb + " GB"
+    cpu: cpu_cores
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 3
+  }
+}
+
+
+task GetSamplesFromVcfHeader {
+  input {
+    File vcf
+    File vcf_idx
+    String bcftools_docker
+  }
+
+  String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools query -l ~{vcf} > ~{out_filename}
+  >>>
+
+  output {
+    File sample_list = out_filename
+    Int n_samples = length(read_lines(out_filename))
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 # Make an empty text file as a placeholder
 task MakeDummyFile {
   input {}
@@ -335,6 +465,182 @@ task MakeDummyFile {
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk 15 HDD"
+    preemptible: 3
+  }
+}
+
+
+# Make an empty benchmark bed to backfill for missing values in optional arrays
+task MakeEmptyBenchBed {
+  input {
+    String docker
+    String header_format = "site"
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    if [ "~{header_format}" == "site" ]; then
+      echo -e "#chrom\tstart\tend\tvid\tclass\tsubclass\tsize\tac\taf\tfreq_het\tfreq_hom\thwe" \
+      | bgzip -c > dummy.bed.gz
+    fi
+  >>>
+
+  output {
+    File empty_bed = "dummy.bed.gz"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.5 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+  }
+}
+
+
+task MakeHeaderFiller {
+  input {}
+
+  command <<<
+    set -eu -o pipefail
+
+    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" > header.supp.vcf
+    echo "##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description=\"Predicted copy state\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Het,Number=A,Type=Integer,Description=\"Heterozygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Hom,Number=A,Type=Integer,Description=\"Homozygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=AC_Hemi,Number=A,Type=Integer,Description=\"Hemizygous allele counts\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
+    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
+    echo "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" >> header.supp.vcf
+    echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
+    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
+    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" >> header.supp.vcf
+    
+  >>>
+
+  output {
+    File supp_vcf_header = "header.supp.vcf"
+  }
+
+  runtime {
+    docker: "marketplace.gcr.io/google/ubuntu1804"
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+    max_retries: 1
+  }
+}
+
+
+# Duplicated from Utilities.wdl
+task MakeTabixIndex {
+  input {
+    File input_file
+    String file_type = "vcf"
+    String docker
+    Int n_cpu = 2
+    Float mem_gb = 3.5
+  }
+
+  String outfile = basename(input_file, "gz") + "gz.tbi"
+  Int disk_gb = ceil(1.25 * size(input_file, "GB")) + 20
+
+  command <<<
+    set -eu -o pipefail
+
+    # Due to weirdness with call cacheing and where tabix writes 
+    # indexes by default, it seems safest to relocate the input
+    # file to the pwd before indexing it
+    
+    mv ~{input_file} ./
+    tabix -p ~{file_type} -f ~{basename(input_file)}
+  >>>
+
+  output {
+    File tbi = "~{outfile}"
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Checks a VCF header for fields indicating that it might contain mCNVs
+# Functionally equivalent to StreamedMcnvHeaderCheck, but localizes entire VCF
+# Unable to disable localization_optional in parameter_meta so we must 
+# have two versions of roughly the same function
+task McnvHeaderCheck {
+  input {
+    File vcf
+    File vcf_idx
+    String docker
+  }
+
+  Int disk_gb = ceil(1.5 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools view --header-only ~{vcf} > header.vcf
+
+    # Check for header rows potentially indicative of MCNVs
+    touch mcnv.header.vcf
+    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
+    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
+    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
+    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
+      echo "true" > has_mcnvs.txt
+    else
+      echo "false" > has_mcnvs.txt
+    fi
+  >>>
+
+  output {
+    Boolean has_mcnvs = read_boolean("has_mcnvs.txt")
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+# Parse a GATK-style interval_list and output as Array[[index, interval_string]] for scattering
+# It appears WDL read_tsv does not allow coercion to Pair objects, so we output as Array[Array[String]]
+task ParseIntervals {
+  input {
+    File intervals_list
+    String docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
+    | awk -v OFS="\t" '{ print NR, $0 }' > intervals.clean.tsv
+  >>>
+
+  output {
+    Array[Array[String]] interval_info = read_tsv("intervals.clean.tsv")
+  }
+
+  runtime {
+    docker: docker
+    memory: "2 GB"
+    cpu: 1
+    disks: "local-disk 25 HDD"
     preemptible: 3
   }
 }
@@ -364,7 +670,7 @@ task PrepSites {
   Int loose_min_size = floor(min_size / lenient_size_scalar)
   Int loose_max_size = ceil(lenient_size_scalar * max_size)
 
-  Int disk_gb = ceil(2 * size(beds, "GB")) + 10
+  Int disk_gb = ceil(3 * size(beds, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
@@ -410,8 +716,8 @@ task PrepSites {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: "1.75 GB"
-    cpu: 1
+    memory: "3.5 GB"
+    cpu: 2
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
@@ -498,67 +804,212 @@ task ShardIntervals {
 }
 
 
-# Make an empty benchmark bed to backfill for missing values in optional arrays
-task MakeEmptyBenchBed {
+task ShardTextFile {
   input {
-    String docker
-    String header_format = "site"
+    File input_file
+    Int n_splits
+    String out_prefix
+    Boolean shuffle = false
+    Float mem_gb = 3.5
+    String g2c_analysis_docker
   }
+
+  Int disk_gb = ceil(3 * size(input_file, "GB")) + 10
+  String shuffle_cmd = if shuffle then "--shuffle" else ""
 
   command <<<
     set -eu -o pipefail
 
-    if [ "~{header_format}" == "site" ]; then
-      echo -e "#chrom\tstart\tend\tvid\tclass\tsubclass\tsize\tac\taf\tfreq_het\tfreq_hom\thwe" \
-      | bgzip -c > dummy.bed.gz
+    if [ ~{n_splits} -gt 1 ]; then
+      /opt/pancan_germline_wgs/scripts/utilities/evenSplitter.R \
+        -S ~{n_splits} \
+        ~{shuffle_cmd} \
+        ~{input_file} \
+        ~{out_prefix}
+    else
+      cp ~{input_file} "~{out_prefix}1"
     fi
   >>>
 
   output {
-    File empty_bed = "dummy.bed.gz"
+    Array[File] shards = glob("~{out_prefix}*")
   }
 
   runtime {
-    docker: docker
-    memory: "1.5 GB"
-    cpu: 1
-    disks: "local-disk 20 HDD"
+    docker: g2c_analysis_docker
+    memory: "~{mem_gb} GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }
 
 
-task MakeHeaderFiller {
-  input {}
+# Duplicated from Utilities.wdl
+task ShardVcf {
+  input {
+    File vcf
+    File vcf_idx
+    Int records_per_shard
+    String bcftools_docker
+    Int? disk_gb
+    Int n_preemptible = 3
+  }
+
+  String out_prefix = basename(vcf, ".vcf.gz") + ".sharded"
+  Int use_disk_gb = select_first([disk_gb, ceil(5 * size(vcf, "GB")) + 20])
 
   command <<<
     set -eu -o pipefail
 
-    echo "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" > header.supp.vcf
-    echo "##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description=\"Predicted copy state\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Het,Number=A,Type=Integer,Description=\"Heterozygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Hom,Number=A,Type=Integer,Description=\"Homozygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=AC_Hemi,Number=A,Type=Integer,Description=\"Hemizygous allele counts\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description=\"Nondip count.\">" >> header.supp.vcf
-    echo "##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description=\"CNV frequency\">" >> header.supp.vcf
-    echo "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" >> header.supp.vcf
-    echo "##INFO=<ID=HWE,Number=A,Type=Float,Description=\"HWE test\">" >> header.supp.vcf
-    echo "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length\">" >> header.supp.vcf
-    echo "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" >> header.supp.vcf
-    
+    # Make an empty shard in case the input VCF is totally empty
+    bcftools view -h ~{vcf} | bgzip -c > "~{out_prefix}.0.vcf.gz"
+
+    bcftools +scatter \
+      -O z3 -o . -p "~{out_prefix}". \
+      -n ~{records_per_shard} \
+      ~{vcf}
+
+    # Print all VCFs to stdout for logging purposes
+    find ./ -name "*.vcf.gz"
+
+    # Index all shards
+    find ./ -name "~{out_prefix}.*.vcf.gz" \
+    | xargs -I {} tabix -p vcf -f {}
   >>>
 
   output {
-    File supp_vcf_header = "header.supp.vcf"
+    Array[File] vcf_shards = glob("~{out_prefix}.*.vcf.gz")
+    Array[File] vcf_shard_idxs = glob("~{out_prefix}.*.vcf.gz.tbi")
   }
 
   runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk 20 HDD"
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + use_disk_gb + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
+    preemptible: n_preemptible
+    maxRetries: 1
+  }
+}
+
+
+# Extract a slice from a VCF with remote indexing rather than localizing the entire file
+task StreamSliceVcf {
+  input {
+    File vcf
+    File vcf_idx
+    String interval
+
+    File? samples_list
+
+    String? outfile_name
+    
+    Int? disk_gb
+    Float mem_gb = 4
+    Int n_cpu = 2
+
+    String bcftools_docker    
+  }
+
+  String outfile = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".sliced.vcf.gz"])
+
+  String samples_cmd = if defined(samples_list) then "--samples-file ~{basename(select_first([samples_list]))} --force-samples" else ""
+
+  Int default_disk_gb = ceil(size(vcf, "GB")) + 10
+  Int hdd_gb = select_first([disk_gb, default_disk_gb])
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    # Parse intervals to set bounds on POS (important for avoiding double-counting SVs)
+    n_int_parts=$( echo "~{interval}" | sed 's/:\|-/\n/g' | wc -l )
+    if [ $n_int_parts -lt 3 ]; then
+      min_pos=-1
+      max_pos=1000000000
+    else
+      min_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f2 )
+      max_pos=$( echo "~{interval}" | sed 's/:\|-/\t/g' | cut -f3 )
+    fi
+
+    # Symlink vcf_idx to current working dir
+    ln -s ~{vcf_idx} .
+
+    # Localize samples list to pwd if provided
+    if [ ~{defined(samples_list)} ]; then
+      cp ~{samples_list} ./
+    fi
+
+    # Stream VCF to interval of interest
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    bcftools view --regions "~{interval}" ~{samples_cmd} ~{vcf} \
+    | awk -v min_pos="$min_pos" -v max_pos="$max_pos" \
+      '{ if ($1 ~ "^#" || ($2 >= min_pos && $2 <= max_pos)) print }' \
+    | bcftools view -Oz -o "~{outfile}"
+
+    # Index slice with tabix
+    tabix -p vcf -f ~{outfile}
+  >>>
+
+  output {
+    File vcf_slice = "~{outfile}"
+    File vcf_slice_idx = "~{outfile}.tbi"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: mem_gb + " GB"
+    cpu: n_cpu
+    disks: "local-disk " + hdd_gb + " HDD"
     preemptible: 3
-    max_retries: 1
+  }
+}
+
+
+task SubsetVcfByVids {
+  input {
+    File vcf
+    File vcf_idx
+    File vids_list
+    String bcftools_docker
+    Int? disk_gb
+    Int n_preemptible = 3
+  }
+
+  String out_fname = basename(vcf, ".vcf.gz") + ".subset.vcf.gz"
+  Int use_disk_gb = select_first([disk_gb, ceil(3 * size(vcf, "GB")) + 20])
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools view \
+      --no-update \
+      --include "ID=@~{vids_list}" \
+      -Oz -o "~{out_fname}" \
+      ~{vcf}
+    tabix -p vcf -f "~{out_fname}"
+  >>>
+
+  output {
+    File subsetted_vcf = out_fname
+    File subsetted_vcf_idx = "~{out_fname}.tbi"
+  }
+
+  runtime {
+    cpu: 2
+    memory: "3.75 GiB"
+    disks: "local-disk " + use_disk_gb + " HDD"
+    bootDiskSizeGb: 10
+    docker: bcftools_docker
+    preemptible: n_preemptible
+    maxRetries: 1
   }
 }
 
@@ -596,4 +1047,5 @@ task SumCompressedDistribs {
     preemptible: 3
   }
 }
+
 

@@ -13,7 +13,6 @@ version 1.0
 
 import "BenchmarkSamplesSingle.wdl" as BenchSingle
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkSamples {
@@ -58,7 +57,7 @@ workflow BenchmarkSamples {
 
   # Collapse source SNV sites
   if ( length(source_snv_beds_nonull) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseSourceSnvs {
+    call QcTasks.ConcatTextFiles as CollapseSourceSnvs {
       input:
         shards = source_snv_beds_nonull,
         concat_command = "zcat",
@@ -73,7 +72,7 @@ workflow BenchmarkSamples {
 
   # Collapse source indel sites
   if ( length(source_indel_beds_nonull) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseSourceIndels {
+    call QcTasks.ConcatTextFiles as CollapseSourceIndels {
       input:
         shards = source_indel_beds_nonull,
         concat_command = "zcat",
@@ -88,7 +87,7 @@ workflow BenchmarkSamples {
 
   # Collapse source SV sites
   if ( length(source_sv_beds_nonull) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseSourceSvs {
+    call QcTasks.ConcatTextFiles as CollapseSourceSvs {
       input:
         shards = source_sv_beds_nonull,
         concat_command = "zcat",
@@ -103,7 +102,7 @@ workflow BenchmarkSamples {
 
   # Collapse all source site metrics unless already provided
   if ( !defined(source_all_sites_bed) ) {
-    call Utils.ConcatTextFiles as CollapseAllSourceVars {
+    call QcTasks.ConcatTextFiles as CollapseAllSourceVars {
       input:
         shards = select_all([source_snv_bed, source_indel_bed, source_sv_bed]),
         concat_command = "zcat",

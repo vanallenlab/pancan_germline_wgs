@@ -12,7 +12,7 @@ version 1.0
 
 
 import "BenchmarkSitesSingle.wdl" as BenchSingle
-import "../Utilities.wdl" as Utils
+import "QcTasks.wdl" as QcTasks
 
 
 workflow BenchmarkSites {
@@ -49,7 +49,7 @@ workflow BenchmarkSites {
 
   # Index SNV BEDs
   if ( defined(source_snv_bed) ){
-    call Utils.MakeTabixIndex as IndexSourceSnvs {
+    call QcTasks.MakeTabixIndex as IndexSourceSnvs {
       input:
         input_file = select_first([source_snv_bed]),
         file_type = "bed",
@@ -57,7 +57,7 @@ workflow BenchmarkSites {
     }
   }
   if ( defined(target_snv_bed) ){
-    call Utils.MakeTabixIndex as IndexTargetSnvs {
+    call QcTasks.MakeTabixIndex as IndexTargetSnvs {
       input:
         input_file = select_first([target_snv_bed]),
         file_type = "bed",
@@ -68,7 +68,7 @@ workflow BenchmarkSites {
 
   # Index indel BEDs
   if ( defined(source_indel_bed) ){
-    call Utils.MakeTabixIndex as IndexSourceIndels {
+    call QcTasks.MakeTabixIndex as IndexSourceIndels {
       input:
         input_file = select_first([source_indel_bed]),
         file_type = "bed",
@@ -76,7 +76,7 @@ workflow BenchmarkSites {
     }
   }
   if ( defined(target_indel_bed) ){
-    call Utils.MakeTabixIndex as IndexTargetIndels {
+    call QcTasks.MakeTabixIndex as IndexTargetIndels {
       input:
         input_file = select_first([target_indel_bed]),
         file_type = "bed",
@@ -87,7 +87,7 @@ workflow BenchmarkSites {
 
   # Index SV BEDs
   if ( defined(source_sv_bed) ){
-    call Utils.MakeTabixIndex as IndexSourceSvs {
+    call QcTasks.MakeTabixIndex as IndexSourceSvs {
       input:
         input_file = select_first([source_sv_bed]),
         file_type = "bed",
@@ -95,7 +95,7 @@ workflow BenchmarkSites {
     }
   }
   if ( defined(target_sv_bed) ){
-    call Utils.MakeTabixIndex as IndexTargetSvs {
+    call QcTasks.MakeTabixIndex as IndexTargetSvs {
       input:
         input_file = select_first([target_sv_bed]),
         file_type = "bed",
@@ -148,7 +148,7 @@ workflow BenchmarkSites {
   # Detect runs of false positive/negative SNVs
   Array[File] all_common_snv_ppv_beds = select_all(BenchmarkTask.common_snv_ppv_bed)
   if ( length(all_common_snv_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvPpvBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonSnvPpvBeds {
       input:
         shards = all_common_snv_ppv_beds,
         concat_command = "zcat",
@@ -169,7 +169,7 @@ workflow BenchmarkSites {
   }
   Array[File] all_common_snv_sens_beds = select_all(BenchmarkTask.common_snv_sens_bed)
   if ( length(all_common_snv_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvSensBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonSnvSensBeds {
       input:
         shards = all_common_snv_sens_beds,
         concat_command = "zcat",
@@ -193,7 +193,7 @@ workflow BenchmarkSites {
   # Detect runs of false positive/negative indels
   Array[File] all_common_indel_ppv_beds = select_all(BenchmarkTask.common_indel_ppv_bed)
   if ( length(all_common_indel_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndelPpvBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonIndelPpvBeds {
       input:
         shards = all_common_indel_ppv_beds,
         concat_command = "zcat",
@@ -214,7 +214,7 @@ workflow BenchmarkSites {
   }
   Array[File] all_common_indel_sens_beds = select_all(BenchmarkTask.common_indel_sens_bed)
   if ( length(all_common_indel_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndelSensBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonIndelSensBeds {
       input:
         shards = all_common_indel_sens_beds,
         concat_command = "zcat",
@@ -238,7 +238,7 @@ workflow BenchmarkSites {
   # Detect runs of false positive/negative SVs
   Array[File] all_common_sv_ppv_beds = select_all(BenchmarkTask.common_sv_ppv_bed)
   if ( length(all_common_sv_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvPpvBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonSvPpvBeds {
       input:
         shards = all_common_sv_ppv_beds,
         concat_command = "zcat",
@@ -259,7 +259,7 @@ workflow BenchmarkSites {
   }
   Array[File] all_common_sv_sens_beds = select_all(BenchmarkTask.common_sv_sens_bed)
   if ( length(all_common_sv_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvSensBeds {
+    call QcTasks.ConcatTextFiles as CollapseCommonSvSensBeds {
       input:
         shards = all_common_sv_sens_beds,
         concat_command = "zcat",

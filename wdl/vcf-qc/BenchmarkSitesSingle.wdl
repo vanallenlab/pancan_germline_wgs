@@ -14,7 +14,6 @@ version 1.0
 
 
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkSitesSingle {
@@ -232,7 +231,7 @@ workflow BenchmarkSitesSingle {
   # Collapse SNV common site comparisons
   Array[File] common_snv_ppv_beds = select_all(CompareSnvPpv.common_sites_bed)
   if ( length(common_snv_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvPpvSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonSnvPpvSites {
       input:
         shards = common_snv_ppv_beds,
         concat_command = "zcat",
@@ -247,7 +246,7 @@ workflow BenchmarkSitesSingle {
   }
   Array[File] common_snv_sens_beds = select_all(CompareSnvSens.common_sites_bed)
   if ( length(common_snv_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvSensSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonSnvSensSites {
       input:
         shards = common_snv_sens_beds,
         concat_command = "zcat",
@@ -264,7 +263,7 @@ workflow BenchmarkSitesSingle {
   # Collapse indel common site comparisons
   Array[File] common_indel_ppv_beds = select_all(CompareIndelPpv.common_sites_bed)
   if ( length(common_indel_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndelPpvSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonIndelPpvSites {
       input:
         shards = common_indel_ppv_beds,
         concat_command = "zcat",
@@ -279,7 +278,7 @@ workflow BenchmarkSitesSingle {
   }
   Array[File] common_indel_sens_beds = select_all(CompareIndelSens.common_sites_bed)
   if ( length(common_indel_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndelSensSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonIndelSensSites {
       input:
         shards = common_indel_sens_beds,
         concat_command = "zcat",
@@ -296,7 +295,7 @@ workflow BenchmarkSitesSingle {
   # Collapse SV common site comparisons
   Array[File] common_sv_ppv_beds = select_all(CompareSvPpv.common_sites_bed)
   if ( length(common_sv_ppv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvPpvSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonSvPpvSites {
       input:
         shards = common_sv_ppv_beds,
         concat_command = "zcat",
@@ -311,7 +310,7 @@ workflow BenchmarkSitesSingle {
   }
   Array[File] common_sv_sens_beds = select_all(CompareSvSens.common_sites_bed)
   if ( length(common_sv_sens_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvSensSites {
+    call QcTasks.ConcatTextFiles as CollapseCommonSvSensSites {
       input:
         shards = common_sv_sens_beds,
         concat_command = "zcat",
@@ -371,7 +370,7 @@ workflow BenchmarkSitesSingle {
     Array[File] all_ppv_shards = select_all(flatten([select_all(CompareSnvPpv.all_sites_bed),
                                                      select_all(CompareIndelPpv.all_sites_bed),
                                                      select_all(CompareSvPpv.all_sites_bed)]))
-    call Utils.ConcatTextFiles as CollapseAllPpvSites {
+    call QcTasks.ConcatTextFiles as CollapseAllPpvSites {
       input:
         shards = all_ppv_shards,
         concat_command = "zcat",
@@ -386,7 +385,7 @@ workflow BenchmarkSitesSingle {
     Array[File] all_sens_shards = select_all(flatten([select_all(CompareSnvSens.all_sites_bed),
                                                      select_all(CompareIndelSens.all_sites_bed),
                                                      select_all(CompareSvSens.all_sites_bed)]))
-    call Utils.ConcatTextFiles as CollapseAllSensSites {
+    call QcTasks.ConcatTextFiles as CollapseAllSensSites {
       input:
         shards = all_sens_shards,
         concat_command = "zcat",

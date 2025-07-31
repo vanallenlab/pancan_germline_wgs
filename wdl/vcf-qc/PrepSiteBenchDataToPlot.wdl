@@ -12,7 +12,6 @@ version 1.0
 
 
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow PrepSiteBenchDataToPlot {
@@ -54,7 +53,7 @@ workflow PrepSiteBenchDataToPlot {
     if (n_snv_beds > 0) {
       Array[File] sb_common_snv_preflat = select_all(common_snv_ppv_beds[sbi])
       if ( n_snv_beds > 1 ) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchSnvs {
+        call QcTasks.ConcatTextFiles as CollapseSiteBenchSnvs {
           input:
             shards = sb_common_snv_preflat,
             concat_command = "zcat",
@@ -73,7 +72,7 @@ workflow PrepSiteBenchDataToPlot {
     if (n_indel_beds > 0) {
       Array[File] sb_common_indel_preflat = select_all(common_indel_ppv_beds[sbi])
       if ( n_indel_beds > 1 ) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchIndels {
+        call QcTasks.ConcatTextFiles as CollapseSiteBenchIndels {
           input:
             shards = sb_common_indel_preflat,
             concat_command = "zcat",
@@ -92,7 +91,7 @@ workflow PrepSiteBenchDataToPlot {
     if (n_sv_beds > 0) {
       Array[File] sb_common_sv_preflat = select_all(common_sv_ppv_beds[sbi])
       if ( n_sv_beds > 1 ) {
-        call Utils.ConcatTextFiles as CollapseSiteBenchSvs {
+        call QcTasks.ConcatTextFiles as CollapseSiteBenchSvs {
           input:
             shards = sb_common_sv_preflat,
             concat_command = "zcat",
@@ -134,7 +133,7 @@ workflow PrepSiteBenchDataToPlot {
   if ( n_snv_beds_any > 0 ) {
     Array[File] sb_common_snv_flat_array = select_all(sb_common_snv_flat)
     if ( length(sb_common_snv_flat_array) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
+      call QcTasks.ConcatTextFiles as CollapseSiteBenchSnvsUnion {
         input:
           shards = sb_common_snv_flat_array,
           concat_command = "zcat",
@@ -153,7 +152,7 @@ workflow PrepSiteBenchDataToPlot {
   if ( n_indel_beds_any > 0 ) {
     Array[File] sb_common_indel_flat_array = select_all(sb_common_indel_flat)
     if ( length(sb_common_indel_flat_array) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
+      call QcTasks.ConcatTextFiles as CollapseSiteBenchIndelsUnion {
         input:
           shards = sb_common_indel_flat_array,
           concat_command = "zcat",
@@ -172,7 +171,7 @@ workflow PrepSiteBenchDataToPlot {
   if ( n_sv_beds_any > 0 ) {
     Array[File] sb_common_sv_flat_array = select_all(sb_common_sv_flat)
     if ( length(sb_common_sv_flat_array) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseSiteBenchSvsUnion {
+      call QcTasks.ConcatTextFiles as CollapseSiteBenchSvsUnion {
         input:
           shards = sb_common_sv_flat_array,
           concat_command = "zcat",

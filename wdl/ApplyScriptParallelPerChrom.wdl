@@ -15,6 +15,7 @@ import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/w
 workflow ApplyScriptParallelPerChrom {
   input {
     File vcf
+    File vcf_idx
     File script                      # User-supplied script staged in a google bucket. Must take input and output VCFs as final two positional arguments 
     String? out_vcf_prefix
 
@@ -22,7 +23,6 @@ workflow ApplyScriptParallelPerChrom {
     String script_options = ""       # Any other command-line options to be passed to the script
     Array[String?] script_files      # Files needed by script to be localized to execution directory
 
-    File? vcf_idx                    # Recommended but not strictly required
     File? ref_fai                    # Used to determine contigs for parallelization. By default will take all contigs in vcf header
     String? bcftools_concat_options 
 

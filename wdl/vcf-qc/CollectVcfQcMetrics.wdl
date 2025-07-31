@@ -14,7 +14,6 @@ import "BenchmarkSites.wdl" as BenchSites
 import "BenchmarkTrios.wdl" as BenchTrios
 import "BenchmarkTwins.wdl" as BenchTwins
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow CollectVcfQcMetrics {
@@ -86,7 +85,7 @@ workflow CollectVcfQcMetrics {
   # Get list of samples present in input VCFs
   # Uses the last input VCF, assuming it will be the smallest in most cases
   Int last_vcf_index = length(vcfs) - 1
-  call Utils.GetSamplesFromVcfHeader as GetSamplesInVcf {
+  call QcTasks.GetSamplesFromVcfHeader as GetSamplesInVcf {
     input:
       vcf = vcfs[last_vcf_index],
       vcf_idx = vcf_idxs[last_vcf_index],
@@ -135,7 +134,7 @@ workflow CollectVcfQcMetrics {
 
   # Read scatter intervals, if optioned
   if ( defined(scatter_intervals_list) ) {
-    call Utils.ParseIntervals {
+    call QcTasks.ParseIntervals {
       input:
         intervals_list = select_first([scatter_intervals_list]),
         docker = linux_docker
@@ -150,7 +149,7 @@ workflow CollectVcfQcMetrics {
     File vcf_idx = input_vcf_info.right
 
     # Check the header of each input VCF for the presence of mCNVs
-    call Utils.McnvHeaderCheck as McnvCheck {
+    call QcTasks.McnvHeaderCheck as McnvCheck {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
@@ -167,7 +166,7 @@ workflow CollectVcfQcMetrics {
           String shard_prefix = basename(vcf, ".vcf.gz") + "." + interval_info[0]
 
           # Extract desired interval from VCF
-          call Utils.StreamSliceVcf as SliceInterval {
+          call QcTasks.StreamSliceVcf as SliceInterval {
             input:
               vcf = vcf,
               vcf_idx = vcf_idx, 
@@ -182,7 +181,7 @@ workflow CollectVcfQcMetrics {
       if ( !defined(scatter_intervals_list) ) {
 
         # Shard VCF on a VM (costly & slow for large VCFs)
-        call Utils.ShardVcf {
+        call QcTasks.ShardVcf {
           input:
             vcf = vcf,
             vcf_idx = vcf_idx,
@@ -279,7 +278,7 @@ workflow CollectVcfQcMetrics {
 
     # Subset dense VCF to common variants 
     # (defined from all unrelated site freqs)
-    call Utils.SubsetVcfByVids as CommonFilterDenseVcf {
+    call QcTasks.SubsetVcfByVids as CommonFilterDenseVcf {
       input:
         vcf = dense_vcf_shard,
         vcf_idx = dense_vcf_shard_idx,
@@ -305,7 +304,7 @@ workflow CollectVcfQcMetrics {
   # Collapse all SNV sites
   Array[File] all_snv_beds = select_all(CollectSiteMetrics.snv_sites)
   if ( length(all_snv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseAllSnvs {
+    call QcTasks.ConcatTextFiles as CollapseAllSnvs {
       input:
         shards = all_snv_beds,
         concat_command = "zcat",
@@ -320,7 +319,7 @@ workflow CollectVcfQcMetrics {
   # Collapse common SNV sites
   Array[File] common_snv_beds = select_all(CollectSiteMetrics.common_snv_sites)
   if ( length(common_snv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSnvs {
+    call QcTasks.ConcatTextFiles as CollapseCommonSnvs {
       input:
         shards = common_snv_beds,
         concat_command = "zcat",
@@ -335,7 +334,7 @@ workflow CollectVcfQcMetrics {
   # Collapse all indel sites
   Array[File] all_indel_beds = select_all(CollectSiteMetrics.indel_sites)
   if ( length(all_indel_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseAllIndels {
+    call QcTasks.ConcatTextFiles as CollapseAllIndels {
       input:
         shards = all_indel_beds,
         concat_command = "zcat",
@@ -350,7 +349,7 @@ workflow CollectVcfQcMetrics {
   # Collapse common indel sites
   Array[File] common_indel_beds = select_all(CollectSiteMetrics.common_indel_sites)
   if ( length(common_indel_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonIndels {
+    call QcTasks.ConcatTextFiles as CollapseCommonIndels {
       input:
         shards = common_indel_beds,
         concat_command = "zcat",
@@ -365,7 +364,7 @@ workflow CollectVcfQcMetrics {
   # Collapse all SV sites
   Array[File] all_sv_beds = select_all(CollectSiteMetrics.sv_sites)
   if ( length(all_sv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseAllSvs {
+    call QcTasks.ConcatTextFiles as CollapseAllSvs {
       input:
         shards = all_sv_beds,
         concat_command = "zcat",
@@ -380,7 +379,7 @@ workflow CollectVcfQcMetrics {
   # Collapse common SV sites
   Array[File] common_sv_beds = select_all(CollectSiteMetrics.common_sv_sites)
   if ( length(common_sv_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseCommonSvs {
+    call QcTasks.ConcatTextFiles as CollapseCommonSvs {
       input:
         shards = common_sv_beds,
         concat_command = "zcat",
@@ -406,7 +405,7 @@ workflow CollectVcfQcMetrics {
   Array[File] dense_sv_site_shards = select_all(select_first([DenseSiteMetrics.sv_sites, [empty_bed]]))
   Array[File] all_dense_sites_beds = flatten([dense_snv_site_shards, dense_indel_site_shards, dense_sv_site_shards])
   if ( length(all_dense_sites_beds) > 0 ) {
-    call Utils.ConcatTextFiles as CollapseDenseSiteMetrics {
+    call QcTasks.ConcatTextFiles as CollapseDenseSiteMetrics {
       input:
         shards = all_dense_sites_beds,
         concat_command = "zcat",
@@ -420,7 +419,7 @@ workflow CollectVcfQcMetrics {
 
   # Concatenate dense common VCFs
   # Necessary for LD comparisons (need all variants in a single file)
-  call Utils.ConcatVcfs as ConcatCommonVcfs {
+  call QcTasks.ConcatVcfs as ConcatCommonVcfs {
     input:
       vcfs = CommonFilterDenseVcf.subsetted_vcf,
       vcf_idxs = CommonFilterDenseVcf.subsetted_vcf_idx,

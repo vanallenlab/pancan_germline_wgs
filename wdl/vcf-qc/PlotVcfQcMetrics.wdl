@@ -12,7 +12,6 @@ version 1.0
 
 import "PrepSiteBenchDataToPlot.wdl" as PSB
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow PlotVcfQcMetrics {
@@ -171,7 +170,7 @@ workflow PlotVcfQcMetrics {
   # If necessary, collapse all SV BEDs
   if ( defined(all_sv_beds) ) {
     if ( length(select_first(select_all([all_sv_beds]))) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseAllSvs {
+      call QcTasks.ConcatTextFiles as CollapseAllSvs {
         input:
           shards = select_first([all_sv_beds]),
           concat_command = "zcat",
@@ -189,7 +188,7 @@ workflow PlotVcfQcMetrics {
   # If necessary, collapse common SNV BEDs
   if ( defined(common_snv_beds) ) {
     if ( length(select_first(select_all([common_snv_beds]))) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseCommonSnvs {
+      call QcTasks.ConcatTextFiles as CollapseCommonSnvs {
         input:
           shards = select_first([common_snv_beds]),
           concat_command = "zcat",
@@ -207,7 +206,7 @@ workflow PlotVcfQcMetrics {
   # If necessary, collapse common indel BEDs
   if ( defined(common_indel_beds) ) {
     if ( length(select_first(select_all([common_indel_beds]))) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseCommonIndels {
+      call QcTasks.ConcatTextFiles as CollapseCommonIndels {
         input:
           shards = select_first([common_indel_beds]),
           concat_command = "zcat",
@@ -225,7 +224,7 @@ workflow PlotVcfQcMetrics {
   # If necessary, collapse common SV BEDs
   if ( defined(common_sv_beds) ) {
     if ( length(select_first(select_all([common_sv_beds]))) > 1 ) {
-      call Utils.ConcatTextFiles as CollapseCommonSvs {
+      call QcTasks.ConcatTextFiles as CollapseCommonSvs {
         input:
           shards = select_first([common_sv_beds]),
           concat_command = "zcat",
@@ -254,7 +253,7 @@ workflow PlotVcfQcMetrics {
 
   # If necessary, collapse peak LD stats
   if ( length(peak_ld_stat_tsvs) > 1 ) {
-    call Utils.ConcatTextFiles as CollapseLdStats {
+    call QcTasks.ConcatTextFiles as CollapseLdStats {
       input:
         shards = peak_ld_stat_tsvs,
         concat_command = "zcat",
@@ -263,9 +262,9 @@ workflow PlotVcfQcMetrics {
         input_has_header = true,
         output_filename = output_prefix + ".peak_ld_stats.tsv.gz",
         docker = linux_docker
-      }
+    }
   }
-  File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsvs[0])
+  File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsvs[0]])
 
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {

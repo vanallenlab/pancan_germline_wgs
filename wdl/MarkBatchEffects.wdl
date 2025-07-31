@@ -16,6 +16,7 @@ import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/w
 workflow MarkBatchEffects {
   input {
     File vcf
+    File vcf_idx
     File group_membership_tsv             # Two-column .tsv mapping group names (e.g., baches, cohorts) to sample IDs. One line per sample.
 
     # Parameters for mark_batch_effects.py
@@ -28,7 +29,6 @@ workflow MarkBatchEffects {
     String? custom_info_flag_id
 
     # Other options
-    File? vcf_idx                         # Recommended but not strictly required
     File? ref_fai                         # Used to determine contigs for parallelization. By default will take all contigs in vcf header
     String? out_vcf_prefix
 

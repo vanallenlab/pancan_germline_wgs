@@ -10,7 +10,6 @@ version 1.0
 
 
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkTrios {
@@ -34,7 +33,7 @@ workflow BenchmarkTrios {
   }
 
   # Index sites BED
-  call Utils.MakeTabixIndex as IndexSites {
+  call QcTasks.MakeTabixIndex as IndexSites {
     input:
       input_file = sites_bed,
       file_type = "bed",

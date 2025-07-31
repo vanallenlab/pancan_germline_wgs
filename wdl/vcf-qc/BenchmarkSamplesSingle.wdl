@@ -15,7 +15,6 @@ version 1.0
 
 import "BenchmarkSites.wdl" as SiteBench
 import "QcTasks.wdl" as QcTasks
-import "../Utilities.wdl" as Utils
 
 
 workflow BenchmarkSamplesSingle {
@@ -113,7 +112,7 @@ workflow BenchmarkSamplesSingle {
   Int n_floored_sample_splits = if n_naive_sample_splits <= 1 then 1 else n_naive_sample_splits
   Int n_sample_shards = if n_naive_sample_splits < total_shards then n_floored_sample_splits else total_shards
   if ( n_sample_shards > 1 ) {
-    call Utils.ShardTextFile as ShardSamples {
+    call QcTasks.ShardTextFile as ShardSamples {
       input:
         input_file = SubsetTargetVcf.filtered_id_map,
         n_splits = n_sample_shards,
