@@ -228,16 +228,31 @@ task SubsetTargetVcf {
 
     # Subset input VCF to overlapping samples
     cut -f2 ~{filtered_map_fname} | sort -V | uniq > target.keep.list
-    bcftools annotate -h ~{supp_header} ~{vcf} \
-    | bcftools view --no-update --samples-file target.keep.list --force-samples \
-    | bcftools view --no-update --include 'GT="alt" | FILTER="MULTIALLELIC"' \
-      -Oz -o ~{filtered_dense_vcf_fname}
-    tabix -p vcf -f ~{filtered_dense_vcf_fname}
+    if [ $( cat target.keep.list | wc -l ) -lt 1 ]; then
 
-    # Make a sites VCF for benchmarking comparison
-    bcftools view --no-update -G \
-      -Oz -o ~{filtered_sites_vcf_fname} \
-      ~{filtered_dense_vcf_fname}
+      # If no overlapping samples exist, make empty VCFs for downstream compatability
+      bcftools view \
+        --header-only -G \
+        -Oz -o ~{filtered_dense_vcf_fname} \
+        ~{vcf}
+      cp ~{filtered_dense_vcf_fname} ~{filtered_sites_vcf_fname}
+    else
+
+      # Make a dense VCF of overlapping samples
+      bcftools annotate -h ~{supp_header} ~{vcf} \
+      | bcftools view --no-update --samples-file target.keep.list --force-samples \
+      | bcftools view --no-update --include 'GT="alt" | FILTER="MULTIALLELIC"' \
+        -Oz -o ~{filtered_dense_vcf_fname}
+
+      # Make a sites VCF for benchmarking comparison
+      bcftools view --no-update -G \
+        -Oz -o ~{filtered_sites_vcf_fname} \
+        ~{filtered_dense_vcf_fname}
+    
+    fi
+
+    # Index both versions of subsetted VCF
+    tabix -p vcf -f ~{filtered_dense_vcf_fname}
     tabix -p vcf -f ~{filtered_sites_vcf_fname}
   >>>
 
