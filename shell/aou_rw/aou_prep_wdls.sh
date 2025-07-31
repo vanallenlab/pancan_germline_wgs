@@ -31,7 +31,7 @@ git clone git@github.com:gatk-workflows/utility-wdls.git
 git clone git@github.com:broadinstitute/warp.git
 
 # Make & populate directory of all WDLs and other reference files
-for dir in wdl wdl/pancan_germline_wgs wdl/gatk-sv wdl/gatk-hc; do
+for dir in wdl wdl/pancan_germline_wgs wdl/gatk-sv wdl/gatk-hc legacy_mingq_wdl; do
   if [ -e $dir ]; then rm -rf $dir; fi
   mkdir $dir
 done
@@ -41,6 +41,12 @@ cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
 cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
 cp utility-wdls/*.wdl $WRKDIR/wdl/gatk-hc/
 cp warp/tasks/broad/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
+
+# Add legacy version of GATK-SV WDLs from most recent branch with working copy of minGQ
+cd gatk-sv && \
+git checkout origin/xz_fixes_3_rlc_mod && \
+cd - > /dev/null && \
+cp gatk-sv/wdl/*.wdl legacy_mingq_wdl/
 
 # Override any GATK WDLs with their corresponding custom G2C copies
 # This is rarely necessary but was deemed the easiest solution for handling 
@@ -58,7 +64,10 @@ gsutil -m cp -r \
   wdl \
   pancan_germline_wgs/refs \
   $rw_bucket/code/
+gsutil -m cp -r \
+  legacy_mingq_wdl \
+  $rw_bucket/misc/
 
 # Clean up
-cd -
+cd - >/dev/null
 rm -rf $WRKDIR

@@ -60,15 +60,17 @@ def main():
     n_fields = len(vbt[0].fields)
 
     # Apply filters to variants and save to --output-bed
-    vbt.filter(lambda x: int(x[6]) >= args.min_size and int(x[6]) <= args.max_size).\
-        filter(lambda x: any((x.start >= tdf.start) & (x.start <= tdf.end))).\
-        coverage(b=tbt).\
-        filter(lambda x: float(x.fields[-1]) >= args.frac_coverage).\
-        cut(range(n_fields)).\
-        saveas(args.output_bed, trackline=header)
+    # Note that per PBT GitHub issue #49, we need to do this in two steps to
+    # avoid OS broken pipe errors
+    vbt2 = vbt.filter(lambda x: int(x[6]) >= args.min_size and int(x[6]) <= args.max_size).\
+               filter(lambda x: any((x.start >= tdf.start) & (x.start <= tdf.end))).\
+               saveas()
+    vbt2.coverage(b=tbt).\
+         filter(lambda x: float(x.fields[-1]) >= args.frac_coverage).\
+         cut(range(n_fields)).\
+         saveas(args.output_bed, trackline=header)
 
 
 if __name__ == '__main__':
     main()
-
 
