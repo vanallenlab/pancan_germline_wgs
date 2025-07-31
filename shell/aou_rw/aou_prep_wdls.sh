@@ -46,7 +46,7 @@ cp warp/tasks/broad/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
 cd gatk-sv && \
 git checkout origin/xz_fixes_3_rlc_mod && \
 cd - > /dev/null && \
-cp gatk-sv/wdl/*.wdl legacy_mingq_wdl/
+cp gatk-sv/wdl/*.wdl $WRKDIR/legacy_mingq_wdl/
 
 # Override any GATK WDLs with their corresponding custom G2C copies
 # This is rarely necessary but was deemed the easiest solution for handling 
@@ -54,6 +54,7 @@ cp gatk-sv/wdl/*.wdl legacy_mingq_wdl/
 # deviated from GATK default procedures (like for outlier sample definition 
 # in SV module 08)
 cp pancan_germline_wgs/wdl/gatk-sv/* $WRKDIR/wdl/gatk-sv/
+mv $WRKDIR/wdl/gatk-sv/Module07MinGQTasks.wdl $WRKDIR/legacy_mingq_wdl/
 cp pancan_germline_wgs/wdl/gatk-hc/* $WRKDIR/wdl/gatk-hc/
 
 # Copy WDLs to AoU RW bucket
