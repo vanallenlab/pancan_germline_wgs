@@ -204,13 +204,13 @@ workflow BenchmarkSamplesSingle {
 
       call MakeEmptyBenchDistrib as MakeDummyPpv {
         input:
-          out_filename = dummy_ppv_prefix + ".gt_comparison.distrib",
+          out_prefix = dummy_ppv_prefix + ".gt_comparison.distrib",
           bcftools_docker = bcftools_docker
       }
 
       call MakeEmptyBenchDistrib as MakeDummySens {
         input:
-          out_filename = dummy_sens_prefix + ".gt_comparison.distrib",
+          out_prefix = dummy_sens_prefix + ".gt_comparison.distrib",
           bcftools_docker = bcftools_docker
       }
     }
@@ -314,7 +314,7 @@ task SubsetTargetVcf {
 
 task MakeEmptyBenchDistrib {
   input {
-    String out_filename
+    String out_prefix
     String bcftools_docker
   }
 
@@ -322,12 +322,12 @@ task MakeEmptyBenchDistrib {
     set -eu -o pipefail
 
     echo -e "#sample\tclass\tsubclass\tfreq_bin\tzygosity\tno_match\tcarrier_match\tgt_match" \
-    | bgzip -c \
-    > ~{out_filename}
+    | gzip -c \
+    > ~{out_prefix}.dummy.tsv.gz
   >>>
 
   output {
-    File dummy_distrib = "~{out_filename}"
+    File dummy_distrib = "~{out_prefix}.dummy.tsv.gz"
   }
 
   runtime {
