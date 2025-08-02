@@ -787,10 +787,10 @@ task ChooseTargetSamples {
     # If probands or duplicates are provided, exclude them from sample universe
     echo -e "THIS_SAMPLE_SHOULD_NEVER_HIT" > site.exclude.samples.list
     if ~{defined(probands_list)}; then
-      cat ~{select_first([probands_list])} >> site.exclude.samples.list || true
+      cat ~{default="" probands_list} >> site.exclude.samples.list || true
     fi
     if ~{defined(duplicate_samples_list)}; then
-      cat ~{select_first([duplicate_samples_list])} >> site.exclude.samples.list || true
+      cat ~{default="" duplicate_samples_list} >> site.exclude.samples.list || true
     fi
     sort -V site.exclude.samples.list | uniq > ~{site_excl_outfile}
 

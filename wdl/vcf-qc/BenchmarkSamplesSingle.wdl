@@ -59,135 +59,168 @@ workflow BenchmarkSamplesSingle {
       bcftools_docker = bcftools_docker
   }
 
-  # Collect site metrics for target VCF
-  call QcTasks.CollectSiteMetrics as TargetVcfToBed {
-    input:
-      vcf = SubsetTargetVcf.filtered_sites_vcf,
-      vcf_idx = SubsetTargetVcf.filtered_sites_vcf_idx,
-      n_samples = SubsetTargetVcf.n_samples_in_original_vcf,
-      common_af_cutoff = common_af_cutoff,
-      g2c_analysis_docker = g2c_analysis_docker
-  }
+  # Only proceed if any overlapping samples were found
+  if ( SubsetTargetVcf.n_overlapping_samples > 0 ) {
 
-  # Run site-level benchmarking to determine mapping of 
-  # matching variant IDs between source & target
-  call SiteBench.BenchmarkSites {
-    input:
-      source_snv_bed = source_snv_bed,
-      source_indel_bed = source_indel_bed,
-      source_sv_bed = source_sv_bed,
-      source_prefix = source_prefix,
-      target_snv_bed = TargetVcfToBed.snv_sites,
-      target_indel_bed = TargetVcfToBed.indel_sites,
-      target_sv_bed = TargetVcfToBed.sv_sites,
-      target_prefix = target_prefix,
-      eval_interval_beds = eval_interval_beds,
-      eval_interval_bed_names = eval_interval_bed_names,
-      genome_file = genome_file,
-      total_shards = total_shards,
-      common_af_cutoff = common_af_cutoff,
-      make_full_id_maps = true,
-      bcftools_docker = bcftools_docker,
-      g2c_analysis_docker = g2c_analysis_docker
-  }
-
-  # Collect sample genotypes for subsetted target VCF
-  call QcTasks.CollectSampleGenotypeMetrics as GatherTargetGts {
-    input:
-      vcf = SubsetTargetVcf.filtered_dense_vcf,
-      vcf_idx = SubsetTargetVcf.filtered_dense_vcf_idx,
-      site_metrics = TargetVcfToBed.all_sites,
-      g2c_analysis_docker = g2c_analysis_docker
-  }
-  call QcTasks.ConcatGenotypeTsvs as MakeTargetGtTarball {
-    input:
-      tsvs = [GatherTargetGts.genotypes_tsv],
-      output_prefix = target_prefix,
-      g2c_analysis_docker = g2c_analysis_docker
-  }
-
-  # Shard the cleaned ID map to optimally parallelize GT benchmarking tasks
-  Int n_tasks_per_shard = 2 * n_eval_intervals
-  Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
-  Int n_floored_sample_splits = if n_naive_sample_splits <= 1 then 1 else n_naive_sample_splits
-  Int n_sample_shards = if n_naive_sample_splits < total_shards then n_floored_sample_splits else total_shards
-  if ( n_sample_shards > 1 ) {
-    call QcTasks.ShardTextFile as ShardSamples {
+    # Collect site metrics for target VCF
+    call QcTasks.CollectSiteMetrics as TargetVcfToBed {
       input:
-        input_file = SubsetTargetVcf.filtered_id_map,
-        n_splits = n_sample_shards,
-        out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
-        shuffle = true,
+        vcf = SubsetTargetVcf.filtered_sites_vcf,
+        vcf_idx = SubsetTargetVcf.filtered_sites_vcf_idx,
+        n_samples = SubsetTargetVcf.n_samples_in_original_vcf,
+        common_af_cutoff = common_af_cutoff,
         g2c_analysis_docker = g2c_analysis_docker
     }
-  }
-  Array[File] sample_shards = select_first([ShardSamples.shards, [SubsetTargetVcf.filtered_id_map]])
 
-  # Keep benchmarking results separate for each evaluation interval set
-  scatter ( i in range(n_eval_intervals) ) {
+    # Run site-level benchmarking to determine mapping of 
+    # matching variant IDs between source & target
+    call SiteBench.BenchmarkSites {
+      input:
+        source_snv_bed = source_snv_bed,
+        source_indel_bed = source_indel_bed,
+        source_sv_bed = source_sv_bed,
+        source_prefix = source_prefix,
+        target_snv_bed = TargetVcfToBed.snv_sites,
+        target_indel_bed = TargetVcfToBed.indel_sites,
+        target_sv_bed = TargetVcfToBed.sv_sites,
+        target_prefix = target_prefix,
+        eval_interval_beds = eval_interval_beds,
+        eval_interval_bed_names = eval_interval_bed_names,
+        genome_file = genome_file,
+        total_shards = total_shards,
+        common_af_cutoff = common_af_cutoff,
+        make_full_id_maps = true,
+        bcftools_docker = bcftools_docker,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
 
-    String ei_prefix = if defined(eval_interval_bed_names)
-                       then flatten(select_all([eval_interval_bed_names]))[i]
-                       else "eval_interval_~{i}"
-    String ppv_prefix = "~{ei_prefix}.~{source_prefix}.~{target_prefix}"
-    String sens_prefix = "~{ei_prefix}.~{target_prefix}.~{source_prefix}"
-    
-    # Scatter over samples and perform benchmarking on each
-    scatter ( k in range(length(sample_shards)) ) {
+    # Collect sample genotypes for subsetted target VCF
+    call QcTasks.CollectSampleGenotypeMetrics as GatherTargetGts {
+      input:
+        vcf = SubsetTargetVcf.filtered_dense_vcf,
+        vcf_idx = SubsetTargetVcf.filtered_dense_vcf_idx,
+        site_metrics = TargetVcfToBed.all_sites,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+    call QcTasks.ConcatGenotypeTsvs as MakeTargetGtTarball {
+      input:
+        tsvs = [GatherTargetGts.genotypes_tsv],
+        output_prefix = target_prefix,
+        g2c_analysis_docker = g2c_analysis_docker
+    }
 
-      # Benchmark PPV (source -> target)
-      call QcTasks.BenchmarkGenotypes as BenchGtPpv {
+    # Shard the cleaned ID map to optimally parallelize GT benchmarking tasks
+    Int n_tasks_per_shard = 2 * n_eval_intervals
+    Int n_naive_sample_splits = ceil(n_tasks_per_shard * SubsetTargetVcf.n_overlapping_samples / min_samples_per_shard)
+    Int n_floored_sample_splits = if n_naive_sample_splits <= 1 then 1 else n_naive_sample_splits
+    Int n_sample_shards = if n_naive_sample_splits < total_shards then n_floored_sample_splits else total_shards
+    if ( n_sample_shards > 1 ) {
+      call QcTasks.ShardTextFile as ShardSamples {
         input:
-          variant_id_map = select_all(BenchmarkSites.ppv_variant_id_maps)[i],
-          sample_id_map = sample_shards[k],
-          invert_sample_map = false,
-          output_prefix = "~{ppv_prefix}.~{k}",
-          source_gt_tarball = source_gt_tarball,
-          target_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
-          source_site_metrics = source_all_sites_bed,
-          common_af_cutoff = common_af_cutoff,
+          input_file = SubsetTargetVcf.filtered_id_map,
+          n_splits = n_sample_shards,
+          out_prefix = "~{source_prefix}.~{target_prefix}.gt_bench.id_map_shard",
+          shuffle = true,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+    Array[File] sample_shards = select_first([ShardSamples.shards, [SubsetTargetVcf.filtered_id_map]])
+
+    # Keep benchmarking results separate for each evaluation interval set
+    scatter ( i in range(n_eval_intervals) ) {
+
+      String ei_prefix = if defined(eval_interval_bed_names)
+                         then flatten(select_all([eval_interval_bed_names]))[i]
+                         else "eval_interval_~{i}"
+      String ppv_prefix = "~{ei_prefix}.~{source_prefix}.~{target_prefix}"
+      String sens_prefix = "~{ei_prefix}.~{target_prefix}.~{source_prefix}"
+      
+      # Scatter over samples and perform benchmarking on each
+      scatter ( k in range(length(sample_shards)) ) {
+
+        # Benchmark PPV (source -> target)
+        call QcTasks.BenchmarkGenotypes as BenchGtPpv {
+          input:
+            variant_id_map = select_all(BenchmarkSites.ppv_variant_id_maps)[i],
+            sample_id_map = sample_shards[k],
+            invert_sample_map = false,
+            output_prefix = "~{ppv_prefix}.~{k}",
+            source_gt_tarball = source_gt_tarball,
+            target_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
+            source_site_metrics = source_all_sites_bed,
+            common_af_cutoff = common_af_cutoff,
+            g2c_analysis_docker = g2c_analysis_docker
+        }
+
+        # Benchmark sensitivity (target -> source)
+        call QcTasks.BenchmarkGenotypes as BenchGtSens {
+          input:
+            variant_id_map = select_all(BenchmarkSites.sensitivity_variant_id_maps)[i],
+            sample_id_map = sample_shards[k],
+            invert_sample_map = true,
+            output_prefix = "~{sens_prefix}.~{k}",
+            source_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
+            target_gt_tarball = source_gt_tarball,
+            source_site_metrics = TargetVcfToBed.all_sites,
+            common_af_cutoff = common_af_cutoff,
+            g2c_analysis_docker = g2c_analysis_docker
+        }
+
+      }
+
+      # Collapse PPV benchmarking across all shards
+      call QcTasks.SumCompressedDistribs as SumPpvDistrib {
+        input:
+          distrib_tsvs = BenchGtPpv.gt_bench_distrib,
+          out_prefix = ppv_prefix + ".gt_comparison.distrib",
+          n_key_columns = 5,
           g2c_analysis_docker = g2c_analysis_docker
       }
 
-      # Benchmark sensitivity (target -> source)
-      call QcTasks.BenchmarkGenotypes as BenchGtSens {
+      # Collapse sensitivity benchmarking across all shards
+      call QcTasks.SumCompressedDistribs as SumSensDistrib {
         input:
-          variant_id_map = select_all(BenchmarkSites.sensitivity_variant_id_maps)[i],
-          sample_id_map = sample_shards[k],
-          invert_sample_map = true,
-          output_prefix = "~{sens_prefix}.~{k}",
-          source_gt_tarball = MakeTargetGtTarball.genotypes_tarball,
-          target_gt_tarball = source_gt_tarball,
-          source_site_metrics = TargetVcfToBed.all_sites,
-          common_af_cutoff = common_af_cutoff,
+          distrib_tsvs = BenchGtSens.gt_bench_distrib,
+          out_prefix = sens_prefix + ".gt_comparison.distrib",
+          n_key_columns = 5,
           g2c_analysis_docker = g2c_analysis_docker
       }
-
-    }
-
-    # Collapse PPV benchmarking across all shards
-    call QcTasks.SumCompressedDistribs as SumPpvDistrib {
-      input:
-        distrib_tsvs = BenchGtPpv.gt_bench_distrib,
-        out_prefix = ppv_prefix + ".gt_comparison.distrib",
-        n_key_columns = 5,
-        g2c_analysis_docker = g2c_analysis_docker
-    }
-
-    # Collapse sensitivity benchmarking across all shards
-    call QcTasks.SumCompressedDistribs as SumSensDistrib {
-      input:
-        distrib_tsvs = BenchGtSens.gt_bench_distrib,
-        out_prefix = sens_prefix + ".gt_comparison.distrib",
-        n_key_columns = 5,
-        g2c_analysis_docker = g2c_analysis_docker
     }
   }
+
+  # If no overlapping samples are found, we still need to produce one empty 
+  # file for each evalulation interval for each of PPV and sensitivity 
+  # for downstream compatability
+  if ( SubsetTargetVcf.n_overlapping_samples == 0 ) {
+
+    # Keep benchmarking results separate for each evaluation interval set
+    scatter ( i in range(n_eval_intervals) ) {
+
+      String dummy_ei_prefix = if defined(eval_interval_bed_names)
+                               then flatten(select_all([eval_interval_bed_names]))[i]
+                               else "eval_interval_~{i}"
+      String dummy_ppv_prefix = "~{dummy_ei_prefix}.~{source_prefix}.~{target_prefix}"
+      String dummy_sens_prefix = "~{dummy_ei_prefix}.~{target_prefix}.~{source_prefix}"
+
+      call MakeEmptyBenchDistrib as MakeDummyPpv {
+        input:
+          out_filename = dummy_ppv_prefix + ".gt_comparison.distrib",
+          bcftools_docker = bcftools_docker
+      }
+
+      call MakeEmptyBenchDistrib as MakeDummySens {
+        input:
+          out_filename = dummy_sens_prefix + ".gt_comparison.distrib",
+          bcftools_docker = bcftools_docker
+      }
+    }
+  }
+
 
   output {
     # One file per evaluation interval set in each output array
-    Array[File] ppv_distribs = SumPpvDistrib.merged_distrib
-    Array[File] sensitivity_distribs = SumSensDistrib.merged_distrib
+    Array[File] ppv_distribs = select_first([SumPpvDistrib.merged_distrib, MakeDummyPpv.dummy_distrib])
+    Array[File] sensitivity_distribs = select_first([SumSensDistrib.merged_distrib, MakeDummySens.dummy_distrib])
   }
 }
 
@@ -274,6 +307,34 @@ task SubsetTargetVcf {
     memory: "3.5 GB"
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+  }
+}
+
+
+task MakeEmptyBenchDistrib {
+  input {
+    String out_filename
+    String bcftools_docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    echo -e "#sample\tclass\tsubclass\tfreq_bin\tzygosity\tno_match\tcarrier_match\tgt_match" \
+    | bgzip -c \
+    > ~{out_filename}
+  >>>
+
+  output {
+    File dummy_distrib = "~{out_filename}"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
     preemptible: 3
   }
 }

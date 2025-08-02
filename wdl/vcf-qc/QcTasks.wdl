@@ -613,6 +613,7 @@ task McnvHeaderCheck {
     cpu: 2
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
+    maxRetries: 2
   }
 }
 

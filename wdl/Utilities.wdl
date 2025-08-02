@@ -411,6 +411,7 @@ task StreamedMcnvHeaderCheck {
     cpu: 2
     disks: "local-disk 15 HDD"
     preemptible: 3
+    maxRetries: 2
   }
 }
 
