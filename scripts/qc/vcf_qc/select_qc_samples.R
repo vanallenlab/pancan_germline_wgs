@@ -60,17 +60,20 @@ if(!is.null(args$priority_tsv)){
 }
 s.p <- s.p[with(s.p, order(-tier, -weight, sid)), ]
 
+# Cap number of samples to be sampled
+total.n.to.sample <- if(args$N > nrow(s.p)){nrow(s.p)}else{args$N}
+
 # Sample desired number of IDs
 n.per.tier <- table(s.p$tier)
 n.per.tier <- n.per.tier[order(-as.numeric(names(n.per.tier)))]
-auto.tiers <- names(n.per.tier)[which(cumsum(n.per.tier) <= args$N)]
+auto.tiers <- names(n.per.tier)[which(cumsum(n.per.tier) <= total.n.to.sample)]
 if(length(auto.tiers) > 0){
   s.keep <- s.p[which(s.p$tier %in% auto.tiers), "sid"]
 }else{
   s.keep <- c()
 }
 random.tier <- names(n.per.tier)[which.min(cumsum(n.per.tier) <= args$N)]
-n.to.sample <- args$N - length(s.keep)
+n.to.sample <- total.n.to.sample - length(s.keep)
 set.seed(2025)
 s.add <- sample(s.p[which(s.p$tier == random.tier), "sid"], n.to.sample,
                 replace=FALSE, prob=s.p[which(s.p$tier == random.tier), "weight"])

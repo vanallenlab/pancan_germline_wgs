@@ -115,13 +115,16 @@ workflow CollectVcfQcMetrics {
   Boolean has_twins = select_first([CleanTwins.n_twins, 0]) > 0
 
   # Define list of samples to use for sample-specific analyses
+  Int actual_n_for_sample_level = if n_for_sample_level_analyses > GetSamplesInVcf.n_samples 
+                                  then GetSamplesInVcf.n_samples 
+                                  else n_for_sample_level_analyses
   call ChooseTargetSamples {
     input:
       all_samples_list = GetSamplesInVcf.sample_list,
       probands_list = CleanFam.probands_list,
       duplicate_samples_list = CleanTwins.duplicate_samples_list,
       sample_priority_tsv = sample_priority_tsv,
-      n_samples = n_for_sample_level_analyses,
+      n_samples = actual_n_for_sample_level,
       out_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
