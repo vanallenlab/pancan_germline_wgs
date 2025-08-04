@@ -494,7 +494,8 @@ task PackageOutputs {
     echo -e "#analysis\tmeasure\tvalue\tn" > ss.all.tsv
     find ~{out_prefix}.stats/ -name "*.summary_metrics.tsv" \
     | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
-    | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> ss.all.tsv
+    | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> \
+    ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
     # TODO: plot bars here
 
     # Compress outputs
