@@ -21,6 +21,7 @@
 #' @param ss.prefix Character prefix for summary statistic descriptions
 #' @param summarize.all Should a final series of summary rows be added to reflect
 #' the overall summary statistics of all data in `plot.dat`? \[default: TRUE\]
+#' @param trio.mode Is the input data from parent-child trios? \[default: FALSE\]
 #'
 #' @returns data.frame of summary statistics for various strata within `plot.dat`
 #'
@@ -28,8 +29,10 @@
 #'
 #' @export calc.gt.bench.ss
 #' @export
-calc.gt.bench.ss <- function(plot.dat, ss.prefix, summarize.all=TRUE){
+calc.gt.bench.ss <- function(plot.dat, ss.prefix, summarize.all=TRUE,
+                             trio.mode=FALSE){
   ss.prefix <- sub("[ /]+", "_", ss.prefix)
+  query.key <- if(trio.mode){"pass.rate"}else{"loose"}
   all.res <- lapply(1:length(plot.dat), function(i){
     prefix.i <- paste(ss.prefix, names(plot.dat)[i], sep=".")
     df.i <- plot.dat[[i]]
@@ -38,18 +41,18 @@ calc.gt.bench.ss <- function(plot.dat, ss.prefix, summarize.all=TRUE){
     res.i <- as.data.frame(do.call("rbind", lapply(1:length(df.i), function(j){
       prefix.j <- paste(prefix.i, tolower(names(df.i)[j]), sep=".")
       df.j <- df.i[[j]]
-      rbind(c(prefix.j, "median", df.j["Median", c("loose", "n")]),
-            c(prefix.j, "dynamic_range", dynamic.range(df.j[c("Min.", "Max."), "loose"]), NA))
+      rbind(c(prefix.j, "median", df.j["Median", c(query.key, "n")]),
+            c(prefix.j, "dynamic_range", dynamic.range(df.j[c("Min.", "Max."), query.key]), NA))
     })))
     colnames(res.i) <- c("analysis", "measure", "value", "n")
 
     # Get overall metric for each stratum across all evaluation sets
-    i.med <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Median", "loose"]})),
+    i.med <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Median", query.key]})),
                            as.numeric(sapply(df.i, function(d){d["Median", "n"]})))
     i.med.n <- sum(as.numeric(sapply(df.i, function(d){d["Median", "n"]})))
-    i.min <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Min.", "loose"]})),
+    i.min <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Min.", query.key]})),
                            as.numeric(sapply(df.i, function(d){d["Min.", "n"]})))
-    i.max <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Max.", "loose"]})),
+    i.max <- weighted.mean(as.numeric(sapply(df.i, function(d){d["Max.", query.key]})),
                            as.numeric(sapply(df.i, function(d){d["Max.", "n"]})))
     i.dr <- i.max / i.min
     res.i.add <- as.data.frame(rbind(c(prefix.i, "median", i.med, i.med.n),
@@ -93,6 +96,7 @@ calc.gt.bench.ss <- function(plot.dat, ss.prefix, summarize.all=TRUE){
 #' @param zygosity Optional character vector of zygosities to consider for calculations
 #' @param key.cols Numeric vector of column indexes to treat as
 #' unique keys \[default: 1:5\]
+#' @param trio.mode Is the input data from parent-child trios? \[default: FALSE\]
 #'
 #' @returns List of data.frames of benchmarking summary statistics amenable with
 #' downstream plotting functions
@@ -102,7 +106,7 @@ calc.gt.bench.ss <- function(plot.dat, ss.prefix, summarize.all=TRUE){
 #' @export calc.gt.bench.stats
 #' @export
 calc.gt.bench.stats <- function(bench.dat, vc=NULL, vsc=NULL, freq=NULL,
-                                zygosity=NULL, key.cols=1:5){
+                                zygosity=NULL, key.cols=NULL, trio.mode=FALSE){
   # Filter bench.dat according to vc, vsc, freq.breaks, and zygosity
   if(!is.null(vc)){
     bench.dat <- lapply(bench.dat,
@@ -116,23 +120,34 @@ calc.gt.bench.stats <- function(bench.dat, vc=NULL, vsc=NULL, freq=NULL,
     bench.dat <- lapply(bench.dat,
                         function(bd.df){bd.df[which(bd.df$freq_bin %in% freq), ]})
   }
-  if(!is.null(zygosity)){
+  if(!is.null(zygosity) & !trio.mode){
     bench.dat <- lapply(bench.dat,
                         function(bd.df){bd.df[which(bd.df$zygosity %in% zygosity), ]})
   }
 
+  # Adjust key columns based on options
+  if(is.null(key.cols)){
+    key.cols <- if(trio.mode){1:4}else{1:5}
+  }
+
   # Collapse each entry in bench.dat by sample
   sum.dat <- lapply(bench.dat, function(bd.df){
-    samples <- as.character(unique(bd.df$sample))
+    s.key.name <- if(trio.mode){"family_id"}else{"sample"}
+    samples <- as.character(unique(bd.df[, s.key.name]))
     s.df <- as.data.frame(do.call("rbind", lapply(samples, function(sid){
-      apply(bd.df[which(bd.df$sample == sid), -key.cols], 2, sum)
+      apply(bd.df[which(bd.df[, s.key.name] == sid), -key.cols], 2, sum)
     })))
     rownames(s.df) <- samples
     s.df$n <- apply(s.df, 1, sum, na.rm=T)
-    s.df$strict <- s.df$gt_match / s.df$n
-    s.df$loose <- apply(s.df[, c("gt_match", "carrier_match")],
-                        1, sum, na.rm=T) / s.df$n
-    return(s.df[, c("n", "strict", "loose")])
+    if(!trio.mode){
+      s.df$strict <- s.df$gt_match / s.df$n
+      s.df$loose <- apply(s.df[, c("gt_match", "carrier_match")],
+                          1, sum, na.rm=T) / s.df$n
+      return(s.df[, c("n", "strict", "loose")])
+    }else{
+      s.df$pass.rate <- s.df$pass / s.df$n
+      return(s.df[, c("n", "pass.rate")])
+    }
   })
 
   # Summarize data for plotting
@@ -187,6 +202,7 @@ clean.breaks <- function(vals){
 #'
 #' @param bench.dat List of benchmarking data.frames processed by [G2CR::load.gt.benchmark.tsvs()]
 #' @param vc Character vector of variant classes for subsetting. See [G2CR::calc.gt.bench.stats()]
+#' @param trio.mode Is the input data from parent-child trios? \[default: FALSE\]
 #'
 #' @returns List of data.frames, one each for rare heterozygous genotypes, common
 #' heterozygous genotypes, and all homozygous genotypes
@@ -195,20 +211,30 @@ clean.breaks <- function(vals){
 #'
 #' @export get.gt.bench.plot.data
 #' @export
-get.gt.bench.plot.data <- function(bench.dat, vc=NULL){
+get.gt.bench.plot.data <- function(bench.dat, vc=NULL, trio.mode=FALSE){
   # Check frequency bins in the data and order from rare -> common
   freq.breaks <- clean.breaks(unique(bench.dat[[1]]$freq_bin))
   freq.breaks <- freq.breaks[order(-freq.breaks, names(freq.breaks),
                                    decreasing=T)]
 
   # By default, we want to split by rare het, common het, and all homozygotes
-  list("rare.het"=calc.gt.bench.stats(bench.dat, vc=vc,
-                                      freq=head(names(freq.breaks), 1),
-                                      zygosity="het"),
-       "common.het"=calc.gt.bench.stats(bench.dat, vc=vc,
-                                        freq=tail(names(freq.breaks), 1),
+  # We ignore zygosity for trios as that is less simple to define across three genomes
+  if(!trio.mode){
+    list("rare.het"=calc.gt.bench.stats(bench.dat, vc=vc,
+                                        freq=head(names(freq.breaks), 1),
                                         zygosity="het"),
-       "hom"=calc.gt.bench.stats(bench.dat, vc=vc, zygosity="hom"))
+         "common.het"=calc.gt.bench.stats(bench.dat, vc=vc,
+                                          freq=tail(names(freq.breaks), 1),
+                                          zygosity="het"),
+         "hom"=calc.gt.bench.stats(bench.dat, vc=vc, zygosity="hom"))
+  }else{
+    list("rare"=calc.gt.bench.stats(bench.dat, vc=vc,
+                                    freq=head(names(freq.breaks), 1),
+                                    trio.mode=TRUE),
+         "common"=calc.gt.bench.stats(bench.dat, vc=vc,
+                                      freq=tail(names(freq.breaks), 1),
+                                      trio.mode=TRUE))
+  }
 }
 
 
@@ -448,6 +474,7 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
 #' @param bar.hex Relative horizontal expansion parameter for the median bars
 #' and the outer "whiskers"; must be bounded on \[0, 1\] \[default: 0.6\]
 #' @param whisker.hex Relative horizontal expansion for median whiskers \[default: 0.035\]
+#' @param trio.mode Is the input data from parent-child trios? \[default: FALSE\]
 #' @param parmar Value of `mar` passed to `par()`
 #'
 #' @export plot.gt.bench
@@ -455,7 +482,8 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
 plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
                           metric.name=NULL, title=NULL, af.cutoff=NULL,
                           strata.space=0.15, bar.hex=0.6,
-                          whisker.hex=0.035, parmar=c(1.8, 2.55, 1.8, 2.5)){
+                          whisker.hex=0.035, trio.mode=FALSE,
+                          parmar=c(1.8, 2.55, 1.8, 2.5)){
   # Get plot parameters
   n.strata <- length(plot.dat)
   n.sets <- length(plot.dat[[1]])
@@ -467,9 +495,15 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
   if(is.null(set.colors)){
     set.colors <- greyscale.palette(n.strata)
   }
-  set.pals <- lapply(set.colors, function(col.base){
-    colorRampPalette(c("black", col.base, "white"))(5)[-c(1:2, 5)]
-  })
+  if(trio.mode){
+    set.pals <- set.colors
+  }else{
+    set.pals <- lapply(set.colors, function(col.base){
+      colorRampPalette(c("black", col.base, "white"))(5)[-c(1:2, 5)]
+    })
+  }
+  whisker.key <- if(trio.mode){"pass.rate"}else{"loose"}
+  iqr.legend.y <- if(trio.mode){c(0.2, 0.35, 0.5, 0.35)}else{c(0, 0.1, 0.2, 0.1)}
 
   # Get generic spacing for elements in each stratum
   s.x.start <- strata.space / 2
@@ -522,17 +556,19 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
   mtext(3, text=title, line=0, cex=5.5/6)
 
   # Add legend to right Y axis
-  right.y.cs <- c(0, as.numeric(plot.dat[[n.strata]][[n.sets]]["Median", c("strict", "loose")]))
-  right.y.mids <- sapply(1:n.sets, function(k){mean(right.y.cs[k+(0:1)])})
-  right.y.lab.pos <- yaxis.legend(c("GT", "Carrier"),
-                                  x=s.bar.x.right+n.strata-1,
-                                  y.positions=right.y.mids,
-                                  sep.wex=0.05*diff(par("usr")[1:2]),
-                                  upper.limit=0.55, lower.limit=0.35,
-                                  colors=hex2grey(set.pals[[n.sets]]),
-                                  label.cex=4.5/6, lwd=2, return.label.pos=T)
-  axis(4, at=max(right.y.lab.pos)+0.1125, las=2, tick=F, line=-0.7,
-       cex.axis=5/6, labels="Match:")
+  if(!trio.mode){
+    right.y.cs <- c(0, as.numeric(plot.dat[[n.strata]][[n.sets]]["Median", c("strict", "loose")]))
+    right.y.mids <- sapply(1:n.sets, function(k){mean(right.y.cs[k+(0:1)])})
+    right.y.lab.pos <- yaxis.legend(c("GT", "Carrier"),
+                                    x=s.bar.x.right+n.strata-1,
+                                    y.positions=right.y.mids,
+                                    sep.wex=0.05*diff(par("usr")[1:2]),
+                                    upper.limit=0.55, lower.limit=0.35,
+                                    colors=hex2grey(set.pals[[n.sets]]),
+                                    label.cex=4.5/6, lwd=2, return.label.pos=T)
+    axis(4, at=max(right.y.lab.pos)+0.1125, las=2, tick=F, line=-0.7,
+         cex.axis=5/6, labels="Match:")
+  }
   set.labs.y <- seq(0.95, 0.7, length.out=n.sets+1)[1:n.sets]
   points(x=rep(par("usr")[2]+strata.space, 2), y=set.labs.y,
          pch=15, col=set.colors, xpd=T)
@@ -540,12 +576,12 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
        cex=5/6, xpd=T, labels=names(plot.dat[[1]]), pos=4)
   polygon(x=par("usr")[2]+strata.space+c(0, -0.03*diff(par("usr")[1:2]),
                                          0, 0.03*diff(par("usr")[1:2])),
-          y=c(0, 0.1, 0.2, 0.1), col=adjustcolor(annotation.color, alpha=0.4),
+          y=iqr.legend.y, col=adjustcolor(annotation.color, alpha=0.4),
           border=NA, xpd=T)
-  points(x=rep(par("usr")[2]+strata.space, 3), y=c(0, 0.1, 0.2),
+  points(x=rep(par("usr")[2]+strata.space, 3), y=iqr.legend.y[1:3],
          pch=c(25, 3, 24), bg=c(annotation.color, NA, annotation.color),
          col=c(NA, annotation.color, NA), lwd=c(0, 2, 0), xpd=T, cex=0.8)
-  text(x=rep(par("usr")[2]+(strata.space/2), 3), y=c(0, 0.1, 0.2),
+  text(x=rep(par("usr")[2]+(strata.space/2), 3), y=iqr.legend.y[1:3],
        cex=4.5/6, xpd=T, labels=c("Min", "IQR", "Max"), pos=4)
 
   # Plot each stratum
@@ -557,7 +593,7 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
     sapply(1:whiskers.left, function(k){
       k.x <- whiskers.left.x.at[k] + x.inc
       k.y <- as.numeric(s.dat[[sets.left[k]]][c("Min.", "1st Qu.", "Median",
-                                                "3rd Qu.", "Max."), "loose"])
+                                                "3rd Qu.", "Max."), whisker.key])
       for(color in c("white", adjustcolor(set.colors[sets.left[k]], alpha=1/3))){
         polygon(x=c(k.x, k.x-whisker.x.adj, k.x, k.x+whisker.x.adj),
                 y=k.y[c(1, 3, 5, 3)], border=NA, col=color)
@@ -574,7 +610,7 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
     sapply(1:whiskers.right, function(k){
       k.x <- whiskers.right.x.at[k] + x.inc
       k.y <- as.numeric(s.dat[[sets.right[k]]][c("Min.", "1st Qu.", "Median",
-                                                 "3rd Qu.", "Max."), "loose"])
+                                                 "3rd Qu.", "Max."), whisker.key])
       for(color in c("white", adjustcolor(set.colors[sets.right[k]], alpha=1/3))){
         polygon(x=c(k.x, k.x-whisker.x.adj, k.x, k.x+whisker.x.adj),
                 y=k.y[c(1, 3, 5, 3)], border=NA, col=color)
@@ -591,9 +627,14 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
     rect.x <- quantile(c(s.bar.x.left, s.bar.x.right) + x.inc,
                        probs=c(0, cumsum(rect.w.n / sum(rect.w.n))))
     sapply(1:length(s.dat), function(k){
-      rect(xleft=rect.x[k], xright=rect.x[k+1],
-           ybottom=as.numeric(c(0, s.dat[[k]]["Median", "strict"])),
-           ytop=as.numeric(s.dat[[k]]["Median", c("strict", "loose")]),
+      if(trio.mode){
+        ybottoms <- 0
+        ytops <- as.numeric(s.dat[[k]]["Median", "pass.rate"])
+      }else{
+        ybottoms <- as.numeric(c(0, s.dat[[k]]["Median", "strict"]))
+        ytops <- as.numeric(s.dat[[k]]["Median", c("strict", "loose")])
+      }
+      rect(xleft=rect.x[k], xright=rect.x[k+1], ybottom=ybottoms, ytop=ytops,
            border=set.pals[[k]], col=set.pals[[k]], lwd=0.5)
     })
   })

@@ -4,7 +4,7 @@
 \alias{calc.gt.bench.ss}
 \title{Compute genotype benchmarking summary statistics}
 \usage{
-calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all = TRUE)
+calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all = TRUE, trio.mode = FALSE)
 }
 \arguments{
 \item{plot.dat}{List of benchmarking data processed by \code{\link[=get.gt.bench.plot.data]{get.gt.bench.plot.data()}}}
@@ -13,6 +13,8 @@ calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all = TRUE)
 
 \item{summarize.all}{Should a final series of summary rows be added to reflect
 the overall summary statistics of all data in \code{plot.dat}? [default: TRUE]}
+
+\item{trio.mode}{Is the input data from parent-child trios? [default: FALSE]}
 
 \item{seealso}{\code{\link[=get.gt.bench.plot.data]{get.gt.bench.plot.data()}}}
 }

@@ -63,6 +63,7 @@ workflow PlotVcfQcMetrics {
     # Other benchmarking data; one outer array per evaluation interval
     # and each inner array can be one or more files (e.g., one per chromosome)
     Array[Array[File?]] twin_genotype_benchmark_distribs = [[]]
+    Array[Array[File?]] trio_mendelian_violation_distribs = [[]]
 
     String output_prefix
 
@@ -99,6 +100,8 @@ workflow PlotVcfQcMetrics {
   # Postprocess other sample-level benchmarking (twins, trios)
   Int n_twin_bench_distribs = length(flatten(twin_genotype_benchmark_distribs))
   Boolean has_twin_benchmarking = (n_twin_bench_distribs > 0 && n_bench_intervals > 0)
+  Int n_trio_bench_distribs = length(flatten(trio_mendelian_violation_distribs))
+  Boolean has_trio_benchmarking = (n_trio_bench_distribs > 0 && n_bench_intervals > 0)
 
 
   ######################
@@ -328,7 +331,7 @@ workflow PlotVcfQcMetrics {
 
       call QcTasks.SumCompressedDistribs as SumTwinBenchDistribs {
         input:
-          distrib_tsvs = select_all(twin_genotype_benchmark_distribs[twin_int_i]),
+          distrib_tsvs = tb_array_presum,
           out_prefix = "twin_bench." + tb_prefix + ".concordance_distribution",
           n_key_columns = 5,
           g2c_analysis_docker = g2c_analysis_docker
@@ -336,6 +339,24 @@ workflow PlotVcfQcMetrics {
     }
   }
   Array[File] twin_bench_summed_distribs = select_first([SumTwinBenchDistribs.merged_distrib, []])
+
+  # Preprocess trio benchmarking, if provided
+  if (has_trio_benchmarking) {
+    scatter ( trio_int_i in range(n_bench_intervals) ) {
+
+      Array[File] mtb_array_presum = select_all(trio_mendelian_violation_distribs[trio_int_i])
+      String mtb_prefix = select_first([select_all(benchmark_interval_names)[trio_int_i], "benchmarking_intervals"])
+
+      call QcTasks.SumCompressedDistribs as SumTrioBenchDistribs {
+        input:
+          distrib_tsvs = mtb_array_presum,
+          out_prefix = "trio_bench." + mtb_prefix + ".concordance_distribution",
+          n_key_columns = 4,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+  }
+  Array[File] trio_bench_summed_distribs = select_first([SumTrioBenchDistribs.merged_distrib, []])
 
 
   #################
@@ -368,6 +389,7 @@ workflow PlotVcfQcMetrics {
       ancestry_labels = sample_ancestry_labels,
       phenotype_labels = sample_phenotype_labels,
       twin_concordance_tsvs = twin_bench_summed_distribs,
+      trio_concordance_tsvs = trio_bench_summed_distribs,
       eval_interval_names = select_all(benchmark_interval_names),
       common_af_cutoff = common_af_cutoff,
       output_prefix = output_prefix,
@@ -594,6 +616,7 @@ task PlotSampleMetrics {
     File? phenotype_labels
 
     Array[File] twin_concordance_tsvs = []
+    Array[File] trio_concordance_tsvs = []
     Array[String] eval_interval_names = []
     
     Float common_af_cutoff
@@ -610,9 +633,10 @@ task PlotSampleMetrics {
   String pop_opt = if defined(ancestry_labels) then "--ancestry-labels ~{basename(select_first([ancestry_labels, 'not_real.txt']))}" else ""
   String pheno_opt = if defined(phenotype_labels) then "--phenotype-labels ~{basename(select_first([phenotype_labels, 'not_real.txt']))}"  else ""
 
-  Boolean do_twins = length(eval_interval_names) > 0
+  Boolean do_twins = length(eval_interval_names) + length(twin_concordance_tsvs) > 0
+  Boolean do_trios = length(eval_interval_names) + length(trio_concordance_tsvs) > 0
 
-  Int default_disk_gb = ceil(2 * size(flatten([[gt_distrib], twin_concordance_tsvs]), "GB")) + 20
+  Int default_disk_gb = ceil(2 * size(flatten([[gt_distrib], twin_concordance_tsvs, trio_concordance_tsvs]), "GB")) + 20
 
   command <<<
     set -eu -o pipefail
@@ -647,6 +671,21 @@ task PlotSampleMetrics {
       twin_cmd="$twin_cmd --out-prefix ~{output_prefix}.sample_metrics/~{output_prefix}"
       echo -e "Now performing twin benchmarking as follows:\n$twin_cmd"
       eval "$twin_cmd"
+    fi
+
+    # Plot trio benchmarking, if optioned
+    if ~{do_trios}; then
+      trio_cmd="/opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_trio_benchmarking.R"
+      while read tsv; do
+        trio_cmd="$trio_cmd --bench-tsv $tsv"
+      done < ~{write_lines(trio_concordance_tsvs)}
+      while read sname; do
+        trio_cmd="$trio_cmd --set-name \"$sname\""
+      done < ~{write_lines(eval_interval_names)}
+      trio_cmd="$trio_cmd --common-af ~{common_af_cutoff}"
+      trio_cmd="$trio_cmd --out-prefix ~{output_prefix}.sample_metrics/~{output_prefix}"
+      echo -e "Now performing trio benchmarking as follows:\n$trio_cmd"
+      eval "$trio_cmd"
     fi
 
     # Compress outputs

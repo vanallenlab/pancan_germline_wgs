@@ -10,7 +10,8 @@ calc.gt.bench.stats(
   vsc = NULL,
   freq = NULL,
   zygosity = NULL,
-  key.cols = 1:5
+  key.cols = NULL,
+  trio.mode = FALSE
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ prior to calculations}
 
 \item{key.cols}{Numeric vector of column indexes to treat as
 unique keys [default: 1:5]}
+
+\item{trio.mode}{Is the input data from parent-child trios? [default: FALSE]}
 }
 \value{
 List of data.frames of benchmarking summary statistics amenable with

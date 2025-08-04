@@ -4,12 +4,14 @@
 \alias{get.gt.bench.plot.data}
 \title{Gather genotype benchmarking plot data}
 \usage{
-get.gt.bench.plot.data(bench.dat, vc = NULL)
+get.gt.bench.plot.data(bench.dat, vc = NULL, trio.mode = FALSE)
 }
 \arguments{
 \item{bench.dat}{List of benchmarking data.frames processed by \code{\link[=load.gt.benchmark.tsvs]{load.gt.benchmark.tsvs()}}}
 
 \item{vc}{Character vector of variant classes for subsetting. See \code{\link[=calc.gt.bench.stats]{calc.gt.bench.stats()}}}
+
+\item{trio.mode}{Is the input data from parent-child trios? [default: FALSE]}
 }
 \value{
 List of data.frames, one each for rare heterozygous genotypes, common

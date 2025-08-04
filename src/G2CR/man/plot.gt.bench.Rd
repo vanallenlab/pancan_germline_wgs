@@ -14,6 +14,7 @@
   strata.space = 0.15,
   bar.hex = 0.6,
   whisker.hex = 0.035,
+  trio.mode = FALSE,
   parmar = c(1.8, 2.55, 1.8, 2.5)
 )
 }
@@ -40,6 +41,8 @@ rare variants; will be used to add second row to bottom X-axis with AF bins}
 and the outer "whiskers"; must be bounded on [0, 1] [default: 0.6]}
 
 \item{whisker.hex}{Relative horizontal expansion for median whiskers [default: 0.035]}
+
+\item{trio.mode}{Is the input data from parent-child trios? [default: FALSE]}
 
 \item{parmar}{Value of \code{mar} passed to \code{par()}}
 }
