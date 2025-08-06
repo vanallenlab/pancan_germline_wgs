@@ -35,8 +35,16 @@ RUN apt-get clean && \
       curl \
       wget \
       git \
-      ttf-mscorefonts-installer && \
+      ttf-mscorefonts-installer \
+      unzip && \
     fc-cache -f -v
+
+# Install plink2
+RUN curl -sSL https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_x86_64_20250515.zip -o plink2.zip && \
+    unzip plink2.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/plink2 && \
+    rm plink2.zip && \
+    plink2 --version
 
 # Clone GATK-SV repo, check out specified hash, and only keep svtk
 ARG GATKSV_TAG=v1.0.1
