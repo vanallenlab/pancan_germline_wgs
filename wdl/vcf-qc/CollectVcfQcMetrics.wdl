@@ -670,7 +670,7 @@ task CalcLd {
   Int disk_gb = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
 
   command <<<
-    set -euo -pipefail
+    set -eu -o pipefail
 
     # Write list of variant IDs present in VCF
     bcftools query -f '%ID\n' ~{vcf} > elig_vids.list

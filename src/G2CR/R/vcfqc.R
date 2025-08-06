@@ -246,12 +246,14 @@ get.gt.bench.plot.data <- function(bench.dat, vc=NULL, trio.mode=FALSE){
 #' @param set.names Character names for each .tsv in `tsvs.in`
 #' @param key.cols Numeric vector of column indexes to treat as
 #' unique keys \[default: 1:5\]
+#' @param trio.mode Is the input data from parent-child trios? \[default: FALSE\]
 #'
 #' @returns List of one data.frame per element in `tsvs.in`
 #'
 #' @export load.gt.benchmark.tsvs
 #' @export
-load.gt.benchmark.tsvs <- function(tsvs.in, set.names, key.cols=1:5){
+load.gt.benchmark.tsvs <- function(tsvs.in, set.names, key.cols=1:5,
+                                   trio.mode=TRUE){
   # Do nothing if no .tsv files are provided
   if(is.null(tsvs.in) | length(tsvs.in) == 0){
     return(NULL)
@@ -271,19 +273,21 @@ load.gt.benchmark.tsvs <- function(tsvs.in, set.names, key.cols=1:5){
   names(bench.dat) <- set.names
 
   # Get union of all samples and row metadata
-  samples <- unique(unlist(sapply(bench.dat, function(d){d$sample})))
+  s.key <- if(trio.mode){"family_id"}else{"sample"}
+  samples <- unique(unlist(sapply(bench.dat, function(d){d[, s.key]})))
   bench.strata <- unique(do.call("rbind", bench.dat)[, setdiff(key.cols, 1)])
 
   # Fill zeros for missing samples in any set or strata to ensure consistent
   # dimensionality across all strata and datasets
   lapply(bench.dat, function(bd.df){
     add.df <- do.call("rbind", lapply(1:nrow(bench.strata), function(si){
-      s.hits <- merge(bd.df, bench.strata[si, ], all.y=T, sort=F)$sample
+      s.hits <- merge(bd.df, bench.strata[si, ], all.y=T, sort=F)[, s.key]
       s.miss <- setdiff(samples, s.hits)
       if(length(s.miss) == 0){
         return(NULL)
       }else{
-        add.df <- data.frame("sample" = s.miss)
+        add.df <- data.frame(s.miss)
+        colnames(add.df) <- s.key
         for(sx in 1:ncol(bench.strata)){
           add.df[, colnames(bench.strata)[sx]] <- bench.strata[si, sx]
         }
@@ -302,11 +306,12 @@ load.gt.benchmark.tsvs <- function(tsvs.in, set.names, key.cols=1:5){
       cpx.rows <- which(bd.df$subclass %in% c("CPX", "INV", "CTX"))
       cpx.df <- bd.df[cpx.rows, ]
       nocpx.df <- bd.df[-cpx.rows, ]
-      cpx.strata <- unique(bench.strata[which(bench.strata$subclass %in% c("CPX", "INV", "CTX")), -(1:2)])
+      cpx.strata <- as.data.frame(unique(bench.strata[which(bench.strata$subclass %in% c("CPX", "INV", "CTX")), -(1:2)]))
+      colnames(cpx.strata) <- colnames(bench.strata[-c(1:2)])
       cpx.add <- as.data.frame(do.call("rbind", lapply(1:nrow(cpx.strata), function(si){
         si.df <- merge(cpx.df, cpx.strata[si, ], sort=F)[, colnames(bd.df)]
-        do.call("rbind", lapply(unique(si.df$sample), function(sid){
-          s.sub <- si.df[which(si.df$sample == sid), -key.cols]
+        do.call("rbind", lapply(unique(si.df[, s.key]), function(sid){
+          s.sub <- si.df[which(si.df[, s.key] == sid), -key.cols]
           if(length(s.sub) > 0){
             c(sid, "sv", "CPX", as.character(cpx.strata[si, ]), apply(s.sub, 2, sum))
           }else{

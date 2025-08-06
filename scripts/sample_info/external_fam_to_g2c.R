@@ -76,5 +76,10 @@ fam$sex <- remap(meta.df[fam$proband, "batching_sex"],
 fam$pheno <- remap(meta.df[fam$proband, "cancer"],
                    c("unknown" = 0, "control" = 1), default.value=2)
 
+# Suffix family IDs with proband G2C ID
+# This is necessary to keep a unique mapping of kindred ID vs. trio ID
+# (In multiplex families like CEPH this can cause QC issues downstream)
+fam$family <- paste(fam$family, fam$proband, sep="_")
+
 # Write updated manifest to --out-fam
 write.table(fam, args$out_fam, col.names=F, row.names=F, quote=F, sep="\t")

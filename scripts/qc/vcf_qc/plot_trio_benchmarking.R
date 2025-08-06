@@ -166,14 +166,15 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("bench_tsv" = c("~/Downloads/giab_easy.dfci-g2c.v1.initial_qc.chr19.trios.mendelian_distribution.merged.tsv.gz",
-#                              "~/Downloads/giab_easy.dfci-g2c.v1.initial_qc.chr19.trios.mendelian_distribution.merged.tsv.gz"),
-#              "set_name" = c("Easy", "Dummy"),
+# args <- list("bench_tsv" = c("~/Downloads/trio_bench_dev_data/trio_bench.Easy.concordance_distribution.merged.tsv.gz",
+#                              "~/Downloads/trio_bench_dev_data/trio_bench.Hard.concordance_distribution.merged.tsv.gz"),
+#              "set_name" = c("Easy", "Hard"),
 #              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
 # Load concordance data & simplify into Mendelian concordant/nonconcordant
-bench.dat <- load.gt.benchmark.tsvs(args$bench_tsv, args$set_name)
+bench.dat <- load.gt.benchmark.tsvs(args$bench_tsv, args$set_name,
+                                    key.cols=1:4, trio.mode=TRUE)
 
 # Get nonredundant list of trio IDs
 trios <- unique(unlist(lapply(bench.dat, function(d){d$family_id})))

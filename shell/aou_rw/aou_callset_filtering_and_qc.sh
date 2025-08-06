@@ -42,10 +42,16 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
-# Create dependencies .zip for workflow submissions
+# Create dependencies .zip for generic G2C workflow submissions
 cd code/wdl/pancan_germline_wgs && \
-zip -r g2c.dependencies.zip * && \
+zip -r g2c.dependencies.zip . && \
 mv g2c.dependencies.zip ~/ && \
+cd ~
+
+# Create dependencies .zip for QC workflow submissions
+cd code/wdl/pancan_germline_wgs/vcf-qc && \
+zip qc.dependencies.zip *.wdl && \
+mv qc.dependencies.zip ~/ && \
 cd ~
 
 # Ensure Cromwell/Cromshell are configured
@@ -285,7 +291,7 @@ EOF
 # Submit SV curation workflow
 cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
-  --dependencies-zip g2c.dependencies.zip \
+  --dependencies-zip qc.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouSvs.wdl \
   cromshell/inputs/PreprocessAouSvs.inputs.json \
 | jq .id | tr -d '"' \
@@ -333,7 +339,7 @@ EOF
 # Submit lrWGS SNV/indel curation workflow
 cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
-  --dependencies-zip g2c.dependencies.zip \
+  --dependencies-zip qc.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/external_data_curation/PreprocessAouLrwgsSnvs.wdl \
   cromshell/inputs/PreprocessAouLrwgsSnvs.inputs.json \
 | jq .id | tr -d '"' \
@@ -722,7 +728,7 @@ code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectVcfQcMetrics.inputs.template.json \
   --contig-variable-overrides $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json \
-  --dependencies-zip g2c.dependencies.zip \
+  --dependencies-zip qc.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/ \
   --name CollectInitialVcfQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
@@ -751,6 +757,7 @@ common_snvs_bed
 common_indels_bed
 common_svs_bed
 genotype_distrib
+ld_stats
 EOF
 
 cat << EOF > $staging_dir/bench_keys.list
@@ -836,7 +843,9 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
   "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:7f27648",
+  "PlotVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
+  "PlotVcfQcMetrics.peak_ld_stat_tsvs": $( collapse_txt $staging_dir/ld_stats.uris.list ),
   "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_cohort_prefix": "gnomAD_v4.1",
@@ -868,17 +877,17 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
   "PlotVcfQcMetrics.site_benchmark_dataset_titles": ["gnomAD v4.1"],
   "PlotVcfQcMetrics.size_distribution_tsvs": $( collapse_txt $staging_dir/size_distrib.uris.list ),
   "PlotVcfQcMetrics.size_vs_af_distribution_tsvs": $( collapse_txt $staging_dir/size_vs_af_distrib.uris.list ),
-  "PlotVcfQcMetrics.twin_genotype_benchmark_distribs": [ $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_easy.uris.list ),
-                                                         $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_hard.uris.list ) ],
   "PlotVcfQcMetrics.trio_mendelian_violation_distribs": [ $( collapse_txt $staging_dir/trio_mendelian_violation_distribs.giab_easy.uris.list ),
-                                                          $( collapse_txt $staging_dir/trio_mendelian_violation_distribs.giab_hard.uris.list ) ]
+                                                          $( collapse_txt $staging_dir/trio_mendelian_violation_distribs.giab_hard.uris.list ) ],
+  "PlotVcfQcMetrics.twin_genotype_benchmark_distribs": [ $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_easy.uris.list ),
+                                                         $( collapse_txt $staging_dir/twin_genotype_benchmark_distribs.giab_hard.uris.list ) ]
 }
 EOF
 
 # Submit QC visualization workflow
 cromshell --no_turtle -t 120 -mc submit --no-validation \
   --options-json code/refs/json/aou.cromwell_options.default.json \
-  --dependencies-zip g2c.dependencies.zip \
+  --dependencies-zip qc.dependencies.zip \
   code/wdl/pancan_germline_wgs/vcf-qc/PlotVcfQcMetrics.wdl \
   cromshell/inputs/PlotInitialVcfQcMetrics.inputs.json \
 | jq .id | tr -d '"' \

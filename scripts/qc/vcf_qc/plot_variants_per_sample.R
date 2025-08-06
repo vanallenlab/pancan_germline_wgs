@@ -724,5 +724,5 @@ if(nrow(ic.ss) > 0){
 
 # Write summary statistics to output file
 colnames(count.ss)[1] <- paste("#", colnames(count.ss)[1], sep="")
-write.table(count.ss, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
+write.table(count.ss, paste(args$out_prefix, "variants_per_sample.summary_metrics.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)
