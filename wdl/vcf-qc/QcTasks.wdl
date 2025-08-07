@@ -352,7 +352,7 @@ task ConcatTextFiles {
       touch header.txt
     fi
 
-    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename} || true
+    cat ~{write_lines(shards)} | xargs -I {} ~{concat_command} {} ~{posthoc_cmds} > ~{output_filename} || true
   >>>
 
   output {

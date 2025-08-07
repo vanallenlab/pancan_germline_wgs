@@ -678,18 +678,18 @@ task CalcLd {
     # Define lists of common variants for each class
     if ~{has_snvs}; then
       zcat ~{default="" common_snvs_bed} \
-      | cut -f4 | fgrep -xf elig_vids.list \
-      > snvs.list || true
+      | cut -f4 | fgrep -xf elig_vids.list | sort \
+      > snv.list || true
     fi
     if ~{has_indels}; then
       zcat ~{default="" common_indels_bed} \
-      | cut -f4 | fgrep -xf elig_vids.list \
-      > indels.list || true
+      | cut -f4 | fgrep -xf elig_vids.list | sort \
+      > indel.list || true
     fi
     if ~{has_svs}; then
       zcat ~{default="" common_svs_bed} \
-      | cut -f4 | fgrep -xf elig_vids.list \
-      > svs.list || true
+      | cut -f4 | fgrep -xf elig_vids.list | sort \
+      > sv.list || true
     fi
 
     # Compute pairwise LD for all pairs of variants
@@ -699,6 +699,9 @@ task CalcLd {
       --ld-window-r2 ~{plink_ld_window_min_r2} \
       --vcf ~{vcf} \
       --out ~{out_prefix}
+    cut -f3,6,7 ~{out_prefix}.vcor | sort -k1,1 -k2,2 \
+    > ~{out_prefix}.vcor.slim
+    rm ~{out_prefix}.vcor
 
     # Simulate synthetic LD "noise" for each variant
     # Note that this R script appends to --out-tsv, so all 
@@ -732,11 +735,22 @@ task CalcLd {
       if [ -s $vc1.list ]; then
         for vc2 in snv indel sv; do
           if [ -s $vc2.list ]; then
-            fgrep -wf $vc1.list \
-              ~{out_prefix}.ld.vcor \
-            | fgrep -wf $vc2.list \
+            for wrapper in 1; do
+              # vc1 left, vc2 right
+              fgrep -wf $vc1.list ~{out_prefix}.vcor.slim \
+              | fgrep -wf $vc2.list \
+              | join -t $'\t' - $vc1.list \
+              | sort -k2,2 \
+              | join -1 2 -2 1 -t $'\t' - $vc2.list
+              # vc2 left, vc1 right
+              fgrep -wf $vc2.list ~{out_prefix}.vcor.slim \
+              | fgrep -wf $vc1.list \
+              | join -t $'\t' - $vc2.list \
+              | sort -k2,2 \
+              | join -1 2 -2 1 -t $'\t' - $vc1.list
+            done \
             | awk -v FS="\t" -v OFS="\t" \
-              '{ if ($3!=$6) print $3, $7"\n"$6, $7 }' \
+              '{ if ($1!=$2) print $1, $3"\n"$2, $3 }' \
             | cat - null_r2.tsv \
             | fgrep -wf $vc1.list \
             | sort -nrk2,2 -k1,1V \

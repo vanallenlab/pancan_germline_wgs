@@ -649,7 +649,7 @@ if ! [ -e $staging_dir/calling_intervals ]; then
 fi
 
 # Initialize .json of contig-specific overrieds for SV VCF paths and scatter counts
-echo "{ " > $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
+echo "{ " > $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.json
 while read contig; do
   kc=$( fgrep -v "@" \
           $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
@@ -659,18 +659,18 @@ while read contig; do
   echo "\"CONTIG_VCF_IDXS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.posthoc_filtered.vcf.gz.tbi\"] },"
 done < contig_lists/dfci-g2c.v1.contigs.$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
->> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
-echo " }" >> $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json
+>> $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.json
+echo " }" >> $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.json
 
 # Build chromosome-specific override json of VCFs and VCF indexes
 add_contig_vcfs_to_chromshard_overrides_json \
-  $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json \
+  $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.json \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2 \
   filtered_vcfs \
   filtered_vcf_idxs
 
 # Write template input .json for QC metric collection
-cat << EOF > $staging_dir/CollectVcfQcMetrics.inputs.template.json
+cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
 {
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.benchmarking_shards": \$CONTIG_SCATTER_COUNT,
@@ -726,13 +726,13 @@ EOF
 # Submit, monitor, stage, and cleanup QC metadata workflow
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
-  --input-json-template $staging_dir/CollectVcfQcMetrics.inputs.template.json \
-  --contig-variable-overrides $staging_dir/CollectVcfQcMetrics.contig_variable_overrides.json \
+  --input-json-template $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json \
+  --contig-variable-overrides $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.json \
   --dependencies-zip qc.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/VcfQcMetrics/ \
   --name CollectInitialVcfQcMetrics \
   --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
-  --status-tsv cromshell/progress/dfci-g2c.v1.CollectVcfQcMetrics.initial_qc.progress.tsv \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollectInitialVcfQcMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
   --max-attempts 3
