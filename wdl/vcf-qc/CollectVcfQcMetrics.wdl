@@ -705,21 +705,21 @@ task CalcLd {
     # variant classes can be written to the same file without issue
     n_samples=$( bcftools query -l ~{vcf} | wc -l )
     if ~{has_snvs}; then
-      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/null_ld_sim.R \
         --bed ~{default="" common_snvs_bed} \
         --sample-size $n_samples \
         --max-r2 ~{plink_ld_window_min_r2} \
         --out-tsv null_r2.tsv
     fi
     if ~{has_indels}; then
-      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/null_ld_sim.R \
         --bed ~{default="" common_indels_bed} \
         --sample-size $n_samples \
         --max-r2 ~{plink_ld_window_min_r2} \
         --out-tsv null_r2.tsv
     fi
     if ~{has_svs}; then
-      /opt/pancan_germline_wgs/scripts/vcf_qc/null_ld_sim.R \
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/null_ld_sim.R \
         --bed ~{default="" common_svs_bed} \
         --sample-size $n_samples \
         --max-r2 ~{plink_ld_window_min_r2} \
