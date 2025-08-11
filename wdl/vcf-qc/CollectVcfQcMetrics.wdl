@@ -660,6 +660,7 @@ task CalcLd {
     
     String out_prefix
     String g2c_analysis_docker
+    Int min_disk_gb = 100
   }
 
   Boolean has_snvs = defined(common_snvs_bed)
@@ -667,7 +668,8 @@ task CalcLd {
   Boolean has_svs = defined(common_svs_bed)
 
   Int disk_gb_auto = ceil(20 * size(vcf, "GB")) + 10
-  Int disk_gb = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
+  Int disk_gb_ceil = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
+  Int disk_gb = if disk_gb_ceil < min_disk_gb then min_disk_gb else disk_gb_ceil
 
   command <<<
     set -eu -o pipefail
@@ -771,8 +773,8 @@ task CalcLd {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: "3.75 GB"
-    cpu: 2
+    memory: "7.5 GB"
+    cpu: 4
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
   }  
