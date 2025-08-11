@@ -773,8 +773,8 @@ task CalcLd {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: "7.5 GB"
-    cpu: 4
+    memory: "3.75 GB"
+    cpu: 2
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
   }  
