@@ -430,6 +430,7 @@ workflow PlotVcfQcMetrics {
           ref_dataset_title = plot_bd_title,
           eval_interval_names = select_all(benchmark_interval_names),
           inputs_json = select_first([PrepSiteBench.plot_files_json])[site_bench_di],
+          inverted_inputs_json = select_first([PrepSiteBenchInverted.plot_files_json])[site_bench_di],
           output_prefix = output_prefix,
           common_af_cutoff = common_af_cutoff,
           g2c_analysis_docker = g2c_analysis_docker
