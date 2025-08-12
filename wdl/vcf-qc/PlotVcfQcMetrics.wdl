@@ -43,8 +43,11 @@ workflow PlotVcfQcMetrics {
     # Inner arrays: one or more files, such as one file per chromosome 
     # (or just one file if already collapsed across all chromosomes)
     Array[Array[Array[File?]]] site_benchmark_common_snv_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_common_snv_sens_beds = [[[]]]
     Array[Array[Array[File?]]] site_benchmark_common_indel_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_common_indel_sens_beds = [[[]]]
     Array[Array[Array[File?]]] site_benchmark_common_sv_ppv_beds = [[[]]]
+    Array[Array[Array[File?]]] site_benchmark_common_sv_sens_beds = [[[]]]
     Array[Array[Array[File?]]] site_benchmark_ppv_by_freqs = [[[]]]
     Array[Array[Array[File?]]] site_benchmark_sensitivity_by_freqs = [[[]]]
     Array[String?] site_benchmark_dataset_prefixes = []
@@ -276,9 +279,12 @@ workflow PlotVcfQcMetrics {
       String bd_name = select_first([site_benchmark_dataset_prefixes[site_bench_di], "benchmark_data"])
       String sb_prefix = output_prefix + "." + bd_name
 
-      Array[Array[File?]] bd_snv_beds = site_benchmark_common_snv_ppv_beds[site_bench_di]
-      Array[Array[File?]] bd_indel_beds = site_benchmark_common_indel_ppv_beds[site_bench_di]
-      Array[Array[File?]] bd_sv_beds = site_benchmark_common_sv_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_snv_ppv_beds = site_benchmark_common_snv_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_indel_ppv_beds = site_benchmark_common_indel_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_sv_ppv_beds = site_benchmark_common_sv_ppv_beds[site_bench_di]
+      Array[Array[File?]] bd_snv_sens_beds = site_benchmark_common_snv_sens_beds[site_bench_di]
+      Array[Array[File?]] bd_indel_sens_beds = site_benchmark_common_indel_sens_beds[site_bench_di]
+      Array[Array[File?]] bd_sv_sens_beds = site_benchmark_common_sv_sens_beds[site_bench_di]
       Array[Array[File?]] bd_ppv_by_af = site_benchmark_ppv_by_freqs[site_bench_di]
       Array[Array[File?]] bd_sens_by_af = site_benchmark_sensitivity_by_freqs[site_bench_di]
 
@@ -287,11 +293,25 @@ workflow PlotVcfQcMetrics {
           dataset_name = bd_name,
           dataset_prefix = sb_prefix,
           interval_set_names = select_all(benchmark_interval_names),
-          common_snv_ppv_beds = bd_snv_beds,
-          common_indel_ppv_beds = bd_indel_beds,
-          common_sv_ppv_beds = bd_sv_beds,
+          common_snv_ppv_beds = bd_snv_ppv_beds,
+          common_indel_ppv_beds = bd_indel_ppv_beds,
+          common_sv_ppv_beds = bd_sv_ppv_beds,
           ppv_by_freqs = bd_ppv_by_af,
           sensitivity_by_freqs = bd_sens_by_af,
+          bcftools_docker = bcftools_docker,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+
+      # Also prep sensitivity benchmarking data
+      # This is required to spike in false negative sites into AF benchmarking plots
+      call PSB.PrepSiteBenchDataToPlot as PrepSiteBenchInverted {
+        input:
+          dataset_name = bd_name,
+          dataset_prefix = sb_prefix,
+          interval_set_names = select_all(benchmark_interval_names),
+          common_snv_ppv_beds = bd_snv_sens_beds,
+          common_indel_ppv_beds = bd_indel_sens_beds,
+          common_sv_ppv_beds = bd_sv_sens_beds,
           bcftools_docker = bcftools_docker,
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -715,6 +735,7 @@ task PlotSiteBenchmarking {
     Array[String] eval_interval_names
     Boolean bed_arrays_include_union = true
     File inputs_json
+    File inverted_inputs_json
     String output_prefix
     Float common_af_cutoff
 
@@ -764,10 +785,45 @@ write_array("ppv_by_af", data.get("ppv_by_af"))
 write_array("sens_by_af", data.get("sens_by_af"))
 CODE
 
+    # Parse inputs .json for "inverted" files (to spike false negatives into plots)
+    python3 - "~{inverted_inputs_json}" <<CODE
+import json
+import sys
+
+infile = sys.argv[1]
+with open(infile, "r") as f:
+  data = json.load(f)
+
+def write_array(name, val):
+  val = [v for v in val if v is not None and v != ""]
+  if len(val) == 0:
+    return
+  with open(f"{name}.txt", "w") as out:
+      for item in (val or []):
+          if item is not None:
+              out.write(item + "\n")
+
+write_array("snv_sens_beds", data.get("snv_ppv_beds", []) + [data.get("snv_ppv_union")])
+write_array("indel_sens_beds", data.get("indel_ppv_beds", []) + [data.get("indel_ppv_union")])
+write_array("sv_sens_beds", data.get("sv_ppv_beds", []) + [data.get("sv_ppv_union")])
+CODE
+
     # Localize SNV beds
     if [ -s snv_ppv_beds.txt ]; then
       cat snv_ppv_beds.txt | gsutil -m cp -I ./
       cat snv_ppv_beds.txt | xargs -I {} basename {} > snv_beds.list
+      # Add false negatives to BED for plotting
+      if [ -s snv_sens_beds.txt ]; then
+        while read main_bed sens_uri; do
+          gsutil -m cat $sens_uri \
+          | awk -v FS="\t" -v OFS="\t" \
+            '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
+          | cat <( zcat $main_bed ) - \
+          | gzip -c \
+          > tmp.bed.gz
+          mv tmp.bed.gz $main_bed
+        done < <( paste snv_beds.list snv_sens_beds.txt )
+      fi
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > snv_beds.list
     fi
@@ -776,6 +832,18 @@ CODE
     if [ -s indel_ppv_beds.txt ]; then
       cat indel_ppv_beds.txt | gsutil -m cp -I ./
       cat indel_ppv_beds.txt | xargs -I {} basename {} > indel_beds.list
+      # Add false negatives to BED for plotting
+      if [ -s indel_sens_beds.txt ]; then
+        while read main_bed sens_uri; do
+          gsutil -m cat $sens_uri \
+          | awk -v FS="\t" -v OFS="\t" \
+            '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
+          | cat <( zcat $main_bed ) - \
+          | gzip -c \
+          > tmp.bed.gz
+          mv tmp.bed.gz $main_bed
+        done < <( paste indel_beds.list indel_sens_beds.txt )
+      fi
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > indel_beds.list
     fi
@@ -784,6 +852,18 @@ CODE
     if [ -s sv_ppv_beds.txt ]; then
       cat sv_ppv_beds.txt | gsutil -m cp -I ./
       cat sv_ppv_beds.txt | xargs -I {} basename {} > sv_beds.list
+      # Add false negatives to BED for plotting
+      if [ -s sv_sens_beds.txt ]; then
+        while read main_bed sens_uri; do
+          gsutil -m cat $sens_uri \
+          | awk -v FS="\t" -v OFS="\t" \
+            '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
+          | cat <( zcat $main_bed ) - \
+          | gzip -c \
+          > tmp.bed.gz
+          mv tmp.bed.gz $main_bed
+        done < <( paste sv_beds.list sv_sens_beds.txt )
+      fi
     else
       seq 1 ~{n_sets} | awk '{ print "." }' > sv_beds.list
     fi

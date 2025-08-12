@@ -32,6 +32,7 @@ read.bed <- function(bed.in, common_af=0){
   keep.cols <- c("vc", "vsc", numeric.cols)
   df <- read.table(bed.in, header=T, sep="\t", comment.char="",
                    check.names=F, quote="")[, keep.cols]
+  df[is.na(df$af), "af"] <- 0
   df[is.na(df$match_af), "match_af"] <- 0
   df[, numeric.cols] <- as.data.frame(apply(df[, numeric.cols], 2, as.numeric))
   df <- df[which(df$af >= common_af), ]

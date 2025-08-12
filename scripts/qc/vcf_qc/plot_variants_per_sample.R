@@ -14,7 +14,6 @@
 # Load necessary libraries and constants
 options(scipen=1000, stringsAsFactors=F)
 require(argparse, quietly=TRUE)
-require(DescTools, quietly=TRUE)
 require(G2CR, quietly=TRUE)
 require(zoo, quietly=TRUE)
 load.constants("all")
@@ -223,7 +222,9 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
   pop.spacer <- n.samples * pop.space.wex
   pheno.spacer <- n.samples * pheno.space.wex
   xlims <- c(-0.01*n.samples,
-             n.samples + (pop.spacer * length(pop.breaks.x)) + (pheno.spacer * length(pheno.breaks.x)))
+             n.samples
+             + (pop.spacer * length(pop.breaks.x))
+             + (pheno.spacer * length(pheno.breaks.x)))
   ylims <- c(0, max(total.per.sample))
   hom.col <- adjust.color.hsb(var.class.colors[vc], s=0.01, b=-0.03)
   het.col <- adjust.color.hsb(var.class.colors[vc], s=-0.01, b=0.06)
@@ -254,24 +255,22 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
          col=c(hom.col, het.col), border=c(hom.col, het.col), lwd=0.25)
   })
 
-  # Add groupwise medians
-  unique.s.feats <- unique(s.feats[, c("pop", "pheno")])
-  sapply(1:nrow(unique.s.feats), function(i){
-    pop <- unique.s.feats$pop[i]
-    pheno <- unique.s.feats$pheno[i]
-    sids <- rownames(s.feats)[which(s.feats$pop == pop & s.feats$pheno == pheno)]
+  # Add groupwise medians, divided by population if provided
+  sapply(unique(s.feats$pop), function(pop){
+    sids <- rownames(s.feats)[which(s.feats$pop == pop)]
     group.df <- data.frame("x" = sample.xleft[sids]+0.5,
                            "k" = total.per.sample[sids],
                            row.names=sids)
     group.df <- group.df[order(group.df$x), ]
     lab.x.at <- median(group.df$x)
-    lab.y.at <- max(group.df$k[which(group.df$x >= quantile(group.df$x, 0.25)
-                                     & group.df$x <= quantile(group.df$x, 0.75))])
+    lab.y.at <- max(c(0.55*diff(par("usr")[3:4]),
+                      quantile(group.df$k, prob=0.99)))
     group.k.med <- median(group.df$k)
-    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T,
-         col=MixColor(var.class.colors[vc], "black", 2/3),
-         labels=clean.numeric.labels(round(group.k.med, 0),
-                                     min.label.length=if(group.k.med < 1000){1}else{3}))
+    med.lab <- clean.numeric.labels(round(group.k.med, 0),
+                                    min.label.length=if(group.k.med < 1000){1}else{3})
+    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T, col="white", font=2, labels=med.lab)
+    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T, labels=med.lab,
+         col=if(is.na(pop)){"black"}else{pop.palettes[[pop]]["dark1"]})
   })
 
   # Add left Y axis
@@ -493,9 +492,9 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
 
 # Helper function to handle scatterplots used for inter-class comparisons
 interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
-                               xlims=NULL, ylims=NULL, diag.lm=F, cor.lm=F,
-                               stat.lab.hex=0.04, pt.cex=0.65,
-                               parmar=c(2, 2.5, 1, 3.5)){
+                               axis.lab.suffix=NULL, xlims=NULL, ylims=NULL,
+                               diag.lm=F, cor.lm=F, stat.lab.hex=0.04,
+                               pt.cex=0.65, parmar=c(2, 2.75, 1, 3.5)){
   # Get pointwise plotting parameters
   pw.params <- scatterplot.point.params(nrow(plot.df))
   if(is.null(pop)){
@@ -529,14 +528,16 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
 
   # Add axes & title
   mtext(3, text=title)
-  clean.axis(1, label.units=label.units, infinite=T, max.ticks=5,
-             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[1]], "s", sep=""),
+  clean.axis(1, label.units=label.units, infinite=T, max.ticks=4,
+             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[1]],
+                                  axis.lab.suffix),
                             error=function(e){"X"}),
-             label.line=-0.85, title.line=0)
-  clean.axis(2, label.units=label.units, infinite=T, max.ticks=5,
-             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[2]], "s", sep=""),
+             label.line=-0.85, title.line=0, max.label.decimals=1)
+  clean.axis(2, label.units=label.units, infinite=T, max.ticks=4,
+             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[2]],
+                                  axis.lab.suffix),
                             error=function(e){"Y"}),
-             label.line=-0.75, title.line=0.5)
+             label.line=-0.75, title.line=0.75, max.label.decimals=1)
 
   # Add title & legends
   r2 <- cor(plot.df[, 1], plot.df[, 2])^2
@@ -602,7 +603,8 @@ plot.heterozygosity <- function(gt.counts, vc1, vc2, pop=NULL,
   # Generate plot
   xlims <- ylims <- range(h.df[, c(vc1, vc2)])
   r2 <- interclass.scatter(h.df, pop, title, label.units="percent",
-                           xlims=xlims, ylims=ylims, diag.lm=T)
+                           axis.lab.suffix="het. rate", xlims=xlims,
+                           ylims=ylims, diag.lm=T)
 
   return(c(r2, nrow(h.df)))
 }
@@ -633,7 +635,8 @@ plot.count.comparisons <- function(gt.counts, vc1, vc2, pop=NULL,
   }
 
   # Generate plot
-  r2 <- interclass.scatter(c.df, pop, title, label.units="count", cor.lm=T)
+  r2 <- interclass.scatter(c.df, pop, title, label.units="count",
+                           axis.lab.suffix="count", cor.lm=T)
 
   return(c(r2, nrow(c.df)))
 }

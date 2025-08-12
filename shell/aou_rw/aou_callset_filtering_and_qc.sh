@@ -678,7 +678,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
-  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:fd8af73",
+  "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8260798",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
@@ -766,6 +766,9 @@ site_benchmark_sensitivity_by_freqs
 site_benchmark_common_snv_ppv_beds
 site_benchmark_common_indel_ppv_beds
 site_benchmark_common_sv_ppv_beds
+site_benchmark_common_snv_sens_beds
+site_benchmark_common_indel_sens_beds
+site_benchmark_common_sv_sens_beds
 twin_genotype_benchmark_distribs
 trio_mendelian_violation_distribs
 EOF
@@ -869,6 +872,12 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
                                                               $( collapse_txt $staging_dir/site_benchmark_common_indel_ppv_beds.giab_hard.uris.list ) ]],
   "PlotVcfQcMetrics.site_benchmark_common_sv_ppv_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_sv_ppv_beds.giab_easy.uris.list ),
                                                            $( collapse_txt $staging_dir/site_benchmark_common_sv_ppv_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_common_snv_sens_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_snv_sens_beds.giab_easy.uris.list ),
+                                                             $( collapse_txt $staging_dir/site_benchmark_common_snv_sens_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_common_indel_sens_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_indel_sens_beds.giab_easy.uris.list ),
+                                                               $( collapse_txt $staging_dir/site_benchmark_common_indel_sens_beds.giab_hard.uris.list ) ]],
+  "PlotVcfQcMetrics.site_benchmark_common_sv_sens_beds": [[ $( collapse_txt $staging_dir/site_benchmark_common_sv_sens_beds.giab_easy.uris.list ),
+                                                            $( collapse_txt $staging_dir/site_benchmark_common_sv_sens_beds.giab_hard.uris.list ) ]],
   "PlotVcfQcMetrics.site_benchmark_ppv_by_freqs": [[ $( collapse_txt $staging_dir/site_benchmark_ppv_by_freqs.giab_easy.uris.list ),
                                                      $( collapse_txt $staging_dir/site_benchmark_ppv_by_freqs.giab_hard.uris.list ) ]],
   "PlotVcfQcMetrics.site_benchmark_sensitivity_by_freqs": [[ $( collapse_txt $staging_dir/site_benchmark_sensitivity_by_freqs.giab_easy.uris.list ),

@@ -448,7 +448,7 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
          col=var.class.colors["snv"], xpd=T)
   }
   if(do.indels){
-    text(x=-log10(10)-snv.gap-snv.width, y=max(del.xy$y),
+    text(x=-log10(2)-snv.gap-snv.width, y=max(del.xy$y),
          labels="Indels", pos=2, col=var.class.colors["indel"], xpd=T)
   }
   if(do.svs){
@@ -461,7 +461,14 @@ plot.size.volcano <- function(size.d, ref.size.d=NULL, ref.title=NULL,
     }else{
       ref.legend <- "Hashes from\nref. cohort"
     }
-    text(x=par("usr")[2], y=0.925*par("usr")[4], pos=2, cex=4.5/6,
+    if(do.ref.svs){
+      ref.legend.y <- max(ref.gain.xy$y[which(names(ref.gain.xy$x) %in%
+                                            names(which(ref.breaks >= log10(500))))],
+                          na.rm=T) + (0.075*diff(par("usr")[3:4]))
+    }else{
+      ref.legend.y <- 0.925*par("usr")[4]
+    }
+    text(x=par("usr")[2], y=ref.legend.y, pos=2, cex=4.5/6,
          col=var.ref.color, xpd=T, labels=ref.legend)
   }
   # n.balcpx <- sum(df[which(df$subclass %in% c("INV", "CPX", "CTX", "OTH")), -c(1:2)])
