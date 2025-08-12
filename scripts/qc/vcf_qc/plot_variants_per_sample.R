@@ -276,7 +276,7 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
 
   # Add left Y axis
   clean.axis(2, title=paste(var.class.abbrevs[vc], "s", sep=""),
-             label.units="count", infinite.positive=T, max.ticks=4,
+             label.units="count", infinite.positive=T, min.ticks=3, max.ticks=4,
              title.line=1.4, cex.title=7.5/6, cex.axis=1)
 
   # Add right Y axis-legend hybrid

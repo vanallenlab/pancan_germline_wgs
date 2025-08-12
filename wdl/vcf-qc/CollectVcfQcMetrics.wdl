@@ -32,6 +32,10 @@ workflow CollectVcfQcMetrics {
                                                    # and writing to stdout
 
     Float common_af_cutoff = 0.01                  # Minimum AF for a variant to be included in common variant subsets
+    Boolean do_ld = true                           # Should LD-based QC be performed?
+    Int ld_window = 500000                         # Window size to draw around each variant for plink LD computation
+    Int ld_scatter_chunk_size = 5000000            # Chunk size for parallelizing LD computations. Will overlap other chunks by ld_window bp
+    File? genome_file                              # BEDTools-style .genome file. Required for LD computation as well as any benchmarking
 
     File? trios_fam_file                           # .fam file of trios for Mendelian transmission analyses
     File? twins_tsv                                # Two-column .tsv with pairs of IDs for technical replicates or identical twins
@@ -61,7 +65,6 @@ workflow CollectVcfQcMetrics {
 
     Array[File]? benchmark_interval_beds           # BED files of intervals to consider for benchmarking evaluation
     Array[String]? benchmark_interval_bed_names    # Descriptive names for each set of evaluation intervals
-    File? genome_file                              # BEDTools-style .genome file
     Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site and sample benchmarking
     Int min_samples_per_bench_shard = 10           # Minimum number of samples per shard to allow for sample benchmarking
 
@@ -420,27 +423,72 @@ workflow CollectVcfQcMetrics {
     }
   }
 
-  # Concatenate dense common VCFs
-  # Necessary for LD comparisons (need all variants in a single file)
-  call QcTasks.ConcatVcfs as ConcatCommonVcfs {
-    input:
-      vcfs = CommonFilterDenseVcf.subsetted_vcf,
-      vcf_idxs = CommonFilterDenseVcf.subsetted_vcf_idx,
-      out_prefix = output_prefix + ".dense.common",
-      bcftools_concat_options = "--allow-overlaps",
-      bcftools_docker = bcftools_docker
-  }
+  # Calculate peak LD between all pairs of variant classes, if optioned
+  if ( do_ld && defined(genome_file) ) {
 
-  # Calculate peak LD between all pairs of variant classes
-  call CalcLd as CalcCommonLd {
-    input:
-      vcf = ConcatCommonVcfs.merged_vcf,
-      vcf_idx = ConcatCommonVcfs.merged_vcf_idx,
-      common_snvs_bed = CollapseCommonSnvs.merged_file,
-      common_indels_bed = CollapseCommonIndels.merged_file,
-      common_svs_bed = CollapseCommonSvs.merged_file,
-      out_prefix = output_prefix + ".dense.common",
-      g2c_analysis_docker = g2c_analysis_docker
+    # Collapse common sites for dense subset
+    Array[File] dense_common_snv_site_shards = select_all(select_first([DenseSiteMetrics.common_snv_sites, [empty_bed]]))
+    Array[File] dense_common_indel_site_shards = select_all(select_first([DenseSiteMetrics.common_indel_sites, [empty_bed]]))
+    Array[File] dense_common_sv_site_shards = select_all(select_first([DenseSiteMetrics.common_sv_sites, [empty_bed]]))
+    Array[File] all_dense_common_sites_beds = flatten([dense_common_snv_site_shards, dense_common_indel_site_shards, dense_common_sv_site_shards])
+    if ( length(all_dense_common_sites_beds) > 0 ) {
+      call QcTasks.ConcatTextFiles as CollapseDenseCommonSiteMetrics {
+        input:
+          shards = all_dense_common_sites_beds,
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".dense_common_sites.bed.gz",
+          docker = bcftools_docker
+      }
+    }
+
+    # Segment common sites from dense subset into 5Mb overlapping chunks
+    call ChunkCommonSites as MakeLdChunks {
+      input:
+        sites_bed = select_first([CollapseDenseCommonSiteMetrics.merged_file, empty_bed]),
+        genome_file = select_first([genome_file, MakeEmptyFile.empty_file]),
+        chunk_size = ld_scatter_chunk_size,
+        buffer = ld_window,
+        docker = bcftools_docker
+    }
+
+    # Concatenate dense common VCFs
+    # Necessary for LD comparisons (need all variants in a single file)
+    # TODO: rework this to output sharded VCFs according to LD chunks
+    call MergeAndReshardVcfs as ChunkCommonVcf {
+      input:
+        vcfs = CommonFilterDenseVcf.subsetted_vcf,
+        vcf_idxs = CommonFilterDenseVcf.subsetted_vcf_idx,
+        new_intervals_tsv = MakeLdChunks.chunks_tsv,
+        out_prefix = output_prefix + ".dense.common",
+        bcftools_concat_options = "--allow-overlaps",
+        bcftools_docker = bcftools_docker
+    }
+
+    # Scatter over chunks and compute LD on each
+    Array[Pair[File, File]] common_vcf_chunks = zip(ChunkCommonVcf.resharded_vcfs, 
+                                                    ChunkCommonVcf.resharded_vcf_idxs)
+    scatter ( chunk_info in common_vcf_chunks ) {
+      call CalcLd as CalcCommonLd {
+        input:
+          vcf = chunk_info.left,
+          vcf_idx = chunk_info.right,
+          common_snvs_bed = CollapseCommonSnvs.merged_file,
+          common_indels_bed = CollapseCommonIndels.merged_file,
+          common_svs_bed = CollapseCommonSvs.merged_file,
+          out_prefix = basename(chunk_info.left, ".vcf.gz"),
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
+
+    call MergePeakLdChunks {
+      input:
+        chunks = CalcCommonLd.ld_stats,
+        out_filename = output_prefix + ".peak_ld_by_vc.tsv.gz",
+        docker = linux_docker
+    }
   }
 
 
@@ -622,7 +670,7 @@ workflow CollectVcfQcMetrics {
     File af_distrib = SumAfDistribs.merged_distrib
     File size_vs_af_distrib = SumJointDistribs.merged_distrib
     File genotype_distrib = SumGenotypeDistribs.merged_distrib
-    File ld_stats = CalcCommonLd.ld_stats
+    File? ld_stats = MergePeakLdChunks.merged_ld
 
     Array[Array[File]]? site_benchmark_common_snv_ppv_beds = BenchmarkSites.common_snv_ppv_beds
     Array[Array[File]]? site_benchmark_common_snv_sens_beds = BenchmarkSites.common_snv_sens_beds
@@ -655,7 +703,7 @@ task CalcLd {
     File? common_indels_bed
     File? common_svs_bed
 
-    Int plink_ld_window_kb = 1000
+    Int plink_ld_window_kb = 500
     Float plink_ld_window_min_r2 = 0.05
     
     String out_prefix
@@ -664,8 +712,11 @@ task CalcLd {
   }
 
   Boolean has_snvs = defined(common_snvs_bed)
+  String snv_opt = if has_snvs then "--snv-list snv.list" else ""
   Boolean has_indels = defined(common_indels_bed)
+  String indel_opt = if has_indels then "--indel-list indel.list" else ""
   Boolean has_svs = defined(common_svs_bed)
+  String sv_opt = if has_svs then "--sv-list sv.list" else ""
 
   Int disk_gb_auto = ceil(20 * size(vcf, "GB")) + 10
   Int disk_gb_ceil = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
@@ -709,6 +760,7 @@ task CalcLd {
     # Note that this R script appends to --out-tsv, so all 
     # variant classes can be written to the same file without issue
     n_samples=$( bcftools query -l ~{vcf} | wc -l )
+    touch null_r2.tsv
     if ~{has_snvs}; then
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/null_ld_sim.R \
         --bed ~{default="" common_snvs_bed} \
@@ -733,38 +785,13 @@ task CalcLd {
 
     # Iterate over pairs of variant classes and 
     # report the strongest R2 per variant
-    for vc1 in snv indel sv; do
-      if [ -s $vc1.list ]; then
-        for vc2 in snv indel sv; do
-          if [ -s $vc2.list ]; then
-            for wrapper in 1; do
-              # vc1 left, vc2 right
-              fgrep -wf $vc1.list ~{out_prefix}.vcor.slim \
-              | fgrep -wf $vc2.list \
-              | join -t $'\t' - $vc1.list \
-              | sort -k2,2 \
-              | join -1 2 -2 1 -t $'\t' - $vc2.list
-              # vc2 left, vc1 right
-              fgrep -wf $vc2.list ~{out_prefix}.vcor.slim \
-              | fgrep -wf $vc1.list \
-              | join -t $'\t' - $vc2.list \
-              | sort -k2,2 \
-              | join -1 2 -2 1 -t $'\t' - $vc1.list
-            done \
-            | awk -v FS="\t" -v OFS="\t" \
-              '{ if ($1!=$2) print $1, $3"\n"$2, $3 }' \
-            | cat - null_r2.tsv \
-            | fgrep -wf $vc1.list \
-            | sort -nrk2,2 -k1,1V \
-            | awk '!seen[$1]++' \
-            | awk -v OFS="\t" -v vc2=$vc2 '{ print $1, vc2, $2 }'
-          fi
-        done
-      fi
-    done \
-    | sort -Vk1,1 -k2,2V \
-    | cat <( echo -e "#vid\tother_vc\tld_r2" ) - | gzip -c \
-    > ~{out_prefix}.peak_ld_by_vc.tsv.gz
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/get_peak_ld.py \
+      ~{snv_opt} \
+      ~{indel_opt} \
+      ~{sv_opt} \
+      --null-r2 null_r2.tsv \
+      --out-tsv ~{out_prefix}.peak_ld_by_vc.tsv.gz \
+      ~{out_prefix}.vcor.slim
   >>>
 
   output {
@@ -843,6 +870,48 @@ task ChooseTargetSamples {
     memory: "3.75 GB"
     cpu: 2
     disks: "local-disk 20 HDD"
+    preemptible: 3
+  }
+}
+
+
+# Chunk genome into partially overlapping segments for LD computation
+task ChunkCommonSites {
+  input {
+    File sites_bed
+    File genome_file
+    Int chunk_size
+    Int buffer
+    String docker
+  }
+
+  Int disk_gb = ceil(3 * size(sites_bed, "GB")) + 10
+  Int step_size = chunk_size - buffer + 2
+
+  command <<<
+    set -eu -o pipefail
+
+    # Define contig start/stops that overlap with any common sites
+    awk -v OFS="\t" '{ print $1, "0", $2 }' ~{genome_file} \
+    | bedtools intersect -u -wa -a - -b ~{sites_bed} \
+    > target_contigs.bed
+
+    # Chunk each contig, only retaining chunks that overlap with at least two common sites
+    bedtools makewindows -b target_contigs.bed -w ~{chunk_size} -s ~{step_size} \
+    | bedtools intersect -c -wa -a - -b ~{sites_bed} \
+    | awk -v OFS="\t" '{ if ($NF>1) print $1":"$2"-"$3, "chunk_"NR }' \
+    > chunks.tsv
+  >>>
+
+  output {
+    File chunks_tsv = "chunks.tsv"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }
@@ -955,6 +1024,95 @@ task CleanTwins {
     memory: "3.75 GB"
     cpu: 2
     disks: "local-disk 20 HDD"
+    preemptible: 3
+  }
+}
+
+
+# Merge VCF shards, and re-shard them based on a new set of intervals
+task MergeAndReshardVcfs {
+  input {
+    Array[File] vcfs
+    Array[File] vcf_idxs
+    File new_intervals_tsv
+    String out_prefix
+
+    String bcftools_concat_options = ""
+
+    Float mem_gb = 3.5
+    Int cpu_cores = 2
+    Int? disk_gb
+
+    String bcftools_docker
+  }
+
+  Int default_disk_gb = ceil(2.5 * size(vcfs, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    bcftools concat \
+      ~{bcftools_concat_options} \
+      --file-list ~{write_lines(vcfs)} \
+      --threads ~{cpu_cores} \
+    | bcftools +scatter \
+      --scatter-file ~{new_intervals_tsv} \
+      -o . -Oz -p "~{out_prefix}."
+
+    find ./ -name "~{out_prefix}*vcf.gz" \
+    | xargs -I {} tabix -p vcf -f {}
+  >>>
+
+  output {
+    Array[File] resharded_vcfs = glob("~{out_prefix}*vcf.gz")
+    Array[File] resharded_vcf_idxs = glob("~{out_prefix}*vcf.gz.tbi")
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: mem_gb + " GB"
+    cpu: cpu_cores
+    disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
+    preemptible: 3
+  }
+}
+
+
+# Merge peak LD results across multiple calls of CalcLd
+task MergePeakLdChunks {
+  input {
+    Array[File] chunks
+    String out_filename
+    String docker
+  }
+
+  Int disk_gb = ceil(3 * size(chunks, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    zcat ~{chunks[0]} | sed -n '1p' > header.tsv || true
+
+    cat ~{write_lines(chunks)} \
+    | xargs -I {} zcat {} \
+    | grep -ve '^#' \
+    | sort -nrk3,3 \
+    | awk '!seen[$1"_"$2]++' \
+    | sort -Vk1,1 -k2,2V \
+    | cat header.tsv - \
+    | gzip -c \
+    > ~{out_filename}
+  >>>
+
+  output {
+    File merged_ld = out_filename
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }
 }

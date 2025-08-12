@@ -172,10 +172,10 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                   "missense" = "#FF6103",
                   "lof" = "#9D1309")
   DFCI.colors <- c("darkblue" = "#003354",
-                   "midblue" = "#02679A",
-                   "lightblue" = "#3AC6F3",
+                   "midblue" = "#00629B",
+                   "lightblue" = "#41B6E6",
                    "paleblue" = "#D4EEFF",
-                   "yellow" = "#F89820")
+                   "yellow" = "#FFA300")
   var.class.colors <- c("snv" = "#D9C9AE",
                         "indel" = "#A69C88",
                         "sv" = "#736D61")
