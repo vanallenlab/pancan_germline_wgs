@@ -135,6 +135,7 @@ task BenchmarkGenotypes {
     docker: g2c_analysis_docker
     memory: "3.5 GB"
     cpu: 2
+    maxRetries: 2
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }

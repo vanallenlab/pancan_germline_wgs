@@ -19,12 +19,7 @@ load.constants("all")
 
 
 ##################
-# Data functions #
-##################
-
-
-##################
-# Trio functions #
+# Plot functions #
 ##################
 # Main wrapper to plot all benchmarking strata
 plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,

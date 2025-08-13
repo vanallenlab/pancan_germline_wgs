@@ -10,7 +10,6 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/Utilities.wdl" as Utils
 import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/posthoc_qc/wdl/vcf-qc/QcTasks.wdl" as QcTasks
 
 
@@ -36,7 +35,7 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Clean SNV scatter intervals
-  call Utils.ParseIntervals as MakeSnvIntervals {
+  call QcTasks.ParseIntervals as MakeSnvIntervals {
     input:
       intervals_list = snv_scatter_intervals,
       docker = linux_docker
@@ -71,7 +70,7 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Concatenate sites BEDs for SNVs
-  call Utils.ConcatTextFiles as ConcatSnvs {
+  call QcTasks.ConcatTextFiles as ConcatSnvs {
     input:
       shards = select_all(CollectSnvMetrics.snv_sites),
       concat_command = "zcat",
@@ -85,7 +84,7 @@ workflow PreprocessGnomadSiteMetrics {
   # Concatenate sites BEDs for indels
   Array[File] indel_beds = flatten(select_all([select_all(CollectSnvMetrics.indel_sites), 
                                    select_all(CollectSvMetrics.indel_sites)]))
-  call Utils.ConcatTextFiles as ConcatIndels {
+  call QcTasks.ConcatTextFiles as ConcatIndels {
     input:
       shards = indel_beds,
       concat_command = "zcat",
@@ -97,7 +96,7 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Clean SV scatter intervals
-  call Utils.ParseIntervals as MakeSvIntervals {
+  call QcTasks.ParseIntervals as MakeSvIntervals {
     input:
       intervals_list = sv_scatter_intervals,
       docker = linux_docker
@@ -134,7 +133,7 @@ workflow PreprocessGnomadSiteMetrics {
   # Concatenate sites BEDs for SVs
   Array[File] sv_beds = flatten(select_all([select_all(CollectSnvMetrics.sv_sites), 
                                 select_all(CollectSvMetrics.sv_sites)]))
-  call Utils.ConcatTextFiles as ConcatSvs {
+  call QcTasks.ConcatTextFiles as ConcatSvs {
     input:
       shards = sv_beds,
       concat_command = "zcat",

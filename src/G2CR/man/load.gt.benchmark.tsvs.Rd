@@ -4,7 +4,7 @@
 \alias{load.gt.benchmark.tsvs}
 \title{Load genotype benchmarking data}
 \usage{
-load.gt.benchmark.tsvs(tsvs.in, set.names, key.cols = 1:5, trio.mode = TRUE)
+load.gt.benchmark.tsvs(tsvs.in, set.names, key.cols = 1:5, trio.mode = FALSE)
 }
 \arguments{
 \item{tsvs.in}{Character vector of paths to .tsv inputs}

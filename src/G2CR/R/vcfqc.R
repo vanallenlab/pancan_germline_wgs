@@ -253,7 +253,7 @@ get.gt.bench.plot.data <- function(bench.dat, vc=NULL, trio.mode=FALSE){
 #' @export load.gt.benchmark.tsvs
 #' @export
 load.gt.benchmark.tsvs <- function(tsvs.in, set.names, key.cols=1:5,
-                                   trio.mode=TRUE){
+                                   trio.mode=FALSE){
   # Do nothing if no .tsv files are provided
   if(is.null(tsvs.in) | length(tsvs.in) == 0){
     return(NULL)
@@ -389,6 +389,9 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
                         gsub("I", "i", paste(var.class.abbrevs[vc], "s", sep="")),
                         "/ genome\n", title.preps[2],
                         clean.numeric.labels(n.samples), ref.title, "samples")
+    if(nchar(metric.name) >= 10){
+      plot.title <- gsub(" / ", "/", plot.title, fixed=T)
+    }
     pdf(paste(out.prefix, vc, "barplot.pdf", sep="."), height=2.25, width=2.45)
     plot.gt.bench(plot.dat=plot.dat,
                   strata.names=c("Het.", "Het.", "Hom."),
