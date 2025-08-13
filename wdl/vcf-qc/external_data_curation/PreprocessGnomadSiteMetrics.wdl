@@ -258,7 +258,7 @@ task SliceVcf {
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    max_retries: 1
+    max_retries: 2
   }
 }
 

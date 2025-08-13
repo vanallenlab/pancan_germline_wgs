@@ -913,6 +913,7 @@ task ChunkCommonSites {
     cpu: 1
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
+    maxRetries: 2
   }
 }
 
@@ -1046,7 +1047,7 @@ task MergeAndReshardVcfs {
     String bcftools_docker
   }
 
-  Int default_disk_gb = ceil(2.5 * size(vcfs, "GB")) + 10
+  Int default_disk_gb = ceil(4 * size(vcfs, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
@@ -1074,6 +1075,7 @@ task MergeAndReshardVcfs {
     cpu: cpu_cores
     disks: "local-disk " + select_first([disk_gb, default_disk_gb]) + " HDD"
     preemptible: 3
+    maxRetries: 3
   }
 }
 
