@@ -892,7 +892,7 @@ task ChunkCommonSites {
     set -eu -o pipefail
 
     # Define contig start/stops that overlap with any common sites
-    awk -v OFS="\t" '{ print $1, "0", $2 }' ~{genome_file} \
+    awk -v OFS="\t" '{ print $1, "1", $2 }' ~{genome_file} \
     | bedtools intersect -u -wa -a - -b ~{sites_bed} \
     > target_contigs.bed
 

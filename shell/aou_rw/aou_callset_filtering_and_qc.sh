@@ -737,7 +737,7 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.CollectInitialVcfQcMetrics.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
-  --max-attempts 3
+  --max-attempts 6
 
 
 ##########################################
@@ -789,6 +789,14 @@ done < $staging_dir/bench_keys.list
 for suffix in af_distribution size_distribution; do
   fname=$staging_dir/gnomAD_$suffix.list
   if [ -e $fname ]; then rm $fname; fi
+done
+for key in sample_benchmark_ppv_distribs sample_benchmark_sensitivity_distribs; do
+  for dset in external_srwgs external_lrwgs; do
+    for subset in giab_easy giab_hard; do
+      fname=$staging_dir/$key.$subset.$dset.uris.list
+      if [ -e $fname ]; then rm $fname; fi
+    done
+  done
 done
 
 # Build input arrays
@@ -847,7 +855,7 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:6ac5224",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:414276d",
   "PlotVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
   "PlotVcfQcMetrics.peak_ld_stat_tsvs": $( collapse_txt $staging_dir/ld_stats.uris.list ),
