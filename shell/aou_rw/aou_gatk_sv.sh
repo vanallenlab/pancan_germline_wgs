@@ -760,5 +760,26 @@ submit_cohort_module 19
 
 # Note: this module only needs to be run once in one workspace for the whole cohort
 
-# TODO: implement this
+# Write template input .json for hard filters, part 1
+staging_dir=staging/posthoc_recluster
+if [ -e $staging_dir ]; then rm -rf $staging_dir; fi
+mkdir $staging_dir
+cat << EOF > $staging_dir/CollapseRedundantSvs.inputs.template.json
+{
+  "CollapseRedundantSvs.g2c_pipeline_docker": "TBD",
+  "CollapseRedundantSvs.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
+  "CollapseRedundantSvs.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
+}
+EOF
+
+# Submit, monitor, and stage/cleanup redundant variant reclustering
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-sv/CollapseRedundantSvs.wdl \
+  --input-json-template $staging_dir/CollapseRedundantSvs.inputs.template.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs \
+  --name CollapseRedundantSvs \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollapseRedundantSvs.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 30 \
+  --max-attempts 3
 

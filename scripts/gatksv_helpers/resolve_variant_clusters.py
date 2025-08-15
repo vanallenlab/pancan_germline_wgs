@@ -15,7 +15,7 @@ import argparse
 import csv
 import numpy as np
 import pysam
-from g2cpy import recursive_flatten
+from g2cpy import recursive_flatten, integrate_infos, integrate_gts
 from sys import stdin, stdout
 
 
@@ -79,6 +79,7 @@ def main():
         # Assign basic (non-INFO) record information
         newrec.pos = int(np.floor(np.nanmedian([r.pos for r in records])))
         newrec.stop = int(np.floor(np.nanmedian([r.stop for r in records])))
+        newrec.info['SVLEN'] = int(np.nanmax([newrec.stop - newrec.pos, 0]))
         newrec.id = '{}_{}'.format(args.prefix, k)
         newrec.qual = int(np.round(np.nanmean([r.qual for r in records])))
         newrec.filter.clear()
