@@ -753,3 +753,12 @@ submit_cohort_module 18
 
 submit_cohort_module 19
 
+
+#####################################
+# Collapse quasi-redundant variants #
+#####################################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# TODO: implement this
+

@@ -570,8 +570,9 @@ code/scripts/manage_chromshards.py \
 # Exclude outliers also from GATK-SV VCFs #
 ###########################################
 
-# Note: this workflow is scattered across all five workspaces for max parallelization
-# It must be submitted as below in each workspace
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# TODO: update this to reflect inputs from re-clustered output (see aou_gatk_sv.sh)
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup

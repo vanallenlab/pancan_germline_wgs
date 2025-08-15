@@ -13,6 +13,7 @@ Generic small / utility functions
 
 import hashlib
 import math
+from collections.abc import Iterable
 
 
 base62_alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -76,13 +77,12 @@ def hash_string(input, out_length, alphabet=base62_alphabet):
 
 def recursive_flatten(S):
     """
-    Recursively flatten all elements of an input list, S
-    Taken from SO: https://stackoverflow.com/questions/12472338/flattening-a-list-recursively
+    Recursively flatten all elements of an input iterable, S
     """
 
-    if S == []:
-        return S
-    if isinstance(S[0], list):
-        return recursive_flatten(S[0]) + recursive_flatten(S[1:])
-    return S[:1] + recursive_flatten(S[1:])
+    for item in S:
+        if isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
+            yield from recursive_flatten(item)
+        else:
+            yield item
 
