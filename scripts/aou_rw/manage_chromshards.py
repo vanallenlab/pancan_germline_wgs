@@ -90,6 +90,24 @@ def report_status(all_status, title=None):
     print('')
 
 
+def report_vm_load(n_retries=10):
+    """
+    Report current GCP VM load 
+    """
+
+    msg = '[{}] Current Cromwell server load: {:,} VMs'
+    k = 0
+    while k < n_retries:
+        try:
+            print(msg.format(clean_date(), g2cpy.count_vms()))
+            return
+        except:
+            k += 1
+
+    msg2 = '[{}] GCP VM check failed after {:,} tries'
+    print(msg.format(clean_date(), k))
+
+
 def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
                      action='cp', timeout=30, max_retries=20, verbose=False):
     """
@@ -294,6 +312,9 @@ def main():
     parser.add_argument('--submission-gate', type=float, default=None, help='Number of ' +
                         'minutes to pause after a new workflow submission ' +
                         '[default: no wait]')
+    parser.add_argument('--gcp-report-period', type=float, default=5, 
+                        help='Number of minutes between GCP VM load reports ' +
+                        '[default: report every 5 minutes]')
     parser.add_argument('--max-cycles', type=int, help='Maximum number of ' +
                         'workflow management cycles before exiting [default: ' +
                         'run until completion]')
@@ -380,6 +401,7 @@ def main():
                         'Outer gate' : args.outer_gate,
                         'Submission gate' : args.submission_gate,
                         'Active VM gate' : args.vm_gate,
+                        'GCP load report period' : args.gcp_report_period,
                         'Max cycles' : max_cycles,
                         'Dry run' : args.dry_run,
                         'Quiet mode' : args.quiet})
@@ -394,7 +416,6 @@ def main():
     else:
         all_status = {k : 'unknown' for k in contigs}
         run_status = all_status.copy()
-
 
     # If --hard-reset is specified, unstage all contigs prior to entering monitor loop
     if args.hard_reset:
@@ -426,6 +447,11 @@ def main():
     if not args.quiet:
         report_status(run_status, title='Status at launch:')
 
+    # Initial VM load check
+    if not args.quiet:
+        report_vm_load()
+    last_vm_check = datetime.now()
+
     # Loop infinitely while any status is not 'staged' and max_cycles has not been reached
     cycle_number = 0
     hard_reset_retries = {k : 0 for k in contigs}
@@ -438,6 +464,12 @@ def main():
 
         # Loop over all chromosomes
         for contig in contigs:
+
+            # VM check
+            if (datetime.now() - last_vm_check).seconds / 60 >= args.gcp_report_period:
+                if not args.quiet:
+                    report_vm_load()
+                last_vm_check = datetime.now()
 
             # Get most recent status for this contig
             status = run_status.get(contig, 'unknown')
@@ -604,7 +636,22 @@ def main():
                 msg = '[{}] Finished checking status for all {:,} contigs. ' + \
                       'Waiting {:,} minutes before checking again...\n'
                 print(msg.format(clean_date(), len(contigs), args.outer_gate))
-            sleep(60 * args.outer_gate)
+
+            # Sleep for --outer-gate, breaking at most every --gcp-report-period 
+            # to check server load
+            og_secs_remain = 60 * args.outer_gate
+            tt_next_vm_check = np.nanmax([(datetime.now() - last_vm_check).seconds, 0])
+            while og_secs_remain > 0:
+                if tt_next_vm_check < og_secs_remain:
+                    sleep(tt_next_vm_check)
+                    if not args.quiet:
+                        report_vm_load()
+                    last_vm_check = datetime.now()
+                    tt_next_vm_check = args.gcp_report_period * 60
+                    og_secs_remain -= tt_next_vm_check
+                else:
+                    sleep(og_secs_remain)
+                    break
 
     # Report if time limit reached
     if cycle_number == max_cycles:

@@ -31,9 +31,6 @@ gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 find code/ -name "*.R" | xargs -I {} chmod a+x {}
 
-# Install necessary packages
-. code/refs/install_packages.sh python
-
 # Source .bashrc and bash utility functions
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
@@ -60,6 +57,12 @@ cd code/wdl/pancan_germline_wgs && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
+
+# Install necessary packages
+. code/refs/install_packages.sh python
 
 # Copy sample & batch information
 gsutil -m cp -r \
@@ -766,7 +769,7 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi
 mkdir $staging_dir
 cat << EOF > $staging_dir/CollapseRedundantSvs.inputs.template.json
 {
-  "CollapseRedundantSvs.g2c_pipeline_docker": "TBD",
+  "CollapseRedundantSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:de08188",
   "CollapseRedundantSvs.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
   "CollapseRedundantSvs.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
 }

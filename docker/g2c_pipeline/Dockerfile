@@ -33,7 +33,7 @@ RUN apt-get -qqy update --fix-missing && \
 # Install missing R libraries as necessary
 RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'
 
-# Clone pancan_germline_wgs repo and check out specified hash
+# Clone pancan_germline_wgs repo, check out specified hash, and install helper python library
 ARG G2C_TAG=main
 RUN git clone \
     https://github.com/vanallenlab/pancan_germline_wgs.git \
@@ -42,6 +42,7 @@ RUN git clone \
     git pull && \
     git checkout $G2C_TAG && \
     cd -
+RUN pip install opt/pancan_germline_wgs/src/g2cpy
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]

@@ -23,7 +23,7 @@ workflow CollapseRedundantSvs {
     String g2c_pipeline_docker
   }
 
-  call CleanupVcf {
+  call DefineClusters {
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
@@ -31,17 +31,25 @@ workflow CollapseRedundantSvs {
       bp_dist = bp_dist,
       sample_overlap = sample_overlap,
       cluster_sv_types = cluster_sv_types,
+      g2c_pipeline_docker = g2c_pipeline_docker    
+  }
+
+  call ResolveClusters {
+    input:
+      vcf = vcf,
+      vcf_idx = vcf_idx,
+      clusters = DefineClusters.clusters,
       g2c_pipeline_docker = g2c_pipeline_docker
   }
 
   output {
-    File reclustered_vcf = CleanupVcf.reclustered_vcf
-    File reclustered_vcf_idx = CleanupVcf.reclustered_vcf_idx
+    File reclustered_vcf = ResolveClusters.reclustered_vcf
+    File reclustered_vcf_idx = ResolveClusters.reclustered_vcf_idx
   }
 }
 
 
-task CleanupVcf {
+task DefineClusters {
   input {
     File vcf
     File vcf_idx
@@ -58,9 +66,8 @@ task CleanupVcf {
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
-  String vcf_out =  "~{out_prefix}.reclustered.vcf.gz"
 
-  Int disk_gb = ceil(5 * size(vcf, "GB")) + 10
+  Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
@@ -80,29 +87,67 @@ task CleanupVcf {
       <( echo "input.vcf.gz" ) \
       - \
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
-    > sv_cluster_assignments.tsv
+    > ~{out_prefix}.sv_cluster_assignments.tsv
 
     # Identify clusters of two or more variants
     while read cidx; do
       awk -v cidx=$cidx -v OFS="\t" \
         '{ if ($5==cidx) print $1, $2, $3, $4 }' \
-        sv_cluster_assignments.tsv \
+        ~{out_prefix}.sv_cluster_assignments.tsv \
       | sort -Vk1,1 -k2,2n -k3,3n \
       | bedtools merge -i - -c 4 -o distinct
-    done < <( cut -f5 sv_cluster_assignments.tsv | uniq -c | awk '{ if ($1>1) print $2 }' ) \
+    done < <( cut -f5 ~{out_prefix}.sv_cluster_assignments.tsv \
+    | uniq -c | awk '{ if ($1>1) print $2 }' ) \
     | sort -Vk1,1 -k2,2n -k3,3n \
-    > sv_clusters.bed
-    cut -f4 sv_clusters.bed | sed 's/,/\n/g' | sort | uniq > member.vids.list
+    > ~{out_prefix}.sv_clusters.bed
+  >>>
+
+  output {
+    File clusters = "~{out_prefix}.sv_clusters.bed"
+  }
+
+  runtime {
+    docker: g2c_pipeline_docker
+    memory: "~{mem_gb} GB"
+    cpu: n_cpu
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+    maxRetries: 2
+  }
+}
+
+
+
+task ResolveClusters {
+  input {
+    File vcf
+    File vcf_idx
+    File clusters
+
+    Float mem_gb = 7.5
+    Int n_cpu = 4
+
+    String g2c_pipeline_docker
+  }
+
+  String out_prefix = basename(vcf, ".vcf.gz")
+  String vcf_out =  "~{out_prefix}.reclustered.vcf.gz"
+
+  Int disk_gb = ceil(5 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
 
     # Process each variant cluster and write to reclustered output file
     /opt/pancan_germline_wgs/scripts/gatksv_helpers/resolve_variant_clusters.py \
       --in-vcf ~{vcf} \
-      --clusters sv_clusters.bed \
+      --clusters ~{clusters} \
       --prefix ~{out_prefix} \
     | bcftools +fill-tags -Oz -o ~{out_prefix}.resolved_clusters.vcf.gz -- -t AC,AN,AF
     tabix -p vcf -f ~{out_prefix}.resolved_clusters.vcf.gz
 
     # Remove cluster members from input VCF and merge remainder with new clustered records
+    cut -f4 ~{clusters} | sed 's/,/\n/g' | sort | uniq > member.vids.list
     bcftools view --exclude 'ID=@member.vids.list' ~{vcf} -Oz -o ~{out_prefix}.remainder.vcf.gz
     tabix -p vcf -f ~{out_prefix}.remainder.vcf.gz
     bcftools concat \
