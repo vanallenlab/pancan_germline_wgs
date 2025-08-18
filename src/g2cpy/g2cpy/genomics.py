@@ -269,14 +269,14 @@ def integrate_infos(records):
             if key_is_numeric:
                 nvl = []
                 for i in range(len(vals[0])):
-                    nvl.append(__resolve_numerics([v[0] for v in vals]))
+                    nvl.append(__resolve_numerics(key, [v[0] for v in vals], key_h.type))
                 newinfo[key] = out_type(nvl)
             else:
                 newinfo[key] = out_type(sorted(list(set(recursive_flatten(vals)))))
 
         else:
             if key_is_numeric:
-                newinfo[key] = __resolve_numerics(key, vals)
+                newinfo[key] = __resolve_numerics(key, vals, key_h.type)
 
             elif key_is_flag:
                 if any(vals):

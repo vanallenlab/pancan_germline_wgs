@@ -124,7 +124,7 @@ task DefineClusters {
     cpu: n_cpu
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
-    maxRetries: 2
+    maxRetries: 1
   }
 }
 
@@ -181,7 +181,6 @@ task ResolveClusters {
     cpu: n_cpu
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
-    maxRetries: 2
+    maxRetries: 1
   }
 }
-
