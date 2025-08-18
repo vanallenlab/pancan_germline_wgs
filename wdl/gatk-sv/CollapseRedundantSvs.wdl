@@ -17,8 +17,10 @@ workflow CollapseRedundantSvs {
 
     Float recip_overlap = 0.98
     Int bp_dist = 500
-    Float sample_overlap = 0.02
+    Float sample_overlap = 0.05
     String cluster_sv_types = "DEL,DUP,INS,INV,CPX"
+    Float min_af = 0.001
+    Int min_ac = 10
 
     String g2c_pipeline_docker
   }
@@ -31,20 +33,24 @@ workflow CollapseRedundantSvs {
       bp_dist = bp_dist,
       sample_overlap = sample_overlap,
       cluster_sv_types = cluster_sv_types,
+      min_af = min_af,
+      min_ac = min_ac,
       g2c_pipeline_docker = g2c_pipeline_docker    
   }
 
-  call ResolveClusters {
-    input:
-      vcf = vcf,
-      vcf_idx = vcf_idx,
-      clusters = DefineClusters.clusters,
-      g2c_pipeline_docker = g2c_pipeline_docker
+  if ( DefineClusters.n_clusters > 0 ) {
+    call ResolveClusters {
+      input:
+        vcf = vcf,
+        vcf_idx = vcf_idx,
+        clusters = DefineClusters.clusters,
+        g2c_pipeline_docker = g2c_pipeline_docker
+    }
   }
 
   output {
-    File reclustered_vcf = ResolveClusters.reclustered_vcf
-    File reclustered_vcf_idx = ResolveClusters.reclustered_vcf_idx
+    File reclustered_vcf = select_first([ResolveClusters.reclustered_vcf, vcf])
+    File reclustered_vcf_idx = select_first([ResolveClusters.reclustered_vcf_idx, vcf_idx])
   }
 }
 
@@ -58,6 +64,8 @@ task DefineClusters {
     Int bp_dist
     Float sample_overlap
     String cluster_sv_types
+    Float min_af
+    Int min_ac
     
     Float mem_gb = 7.5
     Int n_cpu = 4
@@ -74,7 +82,9 @@ task DefineClusters {
 
     # Assign variants to clusters using svtk
     echo "##source=gatksv" > add_header.vcf
-    bcftools annotate -h add_header.vcf ~{vcf} -Oz -o input.vcf.gz
+    bcftools annotate -h add_header.vcf ~{vcf} \
+    | bcftools +fill-tags -- -t AF,AC \
+    | bcftools view --include "AF>=~{min_af} & AC>=~{min_ac}" -Oz -o input.vcf.gz
     tabix -f input.vcf.gz
     svtk vcfcluster \
       -d ~{bp_dist} \
@@ -95,15 +105,17 @@ task DefineClusters {
         '{ if ($5==cidx) print $1, $2, $3, $4 }' \
         ~{out_prefix}.sv_cluster_assignments.tsv \
       | sort -Vk1,1 -k2,2n -k3,3n \
-      | bedtools merge -i - -c 4 -o distinct
+      | bedtools merge -i - -d ~{bp_dist} -c 4 -o distinct
     done < <( cut -f5 ~{out_prefix}.sv_cluster_assignments.tsv \
-    | uniq -c | awk '{ if ($1>1) print $2 }' ) \
+              | uniq -c | awk '{ if ($1>1) print $2 }' ) \
+    | awk '{ if ($4~/,/) print }' \
     | sort -Vk1,1 -k2,2n -k3,3n \
     > ~{out_prefix}.sv_clusters.bed
   >>>
 
   output {
     File clusters = "~{out_prefix}.sv_clusters.bed"
+    Int n_clusters = length(read_lines("~{out_prefix}.sv_clusters.bed"))
   }
 
   runtime {
