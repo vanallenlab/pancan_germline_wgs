@@ -60,7 +60,8 @@ def startup_report(inputs):
     for key, val in inputs.items():
         if val is not None:
             if isinstance(val, bool):
-                print('  - {} enabled'.format(key))
+                if val:
+                    print('  - {} enabled'.format(key))
             else:
                 print('  - {}: {}'.format(key, val))
     print('')
@@ -236,6 +237,28 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
             status = 'submission_error'
 
     return status
+
+
+def sleepwalk(gate_mins, vm_report_secs, last_vm_check, quiet=False):
+    """
+    Wait for a specified duration, checking intermittently on Cromwell VM load
+    """
+
+    og_secs_remain = 60 * gate_mins
+    tt_next_vm_check = np.nanmax([(datetime.now() - last_vm_check).seconds, 0])
+    while og_secs_remain > 0:
+        if tt_next_vm_check < og_secs_remain:
+            sleep(tt_next_vm_check)
+            if not quiet:
+                report_vm_load()
+            last_vm_check = datetime.now()
+            tt_next_vm_check = vm_report_secs * 60
+            og_secs_remain -= tt_next_vm_check
+        else:
+            sleep(og_secs_remain)
+            break
+
+    return
 
 
 def main():
@@ -597,7 +620,10 @@ def main():
                                     print(msg.format(clean_date(), 
                                                      args.submission_gate, 
                                                      args.submission_gate))
-                                sleep(60 * args.submission_gate)
+                                # Sleep for --submission-gate, breaking at most 
+                                # every --gcp-report-period to check server load
+                                sleepwalk(args.submission_gate, args.gcp_report_period, 
+                                          last_vm_check, args.quiet)
 
                 else:
                     if not args.quiet:
@@ -639,19 +665,7 @@ def main():
 
             # Sleep for --outer-gate, breaking at most every --gcp-report-period 
             # to check server load
-            og_secs_remain = 60 * args.outer_gate
-            tt_next_vm_check = np.nanmax([(datetime.now() - last_vm_check).seconds, 0])
-            while og_secs_remain > 0:
-                if tt_next_vm_check < og_secs_remain:
-                    sleep(tt_next_vm_check)
-                    if not args.quiet:
-                        report_vm_load()
-                    last_vm_check = datetime.now()
-                    tt_next_vm_check = args.gcp_report_period * 60
-                    og_secs_remain -= tt_next_vm_check
-                else:
-                    sleep(og_secs_remain)
-                    break
+            sleepwalk(args.outer_gate, args.gcp_report_period, last_vm_check, args.quiet)
 
     # Report if time limit reached
     if cycle_number == max_cycles:

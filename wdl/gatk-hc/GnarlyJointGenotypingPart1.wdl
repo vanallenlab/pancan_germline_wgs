@@ -95,6 +95,7 @@ workflow GnarlyJointGenotypingPart1 {
         ref_fasta_index = ref_fasta_index,
         ref_dict = ref_dict,
         workspace_dir_name = "genomicsdb",
+        seed = idx,
         disk_size_gb = import_gvcfs_disk_gb,
         batch_size = import_gvcfs_batch_size
     }
@@ -183,6 +184,7 @@ task ImportGVCFsFT {
     File ref_dict
 
     String workspace_dir_name
+    String seed
 
     Int disk_size_gb
     Int machine_mem_mb = 30000
@@ -202,6 +204,11 @@ task ImportGVCFsFT {
 
     rm -rf ~{workspace_dir_name}
 
+    # Shuffle sample map to avoid I/O bottlenecking caused by
+    # thousands of read operations on a single URI
+    shuf --random-source=<( yes "~{seed}" ) ~{sample_name_map} > shuffled.sample.map.tsv
+
+    # GATK dev comments below:
     # We've seen some GenomicsDB performance regressions related to intervals, so we're going to pretend we only have a single interval
     # using the --merge-input-intervals arg
     # There's no data in between since we didn't run HaplotypeCaller over those loci so we're not wasting any compute
@@ -216,7 +223,7 @@ task ImportGVCFsFT {
       --genomicsdb-workspace-path ~{workspace_dir_name} \
       --batch-size ~{batch_size} \
       -L ~{interval} \
-      --sample-name-map <( shuf ~{sample_name_map} ) \
+      --sample-name-map shuffled.sample.map.tsv \
       --reader-threads 5 \
       --merge-input-intervals \
       --consolidate

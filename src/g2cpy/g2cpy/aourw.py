@@ -138,15 +138,19 @@ def delete_uris(uris, rm_args='', verbose=False):
                    shell=True, text=True)
 
 
-def count_vms():
+def count_vms(n_background=4):
     """
     Count number of active GCP VMs (useful as a proxy for Cromwell server load)
+    This will also subtract n_background from the total count to reflect baseline
+    VMs used by Cromwell or AoU RW all the time and unrelated to user-generated
+    server load. Based on empirical experience, this number appears to be 4
+    when using AOU RW default configurations
     """
 
     gcheck = subprocess.run('gcloud compute instances list | wc -l', 
                             shell=True, capture_output=True, text=True,
                             encoding='utf-8')
-    return int(gcheck.stdout)
+    return int(gcheck.stdout) - n_background
 
 
 def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
