@@ -169,7 +169,9 @@ workflow GnarlyJointGenotypingPart1 {
 
 # Local version of ImportGCCFs to expose number of preemptible tries
 # Also adds one max retry to account for Google API errors
-# Otherwise, this task is identical to ImportGVCFs as imported in JointGenotypingTasks.wdl
+# Also shuffles sample map order to improve performance when scalling to massive parallelization,
+# as we have found that GCP I/O becomes glacially slow with too many parallel reads to the same URI
+# Otherwise, this task is functionally identical to ImportGVCFs as imported in JointGenotypingTasks.wdl
 # This task is suffixed with "FT" for "fault tolerant" to disambiguate
 task ImportGVCFsFT {
 
@@ -184,11 +186,16 @@ task ImportGVCFsFT {
 
     Int disk_size_gb
     Int machine_mem_mb = 30000
+    Int min_swap_mb = 3000
     Int batch_size
     Int n_preemptible_tries = 3
 
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
   }
+
+  Int xms_mb = if machine_mem_mb / 3 < min_swap_mb then min_swap_mb else ceil(machine_mem_mb / 3)
+  Int xmx_mb = machine_mem_mb - 1000
+  String java_opts = "-Xms" + xms_mb + "m -Xmx" + xmx_mb + "m"
 
   command <<<
     set -euo pipefail
@@ -204,12 +211,12 @@ task ImportGVCFsFT {
     # a significant amount of non-heap memory for native libraries.
     # Also, testing has shown that the multithreaded reader initialization
     # does not scale well beyond 5 threads, so don't increase beyond that.
-    gatk --java-options "-Xms8000m -Xmx25000m" \
+    gatk --java-options "~{java_opts}" \
       GenomicsDBImport \
       --genomicsdb-workspace-path ~{workspace_dir_name} \
       --batch-size ~{batch_size} \
       -L ~{interval} \
-      --sample-name-map ~{sample_name_map} \
+      --sample-name-map <( shuf ~{sample_name_map} ) \
       --reader-threads 5 \
       --merge-input-intervals \
       --consolidate
@@ -235,7 +242,7 @@ task ImportGVCFsFT {
 
 # Local version of GnarlyGenotyper to expose number of preemptible tries
 # Also adds one max retry to increase robustness to transiet errors
-# Otherwise, this task is identical to the one imported in JointGenotypingTasks.wdl
+# Otherwise, this task is functionally identical to the one imported in JointGenotypingTasks.wdl
 # This task is suffixed with "FT" for "fault tolerant" to disambiguate
 task GnarlyGenotyperFT {
 
@@ -251,9 +258,14 @@ task GnarlyGenotyperFT {
 
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
     Int machine_mem_mb = 26000
-    Int disk_size_gb = ceil(size(workspace_tar, "GiB") + size(ref_fasta, "GiB") + size(dbsnp_vcf, "GiB") * 3)
+    Int min_swap_mb = 3000
+    Int disk_size_gb = ceil(size(workspace_tar, "GiB") + size(ref_fasta, "GiB") + size(dbsnp_vcf, "GiB"))
     Int n_preemptible_tries = 3
   }
+
+  Int xms_mb = if machine_mem_mb / 3 < min_swap_mb then min_swap_mb else ceil(machine_mem_mb / 3)
+  Int xmx_mb = machine_mem_mb - 1000
+  String java_opts = "-Xms" + xms_mb + "m -Xmx" + xmx_mb + "m"
 
   parameter_meta {
     interval: {
@@ -267,7 +279,7 @@ task GnarlyGenotyperFT {
     tar -xf ~{workspace_tar}
     WORKSPACE=$( basename ~{workspace_tar} .tar)
 
-    gatk --java-options "-Xms8000m -Xmx25000m" \
+    gatk --java-options "~{java_opts}" \
       GnarlyGenotyper \
       -R ~{ref_fasta} \
       -O ~{output_vcf_filename} \
@@ -278,7 +290,7 @@ task GnarlyGenotyperFT {
       -L ~{interval} \
       -stand-call-conf 10 \
       --max-alternate-alleles 5 \
-      --merge-input-intervals
+      --merge-input-intervals  
   >>>
 
   runtime {

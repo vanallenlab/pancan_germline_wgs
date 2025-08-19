@@ -34,8 +34,6 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 
-# Ensure Cromwell/Cromshell are configured
-code/scripts/setup_cromshell.py
 
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
@@ -50,11 +48,14 @@ zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
 
-# Install necessary packages
-. code/refs/install_packages.sh python
-
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
+
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
+
+# Install necessary packages
+. code/refs/install_packages.sh python
 
 # Download workspace-specific contig lists
 gsutil cp -r \
@@ -208,11 +209,11 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyperFT.machine_mem_mb": 16000,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyperFT.machine_mem_mb": 12000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
-  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
-  "GnarlyJointGenotypingPart1.ImportGVCFsFT.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 20,
+  "GnarlyJointGenotypingPart1.ImportGVCFsFT.machine_mem_mb": 44000,
   "GnarlyJointGenotypingPart1.intervals_already_split": true,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
@@ -261,22 +262,56 @@ code/scripts/manage_chromshards.py \
 # Instead of increasing the resources for all tasks (and therefore increasing cost),
 # we can manually stage the VCFs per chromosome as below:
 
+# Note that this should be run once for each workspace for best parallelization
+
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# Set manual staging parameters
-contig=chr21
-wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+# Locate and stage successfully genotyped shards, then clear all prior execution buckets
+while read contig; do
 
-# Stage good shards
-gsutil -m cp \
-  $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+  echo $contig
+
+  # Make contig-specific staging subdirectory
+  contig_dir=$staging_dir/$contig
+  if ! [ -e $contig_dir ]; then mkdir $contig_dir; fi
+
+  # Get expected number of shards
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
+    $contig_dir/
+  n_orig_shards=$( fgrep -v "@" $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list | wc -l )
+
+  # Find and stage successful shards
+  wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+  gsutil -m cp \
+    $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+
+  # Clear all prior execution buckets
+  gsutil ls $( awk -v prefix=$WORKSPACE_BUCKET '{ print prefix"/cromwell-execution/GnarlyJointGenotypingPart1/"$1"/**" }' \
+                 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list \
+               | paste -s - ) \
+  > uris_to_delete.list
+  cleanup_garbage
+
+done < <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list )
 
 # Re-shard bad intervals and copy them to temporary bucket
-# Note: there is no easy programmatic way to do this. This must be done manually 
-# by consulting the workflow completion status with `cromshell counts` or similar.
+while read contig; do
+
+  echo $contig
+
+  # Reaffirm contig-specific staging directory
+  contig_dir=$staging_dir/$contig
+  if ! [ -e $contig_dir ]; then mkdir $contig_dir; fi
+
+done < <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list )
+
+
 # Shards to be re-run should be moved to: $WORKSPACE_BUCKET/misc/gatkhc_debug/$contig.choke.interval_list
 # Below is a semi-automatic implementation given that you know which shards failed ImportGVCF.
 # Note that we manually re-shard intervals here due to GATK WARP interval sharding weirdness
@@ -583,8 +618,8 @@ cat << EOF > $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json
 {
   "PosthocHardFilterPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocHardFilterPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
-  "PosthocHardFilterPart2.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
-  "PosthocHardFilterPart2.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
+  "PosthocHardFilterPart2.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/\$CONTIG/ResolveClusters/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.reclustered.vcf.gz",
+  "PosthocHardFilterPart2.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/\$CONTIG/ResolveClusters/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.reclustered.vcf.gz.tbi"
 }
 EOF
 
