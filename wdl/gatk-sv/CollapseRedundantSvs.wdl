@@ -157,6 +157,7 @@ task ResolveClusters {
       --in-vcf ~{vcf} \
       --clusters ~{clusters} \
       --prefix ~{out_prefix} \
+    | bcftools sort -m "~{sort_mem}G" \
     | bcftools +fill-tags -Oz -o ~{out_prefix}.resolved_clusters.vcf.gz -- -t AC,AN,AF
     tabix -p vcf -f ~{out_prefix}.resolved_clusters.vcf.gz
 
