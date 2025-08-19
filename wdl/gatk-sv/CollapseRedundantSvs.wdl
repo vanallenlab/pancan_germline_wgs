@@ -145,7 +145,7 @@ task ResolveClusters {
   String out_prefix = basename(vcf, ".vcf.gz")
   String vcf_out =  "~{out_prefix}.reclustered.vcf.gz"
 
-  Int disk_gb = ceil(5 * size(vcf, "GB")) + 10
+  Int disk_gb = ceil(10 * size(vcf, "GB")) + 10
 
   Float sort_mem = 2 * mem_gb / 3
 
@@ -169,7 +169,6 @@ task ResolveClusters {
       --allow-overlaps \
       ~{out_prefix}.remainder.vcf.gz \
       ~{out_prefix}.resolved_clusters.vcf.gz \
-    | bcftools sort -m "~{sort_mem}G" \
       -Oz -o ~{vcf_out} 
     tabix -p vcf -f ~{vcf_out}
   >>>
@@ -186,5 +185,6 @@ task ResolveClusters {
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
     maxRetries: 1
+    bootDiskSizeGb: 30
   }
 }
