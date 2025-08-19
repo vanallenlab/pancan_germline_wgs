@@ -147,6 +147,8 @@ task ResolveClusters {
 
   Int disk_gb = ceil(5 * size(vcf, "GB")) + 10
 
+  Float sort_mem = 2 * mem_gb / 3
+
   command <<<
     set -eu -o pipefail
 
@@ -164,9 +166,10 @@ task ResolveClusters {
     tabix -p vcf -f ~{out_prefix}.remainder.vcf.gz
     bcftools concat \
       --allow-overlaps \
-      -Oz -o ~{vcf_out} \
       ~{out_prefix}.remainder.vcf.gz \
-      ~{out_prefix}.resolved_clusters.vcf.gz
+      ~{out_prefix}.resolved_clusters.vcf.gz \
+    | bcftools sort -m "~{sort_mem}G" \
+      -Oz -o ~{vcf_out} 
     tabix -p vcf -f ~{vcf_out}
   >>>
 
