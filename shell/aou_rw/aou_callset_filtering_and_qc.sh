@@ -672,6 +672,7 @@ add_contig_vcfs_to_chromshard_overrides_json \
 # Write template input .json for QC metric collection
 cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
 {
+  "CollectVcfQcMetrics.all_samples_fam_file": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/refs/dfci-g2c.all_samples.ped",
   "CollectVcfQcMetrics.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "CollectVcfQcMetrics.benchmarking_shards": \$CONTIG_SCATTER_COUNT,
   "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.easy.\$CONTIG.bed.gz",

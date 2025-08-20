@@ -38,6 +38,8 @@ workflow CollectVcfQcMetrics {
     File? genome_file                              # BEDTools-style .genome file. Required for LD computation as well as any benchmarking
 
     File? trios_fam_file                           # .fam file of trios for Mendelian transmission analyses
+    File? all_samples_fam_file                     # Plink-style .fam file with sex encodings. Family IDs and phenotype values are not 
+                                                   # required. This is a necessary input if do_ld is True and chrX is included in input VCFs
     File? twins_tsv                                # Two-column .tsv with pairs of IDs for technical replicates or identical twins
     File? sample_priority_tsv                      # Three-column .tsv of sample ID, priority tier (integer), and sampling weight (float)
                                                    # This file will be used in conjunction with n_for_sample_level_analyses
@@ -478,6 +480,7 @@ workflow CollectVcfQcMetrics {
           common_snvs_bed = CollapseCommonSnvs.merged_file,
           common_indels_bed = CollapseCommonIndels.merged_file,
           common_svs_bed = CollapseCommonSvs.merged_file,
+          fam_file = all_samples_fam_file,
           out_prefix = basename(chunk_info.left, ".vcf.gz"),
           g2c_analysis_docker = g2c_analysis_docker
       }
@@ -703,6 +706,8 @@ task CalcLd {
     File? common_indels_bed
     File? common_svs_bed
 
+    File? fam_file
+
     Int plink_ld_window_kb = 500
     Float plink_ld_window_min_r2 = 0.05
     
@@ -728,6 +733,34 @@ task CalcLd {
     # Write list of variant IDs present in VCF
     bcftools query -f '%ID\n' ~{vcf} > elig_vids.list
 
+    # Make .fam file
+    bcftools query -l ~{vcf} | sort > samples.list
+    if ~{defined(fam_file)}; then
+      sort -k2 ~{fam_file} \
+      | join -1 2 -2 1 -t$'\t' - samples.list \
+      | awk -v OFS="\t" '{ print $2, $1, $3, $4, $5, $6 }' \
+      > samples.fam
+    else
+      awk -v OFS="\t" '{ print $1, $1, 0, 0, 0, 0 }' samples.list > samples.fam
+    fi
+
+    # Infer reference assembly from VCF header (necessary for handling PARs)
+    ref=$( tabix -H ~{vcf} | fgrep "##contig" \
+           | sed 's/,/\n/g' | grep -e '^assembly' \
+           | sed 's/=/\t/g' | awk '{ print $2 }' \
+           | sort | uniq -c | sort -nrk1,1 \
+           | head -n1 | awk '{ print $2 }' \
+           | tr '[A-Z]' '[a-z]' )
+    if [ $( echo $ref | grep 38 | wc -l ) -gt 0 ]; then
+      plink_ref="--split-par hg38"
+    else if [ $( echo $ref | grep 19 | wc -l ) -gt 0 ]; then
+      plink_ref="--split-par hg19"
+    else if [ $( echo $ref | grep 13 | wc -l ) -gt 0 ]; then
+      plink_ref="--split-par chm13"
+    else if [ $( echo $ref | grep t2t | wc -l ) -gt 0 ]; then
+      plink_ref="--split-par chm13"
+    fi
+
     # Define lists of common variants for each class
     if ~{has_snvs}; then
       zcat ~{default="" common_snvs_bed} \
@@ -750,6 +783,9 @@ task CalcLd {
       --r2-unphased 'yes-really' \
       --ld-window-kb ~{plink_ld_window_kb} \
       --ld-window-r2 ~{plink_ld_window_min_r2} \
+      --split-par $plink_ref \
+      --polyploid-mode missing \
+      --fam samples.fam \
       --vcf ~{vcf} \
       --out ~{out_prefix}
     cut -f3,6,7 ~{out_prefix}.vcor | sort -k1,1 -k2,2 \
