@@ -153,7 +153,7 @@ def count_vms(n_background=4):
     return int(gcheck.stdout) - n_background
 
 
-def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
+def relocate_uri(src_uri, dest_uri, action='cp', check_exit_codes=True, verbose=False):
     """
     Moves or copies a GCP object from a source URI to a destination URI
     """
@@ -165,5 +165,6 @@ def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
     if verbose:
         msg = 'Relocating {} to {}\n'
         stdout.write(msg.format(src_uri, dest_uri))
-    subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
+    subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), 
+                   shell=True, check=check_exit_codes)
 

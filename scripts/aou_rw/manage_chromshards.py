@@ -96,7 +96,7 @@ def report_vm_load(n_retries=10):
     Report current GCP VM load 
     """
 
-    msg = '[{}] Current Cromwell server load: {:,} VMs'
+    msg = '[{}] Current Cromwell server load: {:,} active VMs'
     k = 0
     while k < n_retries:
         try:
@@ -107,6 +107,8 @@ def report_vm_load(n_retries=10):
 
     msg2 = '[{}] GCP VM check failed after {:,} tries'
     print(msg.format(clean_date(), k))
+
+    return k
 
 
 def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
@@ -250,7 +252,9 @@ def sleepwalk(gate_mins, vm_report_secs, last_vm_check, quiet=False):
         if tt_next_vm_check < og_secs_remain:
             sleep(tt_next_vm_check)
             if not quiet:
-                report_vm_load()
+                n_vms = report_vm_load()
+                if n_vms == 0:
+                    return
             last_vm_check = datetime.now()
             tt_next_vm_check = vm_report_secs * 60
             og_secs_remain -= tt_next_vm_check
@@ -329,7 +333,7 @@ def main():
                         help='Maximum number of submission attempts for any one contig')
     parser.add_argument('-g', '--outer-gate', type=float, default=20, 
                         help='Number of minutes to wait between monitor cycles')
-    parser.add_argument('--vm-gate', type=int, default=2500, help='Maximum ' +
+    parser.add_argument('--vm-gate', type=int, default=1100, help='Maximum ' +
                         'number of active GCP VMs before skipping submission; ' +
                         'useful for throttling Cromwell server load')
     parser.add_argument('--submission-gate', type=float, default=None, help='Number of ' +
@@ -472,7 +476,7 @@ def main():
 
     # Initial VM load check
     if not args.quiet:
-        report_vm_load()
+        n_vms = report_vm_load()
     last_vm_check = datetime.now()
 
     # Loop infinitely while any status is not 'staged' and max_cycles has not been reached
@@ -491,7 +495,7 @@ def main():
             # VM check
             if (datetime.now() - last_vm_check).seconds / 60 >= args.gcp_report_period:
                 if not args.quiet:
-                    report_vm_load()
+                    n_vms = report_vm_load()
                 last_vm_check = datetime.now()
 
             # Get most recent status for this contig
@@ -601,8 +605,7 @@ def main():
                     # Otherwise, submit workflow as normal
                     else:
                         if args.behavior in 'indifferent strict'.split() \
-                        or (args.behavior == 'patient' \
-                            and status in strict_sub_status):
+                        or (args.behavior == 'patient' and status in strict_sub_status):
                             if args.behavior == 'strict':
                                 aborted = g2cpy.abort_workflow(wid)
                             status = submit_workflow(contig, args.wdl, 

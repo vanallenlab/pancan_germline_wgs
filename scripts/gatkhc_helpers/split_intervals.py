@@ -25,6 +25,61 @@ from sys import stdin, stdout
 from pysam import TabixFile
 
 
+def uniform_split(int_list, n_shards, min_size=5000, zero_based=False, verbose=False):
+    """
+    Split each interval into the same number of equal-sized shards such that the
+    total number of shards matches n_shards
+    """
+
+    # Assign buffers for size and start based on coordinate system
+    if zero_based:
+        coord_buf = 0
+    else:
+        coord_buf = 1
+
+    # Sort intervals by size, from largest to smallest
+    int_list = sorted(int_list, key=lambda x: x[0], reverse=True)
+
+    # Determine sharding parameters
+    target_spi = int(np.floor(n_shards / len(int_list)))
+    max_spi = [int(np.floor(size / min_size)) for size, vals in int_list]
+    spi = [np.nanmin([target_spi, m]) for m in max_spi]
+    rem = n_shards - sum(spi)
+    while rem > 0:
+        for i in range(len(spi)):
+            if spi[i] < max_spi[i]:
+                spi[i] += 1
+                rem -= 1
+                if rem == 0:
+                    break
+
+    # Uniformly shard each interval
+    shards = []
+    for i, ivals in enumerate(int_list):
+        isize = ivals[0]
+        ifields = ivals[1]
+        ishards = spi[i]
+
+        chrom = ifields[0]
+        start = int(ifields[1])
+        end = int(ifields[2])
+
+        if ishards < 2:
+            shards.append([chrom, start, end])
+            continue
+
+        split_points = np.round(np.linspace(start, end, ishards + 1), 0)
+        for si in range(ishards):
+            cstart = int(split_points[si])
+            if si > 0:
+                cstart += coord_buf
+            cend = int(split_points[si+1])
+            csize = cend - cstart + coord_buf
+            shards.append([chrom, cstart, cend])
+
+    return sorted(shards, key=lambda x: (chrom2int(x[0]), int(x[1]), int(x[2])))
+
+
 def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000, 
                      max_size=np.inf, zero_based=False, verbose=False):
     """
@@ -114,7 +169,7 @@ def split_by_density(int_list, var_beds, vars_per_shard, min_size=5000,
                                     chrom, istart, iend, k))
 
 
-    return sorted(shards, key = lambda x: int(x[1]))
+    return sorted(shards, key=lambda x: (chrom2int(x[0]), int(x[1]), int(x[2])))
 
 
 def split_by_size(int_list, target_size, max_size=np.inf, zero_based=False):
@@ -188,7 +243,8 @@ def split_by_size(int_list, target_size, max_size=np.inf, zero_based=False):
         avg_size = int_df.isize.mean()
 
     # Return list of new intervals sorted by start coordinate
-    return sorted(int_df.fields.tolist(), key=lambda x: int(x[1]))
+    return sorted(int_df.fields.tolist(), 
+                  key=lambda x: (chrom2int(x[0]), int(x[1]), int(x[2])))
 
 
 def main():
@@ -205,15 +261,19 @@ def main():
                         'their genomic size, controlled by this parameter.',
                         type=float, default=10e10)
     parser.add_argument('--n-shards', type=int, help='Total number of desired ' +
-                        'shards. Only used if --vars-per-shard and --var-sites ' +
-                        'are also specified, otherwise will default to --target-size')
+                        'shards. Specifying this option will override ' +
+                        '--target-size, but the exact behavior depends on other ' +
+                        'options. If --vars-per-shard and --var-sites are also ' +
+                        'specified, will perform density-based splitting. ' +
+                        'Otherwise, will uniformly divide each interval the same ' +
+                        'number of times such that --n-shards in total are produced.')
     parser.add_argument('--var-sites', action='append', help='One or more BED ' +
                         'files listing known variant sites in an external ' +
                         'reference dataset, like gnomAD. May be provided ' +
                         'multiple times. If specified with --vars-per-shard, ' +
                         'intervals will be divided into shards balanced by ' +
                         'number of variants per shard.')
-    parser.add_argument('--vars-per-shard', type=float, help='Desired number' +
+    parser.add_argument('--vars-per-shard', type=float, help='Desired number ' +
                         'of variants present in --var-sites to allocate per shard. ' +
                         'Required for variant density-based shard balancing ' +
                         'if --var-sites is also optioned.')
@@ -236,11 +296,16 @@ def main():
     args = parser.parse_args()
 
     # Determine & report desired splitting mode 
-    if args.vars_per_shard is not None \
-    and len(args.var_sites) > 0:
-        split_mode = 'density'
-        msg = 'Splitting intervals by variant density due to the presence of ' + \
-              'both --var-sites and --vars-per-shard'
+    if args.n_shards:
+        if args.vars_per_shard is not None \
+        and len(args.var_sites) > 0:
+            split_mode = 'density'
+            msg = 'Splitting intervals by variant density due to the presence of ' + \
+                  '--n-shards, --var-sites, and --vars-per-shard'
+        else:
+            split_mode = 'uniform'
+            msg = 'Uniformly splitting each interval the same number of times due ' + \
+                  'to the presence of --n-shards on its own'
     else:
         split_mode = 'size'
         msg = 'Splitting intervals by size due to the lack of other specific options'
@@ -284,7 +349,10 @@ def main():
                 int_list.append((size, fields, ))
 
     # After reading input intervals, perform splitting based on value of split_mode
-    if split_mode == 'density':
+    if split_mode == 'uniform':
+        shards = uniform_split(int_list, args.n_shards, args.min_interval_size,
+                               args.bed_style, args.verbose)
+    elif split_mode == 'density':
         shards = split_by_density(int_list, args.var_sites, args.vars_per_shard, 
                                   args.min_interval_size, args.max_interval_size,
                                   args.bed_style, args.verbose)

@@ -188,15 +188,15 @@ task ImportGVCFsFT {
 
     Int disk_size_gb
     Int machine_mem_mb = 30000
-    Int min_swap_mb = 3000
+    Int jvm_start_mb = 8000
     Int batch_size
-    Int n_preemptible_tries = 3
+    Int n_preemptible_tries = 2
 
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
   }
 
-  Int xms_mb = if machine_mem_mb / 3 < min_swap_mb then min_swap_mb else ceil(machine_mem_mb / 3)
-  Int xmx_mb = machine_mem_mb - 1000
+  Int xms_mb = if machine_mem_mb / 3 < jvm_start_mb then jvm_start_mb else ceil(machine_mem_mb / 3)
+  Int xmx_mb = machine_mem_mb - 5000
   String java_opts = "-Xms" + xms_mb + "m -Xmx" + xmx_mb + "m"
 
   command <<<
@@ -209,9 +209,10 @@ task ImportGVCFsFT {
     shuf --random-source=<( yes "~{seed}" ) ~{sample_name_map} > shuffled.sample.map.tsv
 
     # GATK dev comments below:
-    # We've seen some GenomicsDB performance regressions related to intervals, so we're going to pretend we only have a single interval
-    # using the --merge-input-intervals arg
-    # There's no data in between since we didn't run HaplotypeCaller over those loci so we're not wasting any compute
+    # We've seen some GenomicsDB performance regressions related to intervals, so we're going to 
+    # pretend we only have a single interval using the --merge-input-intervals arg
+    # There's no data in between since we didn't run HaplotypeCaller over those loci 
+    # so we're not wasting any compute
 
     # The memory setting here is very important and must be several GiB lower
     # than the total memory allocated to the VM because this tool uses
@@ -234,7 +235,7 @@ task ImportGVCFsFT {
   runtime {
     memory: "~{machine_mem_mb} MiB"
     cpu: 4
-    bootDiskSizeGb: 15
+    bootDiskSizeGb: 20
     disks: "local-disk " + disk_size_gb + " HDD"
     docker: gatk_docker
     preemptible: n_preemptible_tries
@@ -265,12 +266,12 @@ task GnarlyGenotyperFT {
 
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
     Int machine_mem_mb = 26000
-    Int min_swap_mb = 3000
+    Int jvm_start_mb = 6000
     Int disk_size_gb = ceil(size(workspace_tar, "GiB") + size(ref_fasta, "GiB") + size(dbsnp_vcf, "GiB"))
     Int n_preemptible_tries = 3
   }
 
-  Int xms_mb = if machine_mem_mb / 3 < min_swap_mb then min_swap_mb else ceil(machine_mem_mb / 3)
+  Int xms_mb = if machine_mem_mb / 3 < jvm_start_mb then jvm_start_mb else ceil(machine_mem_mb / 3)
   Int xmx_mb = machine_mem_mb - 1000
   String java_opts = "-Xms" + xms_mb + "m -Xmx" + xmx_mb + "m"
 
