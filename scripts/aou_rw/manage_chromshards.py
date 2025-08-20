@@ -336,9 +336,9 @@ def main():
     parser.add_argument('--vm-gate', type=int, default=1100, help='Maximum ' +
                         'number of active GCP VMs before skipping submission; ' +
                         'useful for throttling Cromwell server load')
-    parser.add_argument('--submission-gate', type=float, default=None, help='Number of ' +
-                        'minutes to pause after a new workflow submission ' +
-                        '[default: no wait]')
+    parser.add_argument('--submission-gate', type=float, default=0.5, help='Number ' +
+                        'of minutes to pause after a new workflow submission ' +
+                        '[default: 30 seconds]')
     parser.add_argument('--gcp-report-period', type=float, default=5, 
                         help='Number of minutes between GCP VM load reports ' +
                         '[default: report every 5 minutes]')
@@ -596,11 +596,13 @@ def main():
                     if n_active_vms > args.vm_gate:
                         status = 'vm_gate_skipped'
                         if not args.quiet:
-                            msg = '[{}] Skipped submission of {} due to the ' + \
-                                  'number of active VMs ({:,}) being greater ' + \
-                                  'than the value of --vm-gate ({:,})'
-                            print(msg.format(clean_date(), contig, n_active_vms,
-                                             args.vm_gate))
+                            msg1 = '[{}] Status of contig {}: {}'
+                            print(msg1.format(clean_date(), contig, status))
+                            msg2 = '[{}] Skipped submission of {} due to the ' + \
+                                   'number of active VMs ({:,}) being greater ' + \
+                                   'than the value of --vm-gate ({:,})'
+                            print(msg2.format(clean_date(), contig, n_active_vms,
+                                              args.vm_gate))
 
                     # Otherwise, submit workflow as normal
                     else:
@@ -639,7 +641,7 @@ def main():
             # Update & report status
             run_status[contig] = status
             all_status.update(run_status)
-            if not args.quiet:
+            if not args.quiet and status != 'vm_gate_skipped':
                 msg = '[{}] Status of contig {}: {}'
                 print(msg.format(clean_date(), contig, status))
             if args.status_tsv is not None:

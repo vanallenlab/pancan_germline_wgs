@@ -428,6 +428,14 @@ workflow CollectVcfQcMetrics {
   # Calculate peak LD between all pairs of variant classes, if optioned
   if ( do_ld && defined(genome_file) ) {
 
+    # Infer reference assembly (necessary for plink to handle LD on chrX/Y)
+    call GetRefFromVcfHeader {
+      input:
+        vcf = dense_sites_vcf_shards[0],
+        vcf_idx = dense_sites_vcf_shard_idxs[0],
+        bcftools_docker = bcftools_docker
+    }
+
     # Collapse common sites for dense subset
     Array[File] dense_common_snv_site_shards = select_all(select_first([DenseSiteMetrics.common_snv_sites, [empty_bed]]))
     Array[File] dense_common_indel_site_shards = select_all(select_first([DenseSiteMetrics.common_indel_sites, [empty_bed]]))
@@ -477,6 +485,7 @@ workflow CollectVcfQcMetrics {
         input:
           vcf = chunk_info.left,
           vcf_idx = chunk_info.right,
+          ref_build = GetRefFromVcfHeader.ref_build,
           common_snvs_bed = CollapseCommonSnvs.merged_file,
           common_indels_bed = CollapseCommonIndels.merged_file,
           common_svs_bed = CollapseCommonSvs.merged_file,
@@ -701,6 +710,8 @@ task CalcLd {
   input {
     File vcf
     File vcf_idx
+
+    String ref_build
     
     File? common_snvs_bed
     File? common_indels_bed
@@ -730,6 +741,11 @@ task CalcLd {
   command <<<
     set -eu -o pipefail
 
+    # Symlink tbi to same mount point as VCF
+    if [ "~{vcf_idx}" != "~{vcf}.tbi" ]; then
+      ln -s "~{vcf_idx}" "~{vcf}.tbi"
+    fi
+
     # Write list of variant IDs present in VCF
     bcftools query -f '%ID\n' ~{vcf} > elig_vids.list
 
@@ -742,23 +758,6 @@ task CalcLd {
       > samples.fam
     else
       awk -v OFS="\t" '{ print $1, $1, 0, 0, 0, 0 }' samples.list > samples.fam
-    fi
-
-    # Infer reference assembly from VCF header (necessary for handling PARs)
-    ref=$( tabix -H ~{vcf} | fgrep "##contig" \
-           | sed 's/,/\n/g' | grep -e '^assembly' \
-           | sed 's/=/\t/g' | awk '{ print $2 }' \
-           | sort | uniq -c | sort -nrk1,1 \
-           | head -n1 | awk '{ print $2 }' \
-           | tr '[A-Z]' '[a-z]' )
-    if [ $( echo $ref | grep 38 | wc -l ) -gt 0 ]; then
-      plink_ref="--split-par hg38"
-    else if [ $( echo $ref | grep 19 | wc -l ) -gt 0 ]; then
-      plink_ref="--split-par hg19"
-    else if [ $( echo $ref | grep 13 | wc -l ) -gt 0 ]; then
-      plink_ref="--split-par chm13"
-    else if [ $( echo $ref | grep t2t | wc -l ) -gt 0 ]; then
-      plink_ref="--split-par chm13"
     fi
 
     # Define lists of common variants for each class
@@ -783,7 +782,7 @@ task CalcLd {
       --r2-unphased 'yes-really' \
       --ld-window-kb ~{plink_ld_window_kb} \
       --ld-window-r2 ~{plink_ld_window_min_r2} \
-      --split-par $plink_ref \
+      --split-par "~{ref_build}" \
       --polyploid-mode missing \
       --fam samples.fam \
       --vcf ~{vcf} \
@@ -1062,6 +1061,58 @@ task CleanTwins {
     cpu: 2
     disks: "local-disk 20 HDD"
     preemptible: 3
+  }
+}
+
+
+# Infer reference assembly from VCF header
+task GetRefFromVcfHeader {
+  input {
+    File vcf
+    File vcf_idx
+
+    String bcftools_docker
+  }
+
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # Symlink tbi to same mount point as VCF
+    if [ "~{vcf_idx}" != "~{vcf}.tbi" ]; then
+      ln -s "~{vcf_idx}" "~{vcf}.tbi"
+    fi
+
+    # Infer reference assembly from VCF header
+    ref=$( tabix -H ~{vcf} | fgrep "##contig" \
+           | sed 's/,/\n/g' | grep -e '^assembly' \
+           | sed 's/=/\t/g' | awk '{ print $2 }' \
+           | sort | uniq -c | sort -nrk1,1 \
+           | head -n1 | awk '{ print $2 }' \
+           | tr '[A-Z]' '[a-z]' )
+    if [ $( echo $ref | grep 38 | wc -l ) -gt 0 ]; then
+      echo "hg38" > ref_build.txt
+    else if [ $( echo $ref | grep 19 | wc -l ) -gt 0 ]; then
+      echo "hg19" > ref_build.txt
+    else if [ $( echo $ref | grep 13 | wc -l ) -gt 0 ]; then
+      echo "chm13" > ref_build.txt
+    else if [ $( echo $ref | grep t2t | wc -l ) -gt 0 ]; then
+      echo "chm13" > ref_build.txt
+    fi
+  >>>
+
+  output {
+    String ref_build = read_string("ref_build.txt")
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 3
+    maxRetries: 1
   }
 }
 
