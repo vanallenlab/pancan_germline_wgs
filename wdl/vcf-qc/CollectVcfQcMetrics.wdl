@@ -1074,18 +1074,17 @@ task GetRefFromVcfHeader {
     String bcftools_docker
   }
 
-  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+  Int disk_gb = ceil(1.5 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
 
-    # Symlink tbi to same mount point as VCF
-    if [ "~{vcf_idx}" != "~{vcf}.tbi" ]; then
-      ln -s "~{vcf_idx}" "~{vcf}.tbi"
-    fi
+    # Symlink VCF and index to working directory for index alignment
+    ln -s ~{vcf} ./input.vcf.gz
+    ln -s ~{vcf_idx} ./input.vcf.gz.tbi
 
     # Infer reference assembly from VCF header
-    ref=$( tabix -H ~{vcf} | fgrep "##contig" \
+    ref=$( tabix -H input.vcf.gz | fgrep "##contig" \
            | sed 's/,/\n/g' | grep -e '^assembly' \
            | sed 's/=/\t/g' | awk '{ print $2 }' \
            | sort | uniq -c | sort -nrk1,1 \
@@ -1093,12 +1092,15 @@ task GetRefFromVcfHeader {
            | tr '[A-Z]' '[a-z]' )
     if [ $( echo $ref | grep 38 | wc -l ) -gt 0 ]; then
       echo "hg38" > ref_build.txt
-    else if [ $( echo $ref | grep 19 | wc -l ) -gt 0 ]; then
+    elif [ $( echo $ref | grep 19 | wc -l ) -gt 0 ]; then
       echo "hg19" > ref_build.txt
-    else if [ $( echo $ref | grep 13 | wc -l ) -gt 0 ]; then
+    elif [ $( echo $ref | grep 13 | wc -l ) -gt 0 ]; then
       echo "chm13" > ref_build.txt
-    else if [ $( echo $ref | grep t2t | wc -l ) -gt 0 ]; then
+    elif [ $( echo $ref | grep t2t | wc -l ) -gt 0 ]; then
       echo "chm13" > ref_build.txt
+    else
+      echo="Unable to determine reference from header"
+      exit 1
     fi
   >>>
 
