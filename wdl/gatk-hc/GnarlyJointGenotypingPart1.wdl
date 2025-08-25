@@ -168,7 +168,7 @@ workflow GnarlyJointGenotypingPart1 {
 }
 
 
-# Local version of ImportGCCFs to expose number of preemptible tries
+# Local version of ImportGVCFs to expose number of preemptible tries
 # Also adds one max retry to account for Google API errors
 # Also shuffles sample map order to improve performance when scalling to massive parallelization,
 # as we have found that GCP I/O becomes glacially slow with too many parallel reads to the same URI

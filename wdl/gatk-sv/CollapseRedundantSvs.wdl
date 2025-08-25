@@ -86,18 +86,19 @@ task DefineClusters {
     | bcftools +fill-tags -- -t AF,AC \
     | bcftools view --include "AF>=~{min_af} & AC>=~{min_ac}" -Oz -o input.vcf.gz
     tabix -f input.vcf.gz
+    echo "input.vcf.gz" > input_vcf.list
     svtk vcfcluster \
       -d ~{bp_dist} \
       -f ~{recip_overlap} \
       -o ~{sample_overlap} \
-      -p "~{out_prefix}.reclustered" \
+      -p ~{out_prefix}.reclustered \
       -t "~{cluster_sv_types}" \
       --preserve-header \
       --skip-merge \
-      <( echo "input.vcf.gz" ) \
+      input_vcf.list \
       - \
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
-    > "~{out_prefix}.sv_cluster_assignments.bed"
+    > ~{out_prefix}.sv_cluster_assignments.bed
 
     # Second pass for clusters of two or more strictly identical variants
     svtk vcfcluster \
@@ -107,25 +108,27 @@ task DefineClusters {
       -t "~{cluster_sv_types}" \
       --preserve-header \
       --skip-merge \
-      <( echo "input.wheader.vcf.gz" ) \
+      input_vcf.list \
       - \
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
-    > "~{out_prefix}.identical_assignment.bed"
+    > ~{out_prefix}.identical_assignment.bed
+    cut -f5 ~{out_prefix}.identical_assignment.bed \
+    | uniq -c | awk '{ if ($1>1) print $2 }' \
+    > candidate_cluster_idxs.list
     while read cidx; do
       awk -v cidx=$cidx -v OFS="\t" \
         '{ if ($5==cidx) print }' \
-        "~{out_prefix}.identical_assignment.bed"
-    done < <( cut -f5 "~{out_prefix}.identical_assignment.bed" \
-              | uniq -c | awk '{ if ($1>1) print $2 }' ) \
-    > "~{out_prefix}.identical_assignment.clusters.bed"
+        ~{out_prefix}.identical_assignment.bed
+    done < candidate_cluster_idxs.list \
+    > ~{out_prefix}.identical_assignment.clusters.bed
 
     # Update rough cluster assignments to ensure that 
     # all strictly identical variants are linked. Outputs
     # a BED4 file with one row per multi-variant cluster
     /opt/pancan_germline_wgs/scripts/gatksv_helpers/update_cluster_assignments.py \
-      -i "~{out_prefix}.sv_cluster_assignments.bed" \
-      -u "~{out_prefix}.identical_assignment.clusters.bed" \
-      -o "~{out_prefix}.sv_clusters.bed"
+      -i ~{out_prefix}.sv_cluster_assignments.bed \
+      -u ~{out_prefix}.identical_assignment.clusters.bed \
+      -o ~{out_prefix}.sv_clusters.bed
   >>>
 
   output {
@@ -142,7 +145,6 @@ task DefineClusters {
     maxRetries: 1
   }
 }
-
 
 
 task ResolveClusters {
