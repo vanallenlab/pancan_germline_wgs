@@ -696,11 +696,11 @@ args <- parser$parse_args()
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
 #              "out_prefix" = "~/scratch/g2c_vcf_qc_dev")
 
-# DEV (single variant class):
+# # DEV (single variant class):
 # args <- list("genotype_dist_tsv" = "~/scratch/dfci-ufc.sv.v1.initial_qc.genotype_distribution.merged.tsv.gz",
 #              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
-#              "out_prefix" = "~/scratch/g2c_vcf_qc_dev")
+#              "out_prefix" = "~/scratch/ufc_sv_qc_dev")
 
 # Load sample genotype counts
 gt.counts <- load.gt.counts(args$genotype_dist_tsv)

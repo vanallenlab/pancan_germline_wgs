@@ -17,12 +17,12 @@ workflow CollapseRedundantSvs {
 
     Float recip_overlap = 0.98
     Int bp_dist = 500
-    Float sample_overlap = 0.1
+    Float sample_overlap = 0.05
     String cluster_sv_types = "DEL,DUP,INS,INV,CPX"
     Float min_af = 0.001
     Int min_ac = 10
 
-    String g2c_pipeline_docker
+    String g2c_analysis_docker
   }
 
   call DefineClusters {
@@ -35,7 +35,7 @@ workflow CollapseRedundantSvs {
       cluster_sv_types = cluster_sv_types,
       min_af = min_af,
       min_ac = min_ac,
-      g2c_pipeline_docker = g2c_pipeline_docker    
+      g2c_analysis_docker = g2c_analysis_docker    
   }
 
   if ( DefineClusters.n_clusters > 0 ) {
@@ -44,7 +44,7 @@ workflow CollapseRedundantSvs {
         vcf = vcf,
         vcf_idx = vcf_idx,
         clusters = DefineClusters.clusters,
-        g2c_pipeline_docker = g2c_pipeline_docker
+        g2c_analysis_docker = g2c_analysis_docker
     }
   }
 
@@ -70,7 +70,7 @@ task DefineClusters {
     Float mem_gb = 7.5
     Int n_cpu = 4
 
-    String g2c_pipeline_docker
+    String g2c_analysis_docker
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
@@ -137,7 +137,7 @@ task DefineClusters {
   }
 
   runtime {
-    docker: g2c_pipeline_docker
+    docker: g2c_analysis_docker
     memory: "~{mem_gb} GB"
     cpu: n_cpu
     disks: "local-disk ~{disk_gb} HDD"
@@ -156,7 +156,7 @@ task ResolveClusters {
     Float mem_gb = 7.5
     Int n_cpu = 4
 
-    String g2c_pipeline_docker
+    String g2c_analysis_docker
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
@@ -196,7 +196,7 @@ task ResolveClusters {
   }
 
   runtime {
-    docker: g2c_pipeline_docker
+    docker: g2c_analysis_docker
     memory: "~{mem_gb} GB"
     cpu: n_cpu
     disks: "local-disk ~{disk_gb} HDD"
