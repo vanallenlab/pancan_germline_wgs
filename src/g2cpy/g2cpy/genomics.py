@@ -296,7 +296,7 @@ def make_tabix_index(filename):
     subprocess.run(['tabix', '-f', filename])
 
 
-def name_variant(chrom, pos, ref, alt, vc, vsc, varlen, suffix_length=12):
+def name_variant(chrom, pos, ref, alt, vc, vsc, varlen, suffix_length=10):
     """
     Determine unique G2C variant identifier based on its site information
     """
@@ -305,7 +305,7 @@ def name_variant(chrom, pos, ref, alt, vc, vsc, varlen, suffix_length=12):
     or (vc == 'indel' and (len(ref) + len(alt) + 1) <= suffix_length):
         return '_'.join([str(x) for x in [chrom, pos, ref, alt]])
     else:
-        vhash_str = ''.join([str(x) for x in [chrom, vsc, pos, ref, varlen, alt]])
+        vhash_str = ''.join([str(x) for x in [vsc, pos, ref, varlen, alt]])
         vhash = hash_string(vhash_str, out_length=suffix_length)
         return '_'.join([str(x) for x in [chrom, pos, vsc, vhash]])
 

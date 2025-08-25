@@ -17,7 +17,7 @@ workflow CollapseRedundantSvs {
 
     Float recip_overlap = 0.98
     Int bp_dist = 500
-    Float sample_overlap = 0.05
+    Float sample_overlap = 0.1
     String cluster_sv_types = "DEL,DUP,INS,INV,CPX"
     Float min_af = 0.001
     Int min_ac = 10
@@ -97,20 +97,35 @@ task DefineClusters {
       <( echo "input.vcf.gz" ) \
       - \
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
-    > ~{out_prefix}.sv_cluster_assignments.tsv
+    > "~{out_prefix}.sv_cluster_assignments.bed"
 
-    # Identify clusters of two or more variants
+    # Second pass for clusters of two or more strictly identical variants
+    svtk vcfcluster \
+      -d 1 \
+      -f 1 \
+      -p "~{out_prefix}.identical" \
+      -t "~{cluster_sv_types}" \
+      --preserve-header \
+      --skip-merge \
+      <( echo "input.wheader.vcf.gz" ) \
+      - \
+    | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
+    > "~{out_prefix}.identical_assignment.bed"
     while read cidx; do
       awk -v cidx=$cidx -v OFS="\t" \
-        '{ if ($5==cidx) print $1, $2, $3, $4 }' \
-        ~{out_prefix}.sv_cluster_assignments.tsv \
-      | sort -Vk1,1 -k2,2n -k3,3n \
-      | bedtools merge -i - -d ~{bp_dist} -c 4 -o distinct
-    done < <( cut -f5 ~{out_prefix}.sv_cluster_assignments.tsv \
+        '{ if ($5==cidx) print }' \
+        "~{out_prefix}.identical_assignment.bed"
+    done < <( cut -f5 "~{out_prefix}.identical_assignment.bed" \
               | uniq -c | awk '{ if ($1>1) print $2 }' ) \
-    | awk '{ if ($4~/,/) print }' \
-    | sort -Vk1,1 -k2,2n -k3,3n \
-    > ~{out_prefix}.sv_clusters.bed
+    > "~{out_prefix}.identical_assignment.clusters.bed"
+
+    # Update rough cluster assignments to ensure that 
+    # all strictly identical variants are linked. Outputs
+    # a BED4 file with one row per multi-variant cluster
+    /opt/pancan_germline_wgs/scripts/gatksv_helpers/update_cluster_assignments.py \
+      -i "~{out_prefix}.sv_cluster_assignments.bed" \
+      -u "~{out_prefix}.identical_assignment.clusters.bed" \
+      -o "~{out_prefix}.sv_clusters.bed"
   >>>
 
   output {

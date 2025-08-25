@@ -435,7 +435,7 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
     pop <- pop[samples]
     pops <- unique(pop)
     pop.m <- sapply(pops, function(p){
-      median(apply(total.counts[names(pop[which(pop == p)]), ], 1, sum))
+      median(apply(total.counts[names(pop[which(pop == p)]), vcs, drop=FALSE], 1, sum))
     })
     pop.rank <- 1:length(pop.m)
     names(pop.rank) <- names(pop.m)[order(pop.m, decreasing=TRUE)]
@@ -463,16 +463,17 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
 
   # Define plot parameters
   # Target dimensions for 3 rows + 2 marker fields: 6.6" wide x 4" tall
-  top.to.bottom.ratio <- 2.5
-  height.scalar <- 4 / ((3*top.to.bottom.ratio) + 1)
+  # Roughly 1.2" for each main row and 0.2" for each marker row
   pdf.width <- 6.6
-  pdf.height <- (top.to.bottom.ratio*height.scalar*n.panels) + (bottom.tracks*height.scalar/2)
+  panel.height <- 3.55/3
+  marker.track.height <- 0.45
+  pdf.height <- (panel.height*n.panels) + if(has.bottom.tracks){marker.track.height}
 
   # Generate waterfall plot
   pdf(paste(out.prefix, "variants_per_genome.waterfall.pdf", sep="."),
       height=pdf.height, width=pdf.width)
   layout(matrix(1:(n.panels+has.bottom.tracks), byrow=T, ncol=1),
-         heights=c(rep(top.to.bottom.ratio, n.panels), if(has.bottom.tracks){1}))
+         heights=c(rep(panel.height, n.panels), if(has.bottom.tracks){marker.track.height}))
   for(vc in vcs){
     waterfall.parmar <- c(0.25, 3.5, 0.5, 2.5)
     if(!has.bottom.tracks & vc == vcs[n.panels]){
@@ -691,6 +692,12 @@ args <- parser$parse_args()
 
 # # DEV:
 # args <- list("genotype_dist_tsv" = "~/scratch/dfci-g2c.v1.initial_qc.genotype_distribution.merged.tsv.gz",
+#              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
+#              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
+#              "out_prefix" = "~/scratch/g2c_vcf_qc_dev")
+
+# DEV (single variant class):
+# args <- list("genotype_dist_tsv" = "~/scratch/dfci-ufc.sv.v1.initial_qc.genotype_distribution.merged.tsv.gz",
 #              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
 #              "out_prefix" = "~/scratch/g2c_vcf_qc_dev")

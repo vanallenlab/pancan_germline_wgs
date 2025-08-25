@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import subprocess
 import textwrap
+import threading
 from datetime import datetime
 from os import environ, getenv, path, putenv, remove
 from re import sub
@@ -29,6 +30,9 @@ from time import sleep
 # Define constants
 hg38_primary_contigs = ['chr{}'.format(x+1) for x in range(22)] + ['chrX', 'chrY']
 strict_sub_status = 'failed aborted aborting unstaged not_started'.split()
+
+# Define global thread lock
+print_lock = threading.Lock()
 
 
 def clean_date():
@@ -91,24 +95,17 @@ def report_status(all_status, title=None):
     print('')
 
 
-def report_vm_load(n_retries=10):
+def vm_load_daemon(period_mins=5, n_retries=10):
     """
-    Report current GCP VM load 
+    Background thread that reports current GCP VM load every `period_mins` minutes
     """
 
     msg = '[{}] Current Cromwell server load: {:,} active VMs'
-    k = 0
-    while k < n_retries:
-        try:
+
+    while True:
+        with print_lock:
             print(msg.format(clean_date(), g2cpy.count_vms()))
-            return
-        except:
-            k += 1
-
-    msg2 = '[{}] GCP VM check failed after {:,} tries'
-    print(msg.format(clean_date(), k))
-
-    return k
+        sleep(60 * period_mins)
 
 
 def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
@@ -219,14 +216,16 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
         if not quiet:
             msg = '[{}] Would submit new workflow with the following ' + \
                   'command if not for --dry-run:\n{}'
-            print(msg.format(clean_date(), cmd))
+            with print_lock:
+                print(msg.format(clean_date(), cmd))
         status = 'dry_run_skipped'
     else:
         sub_res = subprocess.run(cmd, capture_output=True, shell=True, 
                                  check=False, text=True)
         if verbose and not quiet:
             msg = '[{}] Standard output from Cromwell submission command:\n{}'
-            print(msg.format(clean_date(), sub_res.stdout))
+            with print_lock:
+                print(msg.format(clean_date(), sub_res.stdout))
         try:
             new_wid = json.loads(sub_res.stdout)['id']
             with open(prev_wids, 'a') as fout:
@@ -234,35 +233,12 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
             status = 'submitted'
             if not quiet:
                 msg = '[{}] Submitted {} for contig {} (workflow ID: {})'
-                print(msg.format(clean_date(), path.basename(wdl), contig, new_wid))
+                with print_lock:
+                    print(msg.format(clean_date(), path.basename(wdl), contig, new_wid))
         except:
             status = 'submission_error'
 
     return status
-
-
-def sleepwalk(gate_mins, vm_report_secs, last_vm_check, quiet=False):
-    """
-    Wait for a specified duration, checking intermittently on Cromwell VM load
-    """
-
-    og_secs_remain = 60 * gate_mins
-    tt_next_vm_check = np.nanmax([(datetime.now() - last_vm_check).seconds, 0])
-    while og_secs_remain > 0:
-        if tt_next_vm_check < og_secs_remain:
-            sleep(tt_next_vm_check)
-            if not quiet:
-                n_vms = report_vm_load()
-                if n_vms == 0:
-                    return
-            last_vm_check = datetime.now()
-            tt_next_vm_check = vm_report_secs * 60
-            og_secs_remain -= tt_next_vm_check
-        else:
-            sleep(og_secs_remain)
-            break
-
-    return
 
 
 def main():
@@ -411,27 +387,28 @@ def main():
 
     # Report startup conditions
     if not args.quiet:
-        startup_report({'Method name' : method_name,
-                        'WDL' : args.wdl,
-                        'Input .json template' : args.input_json_template,
-                        'WDL dependencies .zip' : args.dependencies_zip,
-                        'Status tracker .tsv' : args.status_tsv,
-                        'Workspace bucket' : bucket,
-                        'Staging bucket' : args.staging_bucket,
-                        'Local root' : args.base_directory,
-                        'Behavior' : args.behavior,
-                        'Dumpster' : args.dumpster,
-                        'Automatic cleanup' : not args.no_cleanup,
-                        'Hard reset' : args.hard_reset,
-                        'Contigs' : ', '.join(contigs),
-                        'Max attempts' : args.max_attempts,
-                        'Outer gate' : args.outer_gate,
-                        'Submission gate' : args.submission_gate,
-                        'Active VM gate' : args.vm_gate,
-                        'GCP load report period' : args.gcp_report_period,
-                        'Max cycles' : max_cycles,
-                        'Dry run' : args.dry_run,
-                        'Quiet mode' : args.quiet})
+        with print_lock:
+            startup_report({'Method name' : method_name,
+                            'WDL' : args.wdl,
+                            'Input .json template' : args.input_json_template,
+                            'WDL dependencies .zip' : args.dependencies_zip,
+                            'Status tracker .tsv' : args.status_tsv,
+                            'Workspace bucket' : bucket,
+                            'Staging bucket' : args.staging_bucket,
+                            'Local root' : args.base_directory,
+                            'Behavior' : args.behavior,
+                            'Dumpster' : args.dumpster,
+                            'Automatic cleanup' : not args.no_cleanup,
+                            'Hard reset' : args.hard_reset,
+                            'Contigs' : ', '.join(contigs),
+                            'Max attempts' : args.max_attempts,
+                            'Outer gate' : args.outer_gate,
+                            'Submission gate' : args.submission_gate,
+                            'Active VM gate' : args.vm_gate,
+                            'GCP load report period' : args.gcp_report_period,
+                            'Max cycles' : max_cycles,
+                            'Dry run' : args.dry_run,
+                            'Quiet mode' : args.quiet})
 
     # If --status-tsv is provided and exists, load this file as a dict
     if args.status_tsv is not None \
@@ -461,10 +438,12 @@ def main():
                 if args.dry_run:
                     if not args.quiet:
                         msg = '[{}] Would un-stage outputs for {} if not for --dry-run'
-                        print(msg.format(clean_date(), contig))
+                        with print_lock:
+                            print(msg.format(clean_date(), contig))
                 else:
                     msg = '[{}] Un-staging outputs for {}'
-                    print(msg.format(clean_date(), contig))
+                    with print_lock:
+                        print(msg.format(clean_date(), contig))
                     g2cpy.delete_uris(['/'.join([sub('/$', '', args.staging_bucket), 
                                                  contig, '**'])])
                     run_status[contig] = 'unstaged'
@@ -472,12 +451,17 @@ def main():
 
     # Report beginning status
     if not args.quiet:
-        report_status(run_status, title='Status at launch:')
+        with print_lock:
+            report_status(run_status, title='Status at launch:')
 
-    # Initial VM load check
+    # Launch Cromwell load monitor
     if not args.quiet:
-        n_vms = report_vm_load()
-    last_vm_check = datetime.now()
+        t = threading.Thread(
+            target=vm_load_daemon, 
+            args=(args.gcp_report_period,), 
+            daemon=True
+            )
+        t.start()
 
     # Loop infinitely while any status is not 'staged' and max_cycles has not been reached
     cycle_number = 0
@@ -487,16 +471,11 @@ def main():
         if not args.quiet:
             msg = '[{}] Not all contigs yet staged. Entering another cycle of ' + \
                   'submission management routine.\n'
-            print(msg.format(clean_date()))
+            with print_lock:
+                print(msg.format(clean_date()))
 
         # Loop over all chromosomes
         for contig in contigs:
-
-            # VM check
-            if (datetime.now() - last_vm_check).seconds / 60 >= args.gcp_report_period:
-                if not args.quiet:
-                    n_vms = report_vm_load()
-                last_vm_check = datetime.now()
 
             # Get most recent status for this contig
             status = run_status.get(contig, 'unknown')
@@ -561,12 +540,14 @@ def main():
                         if not args.quiet:
                             msg = '[{}] Found successful workflow ({}); would stage ' + \
                                   'outputs and clean garbage if not for --dry-run'
-                            print(msg.format(clean_date(), wid))
+                            with print_lock:
+                                print(msg.format(clean_date(), wid))
                     elif args.no_stage:
                         if not args.quiet:
                             msg = '[{}] Found successful workflow ({}); would stage ' + \
                                   'outputs and clean garbage if not for --no-stage'
-                            print(msg.format(clean_date(), wid))
+                            with print_lock:
+                                print(msg.format(clean_date(), wid))
                     else:
                         relocate_outputs(wid, output_bucket, wdl_name, output_json_uri)
                         status = 'staged'
@@ -577,7 +558,8 @@ def main():
                                            '&& cleanup_garbage', shell=True, check=False, 
                                            text=True, executable='/bin/bash')
                         if not args.quiet:
-                            print('')
+                            with print_lock:
+                                print('')
 
                 # Exit loop after processing most recent workflow ID
                 break
@@ -594,15 +576,16 @@ def main():
                     # Check to ensure that the cromwell server isn't already overloaded
                     n_active_vms = g2cpy.count_vms()
                     if n_active_vms > args.vm_gate:
-                        status = 'vm_gate_skipped'
                         if not args.quiet:
-                            msg1 = '[{}] Status of contig {}: {}'
-                            print(msg1.format(clean_date(), contig, status))
-                            msg2 = '[{}] Skipped submission of {} due to the ' + \
-                                   'number of active VMs ({:,}) being greater ' + \
-                                   'than the value of --vm-gate ({:,})'
-                            print(msg2.format(clean_date(), contig, n_active_vms,
-                                              args.vm_gate))
+                            with print_lock:
+                                msg1 = '[{}] Status of contig {}: {}'
+                                print(msg1.format(clean_date(), contig, status))
+                                msg2 = '[{}] Skipped submission of {} due to the ' + \
+                                       'number of active VMs ({:,}) being greater ' + \
+                                       'than the value of --vm-gate ({:,})'
+                                print(msg2.format(clean_date(), contig, n_active_vms,
+                                                  args.vm_gate))
+                        status = 'vm_gate_skipped'
 
                     # Otherwise, submit workflow as normal
                     else:
@@ -622,20 +605,20 @@ def main():
                                 if not args.quiet:
                                     msg = '[{}] Pausing {:,} minutes before ' + \
                                           'proceeding with next chromosome...\n'
-                                    print(msg.format(clean_date(), 
-                                                     args.submission_gate, 
-                                                     args.submission_gate))
-                                # Sleep for --submission-gate, breaking at most 
-                                # every --gcp-report-period to check server load
-                                sleepwalk(args.submission_gate, args.gcp_report_period, 
-                                          last_vm_check, args.quiet)
+                                    with print_lock:
+                                        print(msg.format(clean_date(), 
+                                                         args.submission_gate, 
+                                                         args.submission_gate))
+                                # Sleep for --submission-gate minutes
+                                sleep(60 * args.submission_gate)
 
                 else:
                     if not args.quiet:
                         msg = '[{}] Contig {} has reached the maximum number of ' + \
                               'attempts ({:,}) for {}; skipping.'
-                        print(msg.format(clean_date(), contig, 
-                                         args.max_attempts, method_name))
+                        with print_lock:
+                            print(msg.format(clean_date(), contig, 
+                                             args.max_attempts, method_name))
                     status = 'exhausted'
 
             # Update & report status
@@ -643,7 +626,8 @@ def main():
             all_status.update(run_status)
             if not args.quiet and status != 'vm_gate_skipped':
                 msg = '[{}] Status of contig {}: {}'
-                print(msg.format(clean_date(), contig, status))
+                with print_lock:
+                    print(msg.format(clean_date(), contig, status))
             if args.status_tsv is not None:
                 with open(args.status_tsv, 'w') as fout:
                     for k, v in all_status.items():
@@ -657,31 +641,35 @@ def main():
         if len(set(run_status.values()).difference({'staged', 'exhausted'})) == 0:
             msg = '[{}] All contigs are staged or exhausted. No more progress ' + \
                   'is possible with current settings. Exiting management routine.'
-            print(msg.format(clean_date()))
+            with print_lock:
+                print(msg.format(clean_date()))
             exit()
 
         # Wait before checking again
         else:
             if not args.quiet:
-                report_status(run_status)
+                with print_lock:
+                    report_status(run_status)
                 msg = '[{}] Finished checking status for all {:,} contigs. ' + \
                       'Waiting {:,} minutes before checking again...\n'
-                print(msg.format(clean_date(), len(contigs), args.outer_gate))
+                with print_lock:
+                    print(msg.format(clean_date(), len(contigs), args.outer_gate))
 
-            # Sleep for --outer-gate, breaking at most every --gcp-report-period 
-            # to check server load
-            sleepwalk(args.outer_gate, args.gcp_report_period, last_vm_check, args.quiet)
+            # Sleep for --outer-gate minutes
+            sleep(60 * args.outer_gate)
 
     # Report if time limit reached
     if cycle_number == max_cycles:
         msg = '[{}] Maximum number of cycles reached ({:,}). ' + \
               'Exiting management routine.'
-        print(msg.format(clean_date(), max_cycles))
+        with print_lock:
+            print(msg.format(clean_date(), max_cycles))
         exit(1)
 
     # Report completion once all contigs are staged
     msg = '[{}] All contig outputs have been staged! Exiting management routine.'
-    print(msg.format(clean_date()))
+    with print_lock:
+        print(msg.format(clean_date()))
 
 
 if __name__ == '__main__':

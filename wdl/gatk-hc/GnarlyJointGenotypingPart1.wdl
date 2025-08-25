@@ -188,15 +188,19 @@ task ImportGVCFsFT {
 
     Int disk_size_gb
     Int machine_mem_mb = 30000
-    Int jvm_start_mb = 8000
+    Int? jvm_start_mb
+    Int? jvm_max_mb
     Int batch_size
-    Int n_preemptible_tries = 2
+    Int n_preemptible_tries = 1
+    Int n_retries = 1
 
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
   }
 
-  Int xms_mb = if machine_mem_mb / 3 < jvm_start_mb then jvm_start_mb else ceil(machine_mem_mb / 3)
-  Int xmx_mb = machine_mem_mb - 5000
+  Int xms_mb_default = if machine_mem_mb / 3 < jvm_start_mb then jvm_start_mb else ceil(machine_mem_mb / 3)
+  Int xms_mb = select_first([jvm_start_mb, xms_mb_default])
+  Int xmx_mb_default = machine_mem_mb - 5000
+  Int xmx_mb = select_first([jvm_max_mb, xmx_mb_default])
   String java_opts = "-Xms" + xms_mb + "m -Xmx" + xmx_mb + "m"
 
   command <<<
@@ -239,7 +243,7 @@ task ImportGVCFsFT {
     disks: "local-disk " + disk_size_gb + " HDD"
     docker: gatk_docker
     preemptible: n_preemptible_tries
-    max_retries: 1
+    max_retries: n_retries
   }
 
   output {
