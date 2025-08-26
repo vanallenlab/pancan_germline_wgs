@@ -23,6 +23,13 @@ from os import path
 from sys import stdin, stdout
 
 
+def _process_record(record):
+    """
+    Handle a single pysam.VariantRecord
+    """
+
+
+
 def main():
     """
     Main block
@@ -54,7 +61,7 @@ def main():
     # Open connection to input VCF
     ijump = False
     if args.input_vcf in '- stdin /dev/stdin'.split():
-        invcf = pysam.VariantFile(stdin)
+        invcf = pysam.VariantFile(stdin.buffer, index_filename=None)
     else:
         invcf = pysam.VariantFile(args.input_vcf)
         if path.exists(args.input_vcf + '.tbi'):
@@ -62,7 +69,7 @@ def main():
 
     # Open connection to output VCF
     if args.out_vcf in '- stdout /dev/stdout'.split():
-        outvcf = pysam.VariantFile(stdout, 'w', header=invcf.header)
+        outvcf = pysam.VariantFile('-', 'w', header=invcf.header)
     else:
         outvcf = pysam.VariantFile(args.out_vcf, 'w', header=invcf.header)
 
@@ -73,15 +80,28 @@ def main():
             for rec in invcf.fetch(region.chrom, region.start, region.end):
                 if rec.id == '.' or rec.id is None:
                     rec.id = name_record(rec)
+                
                 if rec.pos >= region.start \
-                and rec.stop <= region.end \
+                and rec.pos <= region.end \
                 and rec.id not in vids_seen:
                     outvcf.write(rec)
                     vids_seen.add(rec.id)
+
     else:
+        for rec in invcf:
+            if any((tdf.chrom == rec.chrom) & \
+                   (tdf.start <= rec.pos) & \
+                   (tdf.end >= rec.pos)):
+                
+                if rec.id == '.' or rec.id is None:
+                    rec.id = name_record(rec)
+
+                if rec.id not in vids_seen:
+                    outvcf.write(rec)
+                    vids_seen.add(rec.id)
 
     # Clear buffer unless writing to stdout
-    if outvcf != stdout:
+    if args.out_vcf not in '- stdout /dev/stdout'.split():
         outvcf.close()
 
 
