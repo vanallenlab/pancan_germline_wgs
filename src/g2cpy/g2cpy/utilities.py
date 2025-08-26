@@ -60,17 +60,12 @@ def hash_string(input, out_length, alphabet=base62_alphabet):
     Designed to generate variant ID suffixes, but can theoretically be used for any string
     """
 
-    bits_needed = math.ceil(out_length * math.log2(len(alphabet)))
-    bytes_needed = math.ceil(bits_needed / 8)
-
-    digest =  hashlib.sha256(input.encode('utf-8')).digest()[:bytes_needed]
+    base = len(alphabet)
+    M = base ** out_length
+    digest =  hashlib.sha256(input.encode('utf-8')).digest()
     num = int.from_bytes(digest, 'big')
-
-    extra_bits = bytes_needed * 8 - bits_needed
-    if extra_bits > 0:
-        num >>= extra_bits
-
-    encoded = baseX_encode(num, alphabet)
+    idx = num % M
+    encoded = baseX_encode(idx, alphabet)
     
     return encoded.rjust(out_length, alphabet[0])
 

@@ -769,7 +769,7 @@ if [ -e $staging_dir ]; then rm -rf $staging_dir; fi
 mkdir $staging_dir
 cat << EOF > $staging_dir/CollapseRedundantSvs.inputs.template.json
 {
-  "CollapseRedundantSvs.g2c_pipeline_docker": "vanallenlab/g2c_analysis:7dda1b4",
+  "CollapseRedundantSvs.g2c_analysis_docker": "vanallenlab/g2c_analysis:7dda1b4",
   "CollapseRedundantSvs.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
   "CollapseRedundantSvs.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
 }
