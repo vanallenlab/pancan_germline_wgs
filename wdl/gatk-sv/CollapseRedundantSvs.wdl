@@ -14,6 +14,7 @@ workflow CollapseRedundantSvs {
   input {
     File vcf
     File vcf_idx
+    File genome_file
 
     Float recip_overlap = 0.98
     Int bp_dist = 500
@@ -29,6 +30,7 @@ workflow CollapseRedundantSvs {
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
+      genome_file = genome_file,
       recip_overlap = recip_overlap,
       bp_dist = bp_dist,
       sample_overlap = sample_overlap,
@@ -59,6 +61,7 @@ task DefineClusters {
   input {
     File vcf
     File vcf_idx
+    File genome_file
 
     Float recip_overlap
     Int bp_dist
@@ -101,6 +104,23 @@ task DefineClusters {
     > ~{out_prefix}.sv_cluster_assignments.bed
 
     # Second pass for clusters of two or more strictly identical variants
+    # This step is not filtered by frequency, and is pre-screened for positions
+    # where at least two variants share the same start position
+    bcftools query -f '%CHROM\t%POS\n' ~{vcf} \
+    | sort -Vk1,1 -k2,2n | uniq -c \
+    | awk -v OFS="\t" '{ if ($1>1) print $2, $3-2, $3+2 }' \
+    | sort -Vk1,1 -k2,2n -k3,3n \
+    | bedtools merge -i - \
+    > candidate_identical_loci.bed
+    /opt/pancan_germline_wgs/scripts/utilities/filter_vcf_by_pos.py \
+      -i ~{vcf} \
+      -r candidate_identical_loci.bed \
+      -g ~{genome_file} \
+    | bcftools annotate \
+      -h add_header.vcf \
+      -Oz -o input2.vcf.gz
+    tabix -f input2.vcf.gz
+    echo "input2.vcf.gz" > input2_vcf.list
     svtk vcfcluster \
       -d 1 \
       -f 1 \
@@ -108,7 +128,7 @@ task DefineClusters {
       -t "~{cluster_sv_types}" \
       --preserve-header \
       --skip-merge \
-      input_vcf.list \
+      input2_vcf.list \
       - \
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
     > ~{out_prefix}.identical_assignment.bed

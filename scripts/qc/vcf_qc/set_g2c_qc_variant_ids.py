@@ -15,7 +15,7 @@ import argparse
 import numpy as np
 import pysam
 import sys
-from g2cpy import classify_variant, name_variant
+from g2cpy import name_record
 
 
 def main():
@@ -42,18 +42,7 @@ def main():
 
     # Rename each record from --vcf-in before writing to --vcf-out
     for record in invcf:
-
-        # Gather site descriptives
-        ref, alt = record.alleles[:2]
-        if 'SVLEN' in record.info.keys():
-            varlen = int(record.info['SVLEN'])
-        else:
-            varlen = np.abs(len(alt) - len(ref))
-        vc, vsc = classify_variant(ref, alt, varlen)
-        vid = name_variant(record.chrom, record.pos, ref, alt, vc, vsc, varlen)
-        record.id = vid
-
-        # Write to --vcf-out
+        record.id = name_record(record)
         outvcf.write(record)
 
     # Clear buffer

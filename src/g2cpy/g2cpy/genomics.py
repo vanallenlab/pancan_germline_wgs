@@ -310,6 +310,20 @@ def name_variant(chrom, pos, ref, alt, vc, vsc, varlen, suffix_length=10):
         return '_'.join([str(x) for x in [chrom, pos, vsc, vhash]])
 
 
+def name_record(record, suffix_length=10):
+    """
+    Wrapper for name_variant designed for pysam.VariantRecord input
+    """
+
+    ref, alt = record.alleles[:2]
+    if 'SVLEN' in record.info.keys():
+        varlen = int(record.info['SVLEN'])
+    else:
+        varlen = np.abs(len(alt) - len(ref))
+    vc, vsc = classify_variant(ref, alt, varlen)
+    return name_variant(record.chrom, record.pos, ref, alt, vc, vsc, varlen)
+
+
 def is_multiallelic(record):
     """
     Check if pysam.VariantRecord is multiallelic (including mCNVs)
