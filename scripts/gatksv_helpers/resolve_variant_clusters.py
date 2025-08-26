@@ -35,6 +35,8 @@ def main():
                         help='output .vcf [default: stdout]')
     parser.add_argument('-p', '--prefix', help='Name prefix for clustered variants',
                         default='reclustered')
+    parser.add_argument('-b', '--buffer', type=int, default=10, 
+                        help='Buffer for VCF queries, in base pairs')
     args = parser.parse_args()
 
     # Open connection to input vcf
@@ -63,7 +65,9 @@ def main():
 
         # Gather records from VCF
         records = []
-        for rec in invcf.fetch(chrom, int(start), int(end)):
+        for rec in invcf.fetch(chrom, 
+                               np.nanmax([int(start) - args.buffer, 0]), 
+                               int(end) + args.buffer):
             if rec.id in vids:
                 records.append(rec)
 

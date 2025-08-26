@@ -173,7 +173,7 @@ task ResolveClusters {
     /opt/pancan_germline_wgs/scripts/gatksv_helpers/resolve_variant_clusters.py \
       --in-vcf ~{vcf} \
       --clusters ~{clusters} \
-      --prefix ~{out_prefix} \
+      --prefix "~{out_prefix}_reclustered" \
     | bcftools sort -m "~{sort_mem}G" \
     | bcftools +fill-tags -Oz -o ~{out_prefix}.resolved_clusters.vcf.gz -- -t AC,AN,AF
     tabix -p vcf -f ~{out_prefix}.resolved_clusters.vcf.gz
