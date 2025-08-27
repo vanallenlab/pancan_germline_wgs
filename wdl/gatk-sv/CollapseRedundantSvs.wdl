@@ -14,7 +14,7 @@ workflow CollapseRedundantSvs {
   input {
     File vcf
     File vcf_idx
-    File genome_file
+    File? genome_file
 
     Float recip_overlap = 0.98
     Int bp_dist = 500
@@ -61,7 +61,7 @@ task DefineClusters {
   input {
     File vcf
     File vcf_idx
-    File genome_file
+    File? genome_file
 
     Float recip_overlap
     Int bp_dist
@@ -77,6 +77,7 @@ task DefineClusters {
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
+  String gfile_cmd = if defined(genome_file) then "-g ~{genome_file}" else ""
 
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
@@ -115,7 +116,7 @@ task DefineClusters {
     /opt/pancan_germline_wgs/scripts/utilities/filter_vcf_by_pos.py \
       -i ~{vcf} \
       -r candidate_identical_loci.bed \
-      -g ~{genome_file} \
+      ~{gfile_cmd} \
     | bcftools annotate \
       -h add_header.vcf \
       -Oz -o input2.vcf.gz
