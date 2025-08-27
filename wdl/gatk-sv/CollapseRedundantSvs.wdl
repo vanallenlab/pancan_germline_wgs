@@ -77,12 +77,16 @@ task DefineClusters {
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
-  String gfile_cmd = if defined(genome_file) then "-g ~{genome_file}" else ""
+  String gfile_cmd = if defined(genome_file) then "-g ~{basename(genome_file)}" else ""
 
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
+
+    if ~{defined(genome_file)}; then
+      cp ~{genome_file} ./
+    fi
 
     # Assign variants to clusters using svtk
     echo "##source=gatksv" > add_header.vcf
