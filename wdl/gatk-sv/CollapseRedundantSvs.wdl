@@ -14,54 +14,114 @@ workflow CollapseRedundantSvs {
   input {
     File vcf
     File vcf_idx
-    File? genome_file
 
-    Float recip_overlap = 0.98
-    Int bp_dist = 500
-    Float sample_overlap = 0.05
+    Array[Float] recip_overlap = [0.975, 0.99, 1]
+    Array[Int] bp_dist = [800, 200, 1]
+    Array[Float] sample_overlap = [0.10, 0.01, 0]
+    Array[Float] min_af = [0.01, 0.001, 0]
+    Array[Int] min_ac = [100, 10, 1]
+    Array[String] round_prefixes = ["loose", "strict", "identical"]
+
     String cluster_sv_types = "DEL,DUP,INS,INV,CPX"
-    Float min_af = 0.001
-    Int min_ac = 10
 
     String g2c_analysis_docker
   }
 
-  call DefineClusters {
+  # ROUND 1
+  call DefineClusters as DC1 {
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
-      genome_file = genome_file,
-      recip_overlap = recip_overlap,
-      bp_dist = bp_dist,
-      sample_overlap = sample_overlap,
+      recip_overlap = recip_overlap[0],
+      bp_dist = bp_dist[0],
+      sample_overlap = sample_overlap[0],
       cluster_sv_types = cluster_sv_types,
-      min_af = min_af,
-      min_ac = min_ac,
+      min_af = min_af[0],
+      min_ac = min_ac[0],
+      out_prefix = basename(vcf, "vcf.gz") + round_prefixes[0],
       g2c_analysis_docker = g2c_analysis_docker    
   }
 
-  if ( DefineClusters.n_clusters > 0 ) {
-    call ResolveClusters {
+  if ( DC1.n_clusters > 0 ) {
+    call ResolveClusters as RC1 {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
-        clusters = DefineClusters.clusters,
+        clusters = DC1.clusters,
+        out_prefix = basename(vcf, "vcf.gz") + round_prefixes[0],
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+  File RC1_vcf = select_first([RC1.reclustered_vcf, vcf])
+  File RC1_vcf_idx = select_first([RC1.reclustered_vcf_idx, vcf_idx])
+
+  # ROUND 2
+  call DefineClusters as DC2 {
+    input:
+      vcf = RC1_vcf,
+      vcf_idx = RC1_vcf_idx,
+      recip_overlap = recip_overlap[1],
+      bp_dist = bp_dist[1],
+      sample_overlap = sample_overlap[1],
+      cluster_sv_types = cluster_sv_types,
+      min_af = min_af[1],
+      min_ac = min_ac[1],
+      out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
+      g2c_analysis_docker = g2c_analysis_docker    
+  }
+
+  if ( DC2.n_clusters > 0 ) {
+    call ResolveClusters as RC2 {
+      input:
+        vcf = RC1_vcf,
+        vcf_idx = RC1_vcf_idx,
+        clusters = DC2.clusters,
+        out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
+        g2c_analysis_docker = g2c_analysis_docker
+    }
+  }
+  File RC2_vcf = select_first([RC2.reclustered_vcf, RC1_vcf])
+  File RC2_vcf_idx = select_first([RC2.reclustered_vcf_idx, RC1_vcf_idx])
+
+  # ROUND 3
+  call DefineClusters as DC3 {
+    input:
+      vcf = RC1_vcf,
+      vcf_idx = RC1_vcf_idx,
+      recip_overlap = recip_overlap[1],
+      bp_dist = bp_dist[1],
+      sample_overlap = sample_overlap[1],
+      cluster_sv_types = cluster_sv_types,
+      min_af = min_af[1],
+      min_ac = min_ac[1],
+      out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
+      g2c_analysis_docker = g2c_analysis_docker    
+  }
+
+  if ( DC3.n_clusters > 0 ) {
+    call ResolveClusters as RC3 {
+      input:
+        vcf = RC1_vcf,
+        vcf_idx = RC1_vcf_idx,
+        clusters = DC3.clusters,
+        out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
 
   output {
-    File reclustered_vcf = select_first([ResolveClusters.reclustered_vcf, vcf])
-    File reclustered_vcf_idx = select_first([ResolveClusters.reclustered_vcf_idx, vcf_idx])
+    File reclustered_vcf = select_first([RC3.reclustered_vcf, RC2_vcf])
+    File reclustered_vcf_idx = select_first([RC3.reclustered_vcf_idx, RC2_vcf_idx])
+    Array[File] cluster_maps = select_all([DC1.clusters, DC2.clusters, DC3.clusters])
   }
 }
 
 
+# Define variants to be clustered based on user-specified clustering parameters
 task DefineClusters {
   input {
     File vcf
     File vcf_idx
-    File? genome_file
 
     Float recip_overlap
     Int bp_dist
@@ -69,6 +129,8 @@ task DefineClusters {
     String cluster_sv_types
     Float min_af
     Int min_ac
+
+    String out_prefix
     
     Float mem_gb = 7.5
     Int n_cpu = 4
@@ -76,17 +138,10 @@ task DefineClusters {
     String g2c_analysis_docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz")
-  String gfile_cmd = if defined(genome_file) then "-g ~{basename(genome_file)}" else ""
-
   Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
 
   command <<<
     set -eu -o pipefail
-
-    if ~{defined(genome_file)}; then
-      cp ~{genome_file} ./
-    fi
 
     # Assign variants to clusters using svtk
     echo "##source=gatksv" > add_header.vcf
@@ -108,52 +163,18 @@ task DefineClusters {
     | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
     > ~{out_prefix}.sv_cluster_assignments.bed
 
-    # Second pass for clusters of two or more strictly identical variants
-    # This step is not filtered by frequency, and is pre-screened for positions
-    # where at least two variants share the same start position
-    bcftools query -f '%CHROM\t%POS\n' ~{vcf} \
-    | sort -Vk1,1 -k2,2n | uniq -c \
-    | awk -v OFS="\t" '{ if ($1>1) print $2, $3-2, $3+2 }' \
-    | sort -Vk1,1 -k2,2n -k3,3n \
-    | bedtools merge -i - \
-    > candidate_identical_loci.bed
-    /opt/pancan_germline_wgs/scripts/utilities/filter_vcf_by_pos.py \
-      -i ~{vcf} \
-      -r candidate_identical_loci.bed \
-      ~{gfile_cmd} \
-    | bcftools annotate \
-      -h add_header.vcf \
-      -Oz -o input2.vcf.gz
-    tabix -f input2.vcf.gz
-    echo "input2.vcf.gz" > input2_vcf.list
-    svtk vcfcluster \
-      -d 1 \
-      -f 1 \
-      -p "~{out_prefix}.identical" \
-      -t "~{cluster_sv_types}" \
-      --preserve-header \
-      --skip-merge \
-      input2_vcf.list \
-      - \
-    | bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%INFO/CLUSTER\n' \
-    > ~{out_prefix}.identical_assignment.bed
-    cut -f5 ~{out_prefix}.identical_assignment.bed \
-    | uniq -c | awk '{ if ($1>1) print $2 }' \
-    > candidate_cluster_idxs.list
+    # Identify clusters of two or more variants
     while read cidx; do
       awk -v cidx=$cidx -v OFS="\t" \
-        '{ if ($5==cidx) print }' \
-        ~{out_prefix}.identical_assignment.bed
-    done < candidate_cluster_idxs.list \
-    > ~{out_prefix}.identical_assignment.clusters.bed
-
-    # Update rough cluster assignments to ensure that 
-    # all strictly identical variants are linked. Outputs
-    # a BED4 file with one row per multi-variant cluster
-    /opt/pancan_germline_wgs/scripts/gatksv_helpers/update_cluster_assignments.py \
-      -i ~{out_prefix}.sv_cluster_assignments.bed \
-      -u ~{out_prefix}.identical_assignment.clusters.bed \
-      -o ~{out_prefix}.sv_clusters.bed
+        '{ if ($5==cidx) print $1, $2, $3, $4 }' \
+        ~{out_prefix}.sv_cluster_assignments.bed \
+      | sort -Vk1,1 -k2,2n -k3,3n \
+      | bedtools merge -i - -d ~{bp_dist} -c 4 -o distinct
+    done < <( cut -f5 ~{out_prefix}.sv_cluster_assignments.bed \
+              | uniq -c | awk '{ if ($1>1) print $2 }' ) \
+    | awk '{ if ($4~/,/) print }' \
+    | sort -Vk1,1 -k2,2n -k3,3n \
+    > ~{out_prefix}.sv_clusters.bed
   >>>
 
   output {
@@ -178,13 +199,14 @@ task ResolveClusters {
     File vcf_idx
     File clusters
 
+    String out_prefix
+
     Float mem_gb = 7.5
     Int n_cpu = 4
 
     String g2c_analysis_docker
   }
 
-  String out_prefix = basename(vcf, ".vcf.gz")
   String vcf_out =  "~{out_prefix}.reclustered.vcf.gz"
 
   Int disk_gb = ceil(10 * size(vcf, "GB")) + 10

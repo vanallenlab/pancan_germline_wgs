@@ -194,7 +194,7 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
 # Helper function to plot a single count waterfall; called within main.waterfall()
 plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
                                  samples.sorted=NULL, pop.space.wex=0.025,
-                                 pheno.space.wex=0.005, legend.text.cex=5/6,
+                                 pheno.space.wex=0.005, global.scaling.cex=1,
                                  parmar=c(0.25, 3.5, 0.5, 2.5)){
   # Format plotting data
   counts <- gt.counts[which(gt.counts$class == vc
@@ -268,15 +268,17 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
     group.k.med <- median(group.df$k)
     med.lab <- clean.numeric.labels(round(group.k.med, 0),
                                     min.label.length=if(group.k.med < 1000){1}else{3})
-    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T, col="white", font=2, labels=med.lab)
-    text(x=lab.x.at, y=lab.y.at, cex=5/6, xpd=T, labels=med.lab,
+    text(x=lab.x.at, y=lab.y.at, cex=global.scaling.cex*5/6,
+         xpd=T, col="white", font=2, labels=med.lab)
+    text(x=lab.x.at, y=lab.y.at, cex=global.scaling.cex*5/6, xpd=T, labels=med.lab,
          col=if(is.na(pop)){"black"}else{pop.palettes[[pop]]["dark1"]})
   })
 
   # Add left Y axis
   clean.axis(2, title=paste(var.class.abbrevs[vc], "s", sep=""),
              label.units="count", infinite.positive=T, min.ticks=3, max.ticks=4,
-             title.line=1.4, cex.title=7.5/6, cex.axis=1)
+             title.line=parmar[2]-2.1, cex.title=global.scaling.cex*7.5/6,
+             cex.axis=global.scaling.cex)
 
   # Add right Y axis-legend hybrid
   legend.y.at <- apply(sapply(tail(ceiling(0.01*n.samples):n.samples, 25), function(si){
@@ -285,14 +287,14 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
   yaxis.legend(c("Hom.", "Het."), x=max(sample.xleft)+1, y.positions=legend.y.at,
                sep.wex=0.005*diff(par("usr")[1:2]),
                min.label.spacing=0.075*diff(par("usr")[3:4]),
-               colors=c(hom.col, het.col), label.cex=legend.text.cex)
+               colors=c(hom.col, het.col), label.cex=5/6*global.scaling.cex)
 }
 
 # Helper function to add groupwise markers to waterfall plot
 add.waterfall.markers <- function(order.df, pop.map, pheno.map,
                                   pop.space.wex=0.025, pheno.space.wex=0.005,
                                   group.labels=c("Ancestry", "Pheno."),
-                                  rect.hex.buffer=0.125,
+                                  rect.hex.buffer=0.125, global.scaling.cex=1,
                                   parmar=c(1.35, 3.5, 0.25, 2.5)){
   # Determine breaks between groups
   s.feats <- data.frame("order" = 1:nrow(order.df), row.names=rownames(order.df))
@@ -378,7 +380,8 @@ add.waterfall.markers <- function(order.df, pop.map, pheno.map,
       pop.lab.x <- mean(as.numeric(pop.rect.df[which(pop.rect.df$lab == pop),
                                                c("start", "end")]))
       text(x=pop.lab.x, y=y.start+0.5, labels=pop.names[pop],
-           col=optimize.label.color(pop.pal[pop], cutoff=0.8))
+           col=optimize.label.color(pop.pal[pop], cutoff=0.8),
+           cex=global.scaling.cex)
     })
     y.start <- y.start + 1
   }
@@ -393,13 +396,15 @@ add.waterfall.markers <- function(order.df, pop.map, pheno.map,
       pheno.lab.x <- mean(as.numeric(head(pheno.rect.df[which(pheno.rect.df$lab == pheno),
                                                         c("start", "end")], 1)))
       text(x=pheno.lab.x, y=y.start+0.5, labels=pheno.names[pheno],
-           col=optimize.label.color(pheno.pal[pheno], cutoff=0.8))
+           col=optimize.label.color(pheno.pal[pheno], cutoff=0.8),
+           cex=global.scaling.cex)
     })
   }
 
   # Add labels
   sapply(1:length(group.labels), function(y){
-    axis(2, at=y-0.5, tick=F, line=-1.2, labels=group.labels[y], las=2)
+    axis(2, at=y-0.5, tick=F, line=-1.2, labels=group.labels[y], las=2,
+         cex.axis=global.scaling.cex)
   })
 }
 
@@ -463,31 +468,39 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
 
   # Define plot parameters
   # Target dimensions for 3 rows + 2 marker fields: 6.6" wide x 4" tall
-  # Roughly 1.2" for each main row and 0.2" for each marker row
+  # Roughly 1.2" for each main row, 0.125" for each marker row, and 0.15" for bottom axis
   pdf.width <- 6.6
   panel.height <- 3.55/3
-  marker.track.height <- 0.45
-  pdf.height <- (panel.height*n.panels) + if(has.bottom.tracks){marker.track.height}
+  marker.row.height <- 0.125
+  bottom.axis.height <- 0.15
+  pdf.height <- (panel.height*n.panels) + (bottom.tracks*marker.row.height) + bottom.axis.height
+  layout.heights <- c(rep(panel.height, n.panels),
+                      if(has.bottom.tracks){bottom.tracks*marker.row.height})
+  layout.heights[length(layout.heights)] <- layout.heights[length(layout.heights)] + bottom.axis.height
+  text.scaling.factor <- (7 / seq(10, 7, length.out=3))[n.panels]
 
   # Generate waterfall plot
   pdf(paste(out.prefix, "variants_per_genome.waterfall.pdf", sep="."),
       height=pdf.height, width=pdf.width)
   layout(matrix(1:(n.panels+has.bottom.tracks), byrow=T, ncol=1),
-         heights=c(rep(panel.height, n.panels), if(has.bottom.tracks){marker.track.height}))
+         heights=layout.heights)
   for(vc in vcs){
-    waterfall.parmar <- c(0.25, 3.5, 0.5, 2.5)
+    waterfall.parmar <- c(0.25, 3.5, 0.5, 2.5) * text.scaling.factor
     if(!has.bottom.tracks & vc == vcs[n.panels]){
-      parmar[1] <- 1.5
+      parmar[1] <- 1.35 * text.scaling.factor
     }
     plot.count.waterfall(gt.counts, vc, pop, pheno, samples.sorted,
-                         pop.space.wex, pheno.space.wex, parmar=waterfall.parmar)
+                         pop.space.wex, pheno.space.wex,
+                         global.scaling.cex=text.scaling.factor,
+                         parmar=waterfall.parmar)
   }
   if(has.bottom.tracks){
     add.waterfall.markers(order.df, pop.rank, pheno.rank,
-                          pop.space.wex, pheno.space.wex)
+                          pop.space.wex, pheno.space.wex,
+                          parmar=c(1.35, 3.5, 0.25, 2.5)*text.scaling.factor)
   }
   mtext(paste(prettyNum(length(samples), big.mark=","), "germline genomes"),
-        1, line=0.25, cex=5/6)
+        1, line=par("mar")[1]-1.1, cex=5/6)
   dev.off()
 }
 
