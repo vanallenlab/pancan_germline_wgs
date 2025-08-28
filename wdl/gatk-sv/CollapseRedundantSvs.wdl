@@ -86,25 +86,25 @@ workflow CollapseRedundantSvs {
   # ROUND 3
   call DefineClusters as DC3 {
     input:
-      vcf = RC1_vcf,
-      vcf_idx = RC1_vcf_idx,
-      recip_overlap = recip_overlap[1],
-      bp_dist = bp_dist[1],
-      sample_overlap = sample_overlap[1],
+      vcf = RC2_vcf,
+      vcf_idx = RC2_vcf_idx,
+      recip_overlap = recip_overlap[2],
+      bp_dist = bp_dist[2],
+      sample_overlap = sample_overlap[2],
       cluster_sv_types = cluster_sv_types,
-      min_af = min_af[1],
-      min_ac = min_ac[1],
-      out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
+      min_af = min_af[2],
+      min_ac = min_ac[2],
+      out_prefix = basename(RC2_vcf, "vcf.gz") + round_prefixes[2],
       g2c_analysis_docker = g2c_analysis_docker    
   }
 
   if ( DC3.n_clusters > 0 ) {
     call ResolveClusters as RC3 {
       input:
-        vcf = RC1_vcf,
-        vcf_idx = RC1_vcf_idx,
+        vcf = RC2_vcf,
+        vcf_idx = RC2_vcf_idx,
         clusters = DC3.clusters,
-        out_prefix = basename(RC1_vcf, "vcf.gz") + round_prefixes[1],
+        out_prefix = basename(vcf, "vcf.gz") + round_prefixes[2],
         g2c_analysis_docker = g2c_analysis_docker
     }
   }
@@ -207,7 +207,7 @@ task ResolveClusters {
     String g2c_analysis_docker
   }
 
-  String vcf_out =  "~{out_prefix}.reclustered.vcf.gz"
+  String vcf_out = "~{out_prefix}.reclustered.vcf.gz"
 
   Int disk_gb = ceil(10 * size(vcf, "GB")) + 10
 
