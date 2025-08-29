@@ -46,11 +46,13 @@ def classify_gt(gt):
 
     if len(alleles) == 0:
         return None
-    else:
+    elif len(alleles) == 1:
         if 0 in alleles:
             return 'ref'
         else:
             return 'hom'
+    else:
+        return 'het'
 
 
 def mendelian_eval(record, pro, fa, mo):
@@ -65,10 +67,12 @@ def mendelian_eval(record, pro, fa, mo):
 
     # Skip sites with incomplete trio genotypes
     if any(gt is None for gt in [pro_gt, fa_gt, mo_gt]):
+        import pdb; pdb.set_trace()
         return None
 
     # Skip sites where all members are reference
     if all(gt == 'ref' for gt in [pro_gt, fa_gt, mo_gt]):
+        import pdb; pdb.set_trace()
         return None
 
     # Count number of ref, het, and hom parents
@@ -89,7 +93,7 @@ def mendelian_eval(record, pro, fa, mo):
         return 'denovo'
 
     elif pro_gt == 'het':
-        if n_par_hom == 2:
+        if n_hom_par == 2:
             return 'obligate_hom'
         else:
             return 'pass'
