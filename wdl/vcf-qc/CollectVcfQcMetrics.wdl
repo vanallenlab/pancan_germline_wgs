@@ -1262,19 +1262,21 @@ task PreprocessVcf {
     # Generate dense VCF of only target samples
     # Note that this command also reassigns all variant IDs to G2C QC standards
     # This is required for compatability with downstream LD calculations
-    bcftools view --samples-file ~{target_samples} --force-samples ~{vcf} \
-    | bcftools annotate -h ~{supp_vcf_header} --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
-    | bcftools view --include 'INFO/AC > 0 | FILTER="MULTIALLELIC"' \
+    # This command also intentionally does not recalculate variant frequency information
+    # on the dense subset, as we want the frequencies to reflect the overall cohort
+    bcftools annotate -h ~{supp_vcf_header} ~{vcf} \
     | bcftools +fill-tags -- -t AN,AC,AF,AC_Hemi,AC_Het,AC_Hom,HWE \
     ~{mcnv_anno} \
     ~{extra_commands} \
     | bcftools annotate -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FILTER/PASS,FILTER/MULTIALLELIC,^FORMAT/GT,FORMAT/RD_CN" \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/set_g2c_qc_variant_ids.py \
-      --vcf-out ~{dense_outfile}
+    | bcftools view --no-update --samples-file ~{target_samples} --force-samples \
+    | bcftools view --no-update --include 'GT="alt" | FILTER="MULTIALLELIC"' \
+      -Oz -o ~{dense_outfile}
     tabix -p vcf -f ~{dense_outfile}
 
     # Make a sites-only equivalent of the dense VCF for downstream benchmarking
-    bcftools view -G ~{dense_outfile} -Oz -o ~{dense_sites_outfile}
+    bcftools view --no-update -G ~{dense_outfile} -Oz -o ~{dense_sites_outfile}
     tabix -p vcf -f ~{dense_sites_outfile}
 
     # For convenience, also make an empty VCF and corresponding index with matching header

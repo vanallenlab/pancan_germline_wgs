@@ -263,13 +263,19 @@ plot.count.waterfall <- function(gt.counts, vc, pop=NULL, pheno=NULL,
                            row.names=sids)
     group.df <- group.df[order(group.df$x), ]
     lab.x.at <- median(group.df$x)
-    lab.y.at <- max(c(0.55*diff(par("usr")[3:4]),
-                      quantile(group.df$k, prob=0.99)))
+    # lab.y.at <- max(c(0.55*diff(par("usr")[3:4]),
+    #                   quantile(group.df$k, prob=0.99)))
+    lab.y.at <- median(group.df$k, na.rm=T)
     group.k.med <- median(group.df$k)
     med.lab <- clean.numeric.labels(round(group.k.med, 0),
                                     min.label.length=if(group.k.med < 1000){1}else{3})
-    text(x=lab.x.at, y=lab.y.at, cex=global.scaling.cex*5/6,
-         xpd=T, col="white", font=2, labels=med.lab)
+    lab.width <- 1.075*strwidth(med.lab, cex=global.scaling.cex*5/6)
+    lab.height <- 1.2*strheight(med.lab, cex=global.scaling.cex*5/6)
+    rect(xleft=lab.x.at-(lab.width/2), xright=lab.x.at+(lab.width/2),
+         ybottom=lab.y.at-(lab.height/2), ytop=lab.y.at+(lab.height/2),
+         col=adjustcolor("white", alpha=3/4), border=NA)
+    # text(x=lab.x.at, y=lab.y.at, cex=global.scaling.cex*5/6,
+    #      xpd=T, col="white", font=2, labels=med.lab)
     text(x=lab.x.at, y=lab.y.at, cex=global.scaling.cex*5/6, xpd=T, labels=med.lab,
          col=if(is.na(pop)){"black"}else{pop.palettes[[pop]]["dark1"]})
   })
@@ -379,7 +385,11 @@ add.waterfall.markers <- function(order.df, pop.map, pheno.map,
     sapply(unique(pop.labs), function(pop){
       pop.lab.x <- mean(as.numeric(pop.rect.df[which(pop.rect.df$lab == pop),
                                                c("start", "end")]))
-      text(x=pop.lab.x, y=y.start+0.5, labels=pop.names[pop],
+      short.lab <- shorten.text(pop.names[pop],
+                                width=pop.rect.df$len[which(pop.rect.df$lab == pop)],
+                                cex=global.scaling.cex)
+      text(x=pop.lab.x, y=y.start+0.5,
+           labels=short.lab,
            col=optimize.label.color(pop.pal[pop], cutoff=0.8),
            cex=global.scaling.cex)
     })
@@ -496,8 +506,8 @@ main.waterfall <- function(gt.counts, out.prefix, pop=NULL, pheno=NULL,
   }
   if(has.bottom.tracks){
     add.waterfall.markers(order.df, pop.rank, pheno.rank,
-                          pop.space.wex, pheno.space.wex,
-                          parmar=c(1.35, 3.5, 0.25, 2.5)*text.scaling.factor)
+                          pop.space.wex, pheno.space.wex, global.scaling.cex=text.scaling.factor,
+                          parmar=c(1.2, 3.5, 0.1, 2.5)*text.scaling.factor)
   }
   mtext(paste(prettyNum(length(samples), big.mark=","), "germline genomes"),
         1, line=par("mar")[1]-1.1, cex=5/6)

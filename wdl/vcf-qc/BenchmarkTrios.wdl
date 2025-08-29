@@ -123,7 +123,8 @@ task BenchmarkTrios {
     bcftools view --no-update --force-samples \
       --samples-file ~{trios_samples_list} \
       ~{vcf} \
-    | bcftools view --no-update --include 'GT="alt" | FILTER="MULTIALLELIC"' \
+    | bcftools view --no-update \
+      --include 'GT="alt" | FILTER="MULTIALLELIC"' \
     | /opt/pancan_germline_wgs/scripts/qc/vcf_qc/gather_mendelian_violations.py \
       --trios-fam ~{trios_fam} \
       --eligible-vids elig_vids.list \

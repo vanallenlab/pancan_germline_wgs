@@ -786,3 +786,16 @@ code/scripts/manage_chromshards.py \
   --outer-gate 30 \
   --max-attempts 3
 
+# Confirm that the reclustering procedure didn't result in major VCF changes
+for k in $( seq 1 22 ) X Y; do
+  for wrapper in 1; do
+    CONTIG="chr$k"
+    echo $CONTIG
+    gsutil -m cat \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.$CONTIG.concordance.gq_recalibrated.vcf.gz \
+    | bcftools query -f '%ID\n' | wc -l
+    gsutil -m cat \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/$CONTIG/RC3/dfci-g2c.v1.$CONTIG.concordance.gq_recalibrated.identical.reclustered.vcf.gz \
+    | bcftools query -f '%ID\n' | wc -l
+  done | paste - - - | awk -v OFS="\t" '{ print $1, $2, $3, $3-$2, 100*(($3-$2)/$2)"%" }'
+done
