@@ -53,6 +53,16 @@ args <- parser$parse_args()
 #              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
+# # DEV (single vc):
+# args <- list("sens_tsv" = c("~/scratch/dbg_dat/dfci-ufc.sv.v1.initial_qc.external_lrwgs.Easy.ppv_by_freq.merged.tsv.gz",
+#                             "~/scratch/dbg_dat/dfci-ufc.sv.v1.initial_qc.external_lrwgs.Hard.ppv_by_freq.merged.tsv.gz"),
+#              "ppv_tsv" = c("~/scratch/dbg_dat/dfci-ufc.sv.v1.initial_qc.external_lrwgs.Easy.sensitivity_by_freq.merged.tsv.gz",
+#                            "~/scratch/dbg_dat/dfci-ufc.sv.v1.initial_qc.external_lrwgs.Hard.sensitivity_by_freq.merged.tsv.gz"),
+#              "set_name" = c("Easy", "Hard"),
+#              "ref_title" = "external lrWGS",
+#              "common_af" = 0.01,
+#              "out_prefix" = "~/scratch/ufc.sv.qc.test")
+
 # Load sensitivity & PPV data
 sens.dat <- load.gt.benchmark.tsvs(args$sens_tsv, args$set_name)
 ppv.dat <- load.gt.benchmark.tsvs(args$ppv_tsv, args$set_name)

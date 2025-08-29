@@ -140,19 +140,38 @@ calc.gt.bench.stats <- function(bench.dat, vc=NULL, vsc=NULL, freq=NULL,
     rownames(s.df) <- samples
     s.df$n <- apply(s.df, 1, sum, na.rm=T)
     if(!trio.mode){
-      s.df$strict <- s.df$gt_match / s.df$n
-      s.df$loose <- apply(s.df[, c("gt_match", "carrier_match")],
-                          1, sum, na.rm=T) / s.df$n
+      if(nrow(s.df) > 0){
+        s.df$strict <- s.df$gt_match / s.df$n
+        s.df$loose <- apply(s.df[, c("gt_match", "carrier_match")],
+                            1, sum, na.rm=T) / s.df$n
+      }else{
+        s.df <- data.frame("n" = numeric(),
+                           "strict" = numeric(),
+                           "loose" = numeric())
+      }
       return(s.df[, c("n", "strict", "loose")])
     }else{
-      s.df$pass.rate <- s.df$pass / s.df$n
+      if(nrow(s.df) > 0){
+        s.df$pass.rate <- s.df$pass / s.df$n
+      }else{
+        s.df <- data.frame("n" = numeric(),
+                           "pass.rate" =)
+      }
       return(s.df[, c("n", "pass.rate")])
     }
   })
 
   # Summarize data for plotting
   lapply(sum.dat, function(sd.df){
-    apply(sd.df, 2, function(v){summary(v[which(!is.na(v) & !is.infinite(v))])})
+    if(nrow(sd.df) > 0){
+      apply(sd.df, 2, function(v){summary(v[which(!is.na(v) & !is.infinite(v))])})
+    }else{
+      summary.df <- as.data.frame(matrix(rep(NA, 6*ncol(sd.df)), nrow=6))
+      colnames(summary.df) <- colnames(sd.df)
+      rownames(summary.df) <- c("Min.", "1st Qu.", "Median", "Mean",
+                                "3rd Qu.", "Max.")
+      return(summary.df)
+    }
   })
 }
 
@@ -492,6 +511,15 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
                           strata.space=0.15, bar.hex=0.6,
                           whisker.hex=0.035, trio.mode=FALSE,
                           parmar=c(1.8, 2.55, 1.8, 2.5)){
+  # Drop strata that are strictly all NAs / have no data
+  keep.strata <- which(sapply(plot.dat, function(pd.l){
+    !all(is.na(do.call("rbind", pd.l)))
+    }))
+  if(length(keep.strata) == 0){
+    return()
+  }
+  plot.dat <- plot.dat[keep.strata]
+
   # Get plot parameters
   n.strata <- length(plot.dat)
   n.sets <- length(plot.dat[[1]])
@@ -499,6 +527,8 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
   sets.right <- which(round((1:n.sets) / n.sets) == 1)
   if(is.null(strata.names)){
     strata.names <- names(plot.dat)
+  }else{
+    strata.names <- strata.names[keep.strata]
   }
   if(is.null(set.colors)){
     set.colors <- greyscale.palette(n.strata)
@@ -596,6 +626,10 @@ plot.gt.bench <- function(plot.dat, strata.names=NULL, set.colors=NULL,
   sapply(1:n.strata, function(i){
     x.inc <- i-1
     s.dat <- plot.dat[[i]]
+
+    if(all(is.na(s.dat))){
+      return(NULL)
+    }
 
     # Draw left whiskers
     sapply(1:whiskers.left, function(k){
