@@ -67,12 +67,10 @@ def mendelian_eval(record, pro, fa, mo):
 
     # Skip sites with incomplete trio genotypes
     if any(gt is None for gt in [pro_gt, fa_gt, mo_gt]):
-        import pdb; pdb.set_trace()
         return None
 
     # Skip sites where all members are reference
     if all(gt == 'ref' for gt in [pro_gt, fa_gt, mo_gt]):
-        import pdb; pdb.set_trace()
         return None
 
     # Count number of ref, het, and hom parents
