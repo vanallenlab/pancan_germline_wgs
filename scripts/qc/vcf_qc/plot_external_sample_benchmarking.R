@@ -110,6 +110,9 @@ if(length(ppv.dat) > 0){
 
 # Write summary stats to output file for logging
 ss.df$n[which(is.na(ss.df$n))] <- n.samples
+for(col in colnames(ss.df)){
+  ss.df[, col] <- unlist(ss.df[, col])
+}
 ss.df <- ss.df[with(ss.df, order(analysis, measure)), ]
 colnames(ss.df)[1] <- paste("#", colnames(ss.df)[1], sep="")
 write.table(ss.df, paste(out.prefix.base, "summary_metrics.tsv", sep="."),
