@@ -15,15 +15,15 @@ import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/h
 
 workflow PreprocessGnomadSiteMetrics {
   input {
-    File snv_vcf
-    File snv_vcf_idx
-    File snv_scatter_intervals
-    Int snv_n_samples
+    File? snv_vcf
+    File? snv_vcf_idx
+    File? snv_scatter_intervals
+    Int? snv_n_samples
 
-    File sv_vcf
-    File sv_vcf_idx
-    File sv_scatter_intervals
-    Int sv_n_samples
+    File? sv_vcf
+    File? sv_vcf_idx
+    File? sv_scatter_intervals
+    Int? sv_n_samples
 
     Float? min_af_bin
 
@@ -34,56 +34,117 @@ workflow PreprocessGnomadSiteMetrics {
     String g2c_pipeline_docker
   }
 
-  # Clean SNV scatter intervals
-  call QcTasks.ParseIntervals as MakeSnvIntervals {
-    input:
-      intervals_list = snv_scatter_intervals,
-      docker = linux_docker
-  }
-  Array[Array[String]] snv_interval_infos = MakeSnvIntervals.interval_info
+  # Handle optional inputs
+  Boolean do_snv = defined(snv_vcf) &&
+                   defined(snv_vcf_idx) &&
+                   defined(snv_scatter_intervals) &&
+                   defined(snv_n_samples)
+  Boolean do_sv = defined(sv_vcf) &&
+                  defined(sv_vcf_idx) &&
+                  defined(sv_scatter_intervals) &&
+                  defined(sv_n_samples)
 
-  # Scatter SNV VCF over intervals
-  scatter ( snv_interval_info in snv_interval_infos ) {
+  # Process SNVs, if provided
+  if ( do_snv ) {
+    File use_snv_vcf = select_first([snv_vcf])
+    File use_snv_vcf_idx = select_first([snv_vcf_idx])
+    File use_snv_scatter_intervals = select_first([snv_scatter_intervals])
+    Int use_snv_n_samples = select_first([snv_n_samples])
 
-    String snv_interval_coords = snv_interval_info[1]
-    String snv_shard_prefix = output_prefix + ".snv." + snv_interval_info[0]
-
-    # Slice gnomAD SNV VCF to interval and drop unnecessary annotations
-    call SliceVcf as SliceSnvShard {
+    # Clean SNV scatter intervals
+    call QcTasks.ParseIntervals as MakeSnvIntervals {
       input:
-        vcf = snv_vcf,
-        vcf_idx = snv_vcf_idx,
-        interval = snv_interval_coords,
-        out_prefix = snv_shard_prefix,
-        g2c_pipeline_docker = g2c_pipeline_docker
+        intervals_list = use_snv_scatter_intervals,
+        docker = linux_docker
+    }
+    Array[Array[String]] snv_interval_infos = MakeSnvIntervals.interval_info
+
+    # Scatter SNV VCF over intervals
+    scatter ( snv_interval_info in snv_interval_infos ) {
+
+      String snv_interval_coords = snv_interval_info[1]
+      String snv_shard_prefix = output_prefix + ".snv." + snv_interval_info[0]
+
+      # Slice gnomAD SNV VCF to interval and drop unnecessary annotations
+      call SliceVcf as SliceSnvShard {
+        input:
+          vcf = use_snv_vcf,
+          vcf_idx = use_snv_vcf_idx,
+          interval = snv_interval_coords,
+          out_prefix = snv_shard_prefix,
+          g2c_pipeline_docker = g2c_pipeline_docker
+      }
+
+      # Collect site metrics for SNVs
+      call QcTasks.CollectSiteMetrics as CollectSnvMetrics {
+        input:
+          vcf = SliceSnvShard.cleaned_vcf,
+          vcf_idx = SliceSnvShard.cleaned_vcf_idx,
+          n_samples = use_snv_n_samples,
+          min_af_bin = min_af_bin,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
     }
 
-    # Collect site metrics for SNVs
-    call QcTasks.CollectSiteMetrics as CollectSnvMetrics {
+    # Concatenate sites BEDs for SNVs
+    call QcTasks.ConcatTextFiles as ConcatSnvs {
       input:
-        vcf = SliceSnvShard.cleaned_vcf,
-        vcf_idx = SliceSnvShard.cleaned_vcf_idx,
-        n_samples = snv_n_samples,
-        min_af_bin = min_af_bin,
-        g2c_analysis_docker = g2c_analysis_docker
+        shards = select_all(CollectSnvMetrics.snv_sites),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".snv.sites.bed.gz",
+        docker = g2c_pipeline_docker
     }
   }
 
-  # Concatenate sites BEDs for SNVs
-  call QcTasks.ConcatTextFiles as ConcatSnvs {
-    input:
-      shards = select_all(CollectSnvMetrics.snv_sites),
-      concat_command = "zcat",
-      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-      compression_command = "bgzip -c",
-      input_has_header = true,
-      output_filename = output_prefix + ".snv.sites.bed.gz",
-      docker = g2c_pipeline_docker
+  # Process SVs, if provided
+  if ( do_sv ) {
+    File use_sv_vcf = select_first([sv_vcf])
+    File use_sv_vcf_idx = select_first([sv_vcf_idx])
+    File use_sv_scatter_intervals = select_first([sv_scatter_intervals])
+    Int use_sv_n_samples = select_first([sv_n_samples])
+
+    # Clean SV scatter intervals
+    call QcTasks.ParseIntervals as MakeSvIntervals {
+      input:
+        intervals_list = use_sv_scatter_intervals,
+        docker = linux_docker
+    }
+    Array[Array[String]] sv_interval_infos = MakeSvIntervals.interval_info
+
+    # Scatter SV VCF over intervals
+    scatter ( sv_interval_info in sv_interval_infos ) {
+
+      String sv_interval_coords = sv_interval_info[1]
+      String sv_shard_prefix = output_prefix + ".snv." + sv_interval_info[0]
+
+      # Slice gnomAD SV VCF to interval and drop unnecessary annotations
+      call SliceVcf as SliceSvShard {
+        input:
+          vcf = use_sv_vcf,
+          vcf_idx = use_sv_vcf_idx,
+          interval = sv_interval_coords,
+          out_prefix = sv_shard_prefix,
+          g2c_pipeline_docker = g2c_pipeline_docker
+      }
+
+      # Collect site metrics for SVs
+      call QcTasks.CollectSiteMetrics as CollectSvMetrics {
+        input:
+          vcf = SliceSvShard.cleaned_vcf,
+          vcf_idx = SliceSvShard.cleaned_vcf_idx,
+          n_samples = use_sv_n_samples,
+          min_af_bin = min_af_bin,
+          g2c_analysis_docker = g2c_analysis_docker
+      }
+    }
   }
 
   # Concatenate sites BEDs for indels
-  Array[File] indel_beds = flatten(select_all([select_all(CollectSnvMetrics.indel_sites), 
-                                   select_all(CollectSvMetrics.indel_sites)]))
+  Array[File] indel_beds = flatten(select_all([select_all(select_first([CollectSnvMetrics.indel_sites, []])), 
+                                               select_all(select_first([CollectSvMetrics.indel_sites, []]))]))
   call QcTasks.ConcatTextFiles as ConcatIndels {
     input:
       shards = indel_beds,
@@ -95,44 +156,9 @@ workflow PreprocessGnomadSiteMetrics {
       docker = g2c_pipeline_docker
   }
 
-  # Clean SV scatter intervals
-  call QcTasks.ParseIntervals as MakeSvIntervals {
-    input:
-      intervals_list = sv_scatter_intervals,
-      docker = linux_docker
-  }
-  Array[Array[String]] sv_interval_infos = MakeSvIntervals.interval_info
-
-  # Scatter SV VCF over intervals
-  scatter ( sv_interval_info in sv_interval_infos ) {
-
-    String sv_interval_coords = sv_interval_info[1]
-    String sv_shard_prefix = output_prefix + ".snv." + sv_interval_info[0]
-
-    # Slice gnomAD SV VCF to interval and drop unnecessary annotations
-    call SliceVcf as SliceSvShard {
-      input:
-        vcf = sv_vcf,
-        vcf_idx = sv_vcf_idx,
-        interval = sv_interval_coords,
-        out_prefix = sv_shard_prefix,
-        g2c_pipeline_docker = g2c_pipeline_docker
-    }
-
-    # Collect site metrics for SVs
-    call QcTasks.CollectSiteMetrics as CollectSvMetrics {
-      input:
-        vcf = SliceSvShard.cleaned_vcf,
-        vcf_idx = SliceSvShard.cleaned_vcf_idx,
-        n_samples = snv_n_samples,
-        min_af_bin = min_af_bin,
-        g2c_analysis_docker = g2c_analysis_docker
-    }
-  }
-
   # Concatenate sites BEDs for SVs
-  Array[File] sv_beds = flatten(select_all([select_all(CollectSnvMetrics.sv_sites), 
-                                select_all(CollectSvMetrics.sv_sites)]))
+  Array[File] sv_beds = flatten(select_all([select_all(select_first([CollectSnvMetrics.sv_sites, []])), 
+                                            select_all(select_first([CollectSvMetrics.sv_sites, []]))]))
   call QcTasks.ConcatTextFiles as ConcatSvs {
     input:
       shards = sv_beds,
@@ -145,40 +171,52 @@ workflow PreprocessGnomadSiteMetrics {
   }
 
   # Collapse size distributions
-  call QcTasks.SumCompressedDistribs as SumSizeDistribs {
-    input:
-      distrib_tsvs = flatten([CollectSnvMetrics.size_distrib, 
-                              CollectSvMetrics.size_distrib]),
-      out_prefix = output_prefix + ".size_distribution",
-      g2c_analysis_docker = g2c_analysis_docker
+  Array[File] short_size_distribs = select_first([CollectSnvMetrics.size_distrib, []])
+  Array[File] sv_size_distribs = select_first([CollectSvMetrics.size_distrib, []])
+  Array[File] size_distrib_shards = flatten([short_size_distribs, sv_size_distribs])
+  if ( length(size_distrib_shards) > 0 ) {
+    call QcTasks.SumCompressedDistribs as SumSizeDistribs {
+      input:
+        distrib_tsvs = size_distrib_shards,
+        out_prefix = output_prefix + ".size_distribution",
+        g2c_analysis_docker = g2c_analysis_docker
+    }    
   }
 
   # Collapse AF distributions
-  call QcTasks.SumCompressedDistribs as SumAfDistribs {
-    input:
-      distrib_tsvs = flatten([CollectSnvMetrics.af_distrib, 
-                              CollectSvMetrics.af_distrib]),
-      out_prefix = output_prefix + ".af_distribution",
-      g2c_analysis_docker = g2c_analysis_docker
+  Array[File] short_af_distribs = select_first([CollectSnvMetrics.af_distrib, []])
+  Array[File] sv_af_distribs = select_first([CollectSvMetrics.af_distrib, []])
+  Array[File] af_distrib_shards = flatten([short_af_distribs, sv_af_distribs])
+  if ( length(size_distrib_shards) > 0 ) {
+    call QcTasks.SumCompressedDistribs as SumAfDistribs {
+      input:
+        distrib_tsvs = af_distrib_shards,
+        out_prefix = output_prefix + ".af_distribution",
+        g2c_analysis_docker = g2c_analysis_docker
+    }    
   }
 
   # Collapse 2D size vs. AF distributions
-  call QcTasks.SumCompressedDistribs as SumJointDistribs {
-    input:
-      distrib_tsvs = flatten([CollectSnvMetrics.size_vs_af_distrib, 
-                              CollectSvMetrics.size_vs_af_distrib]),
-      n_key_columns = 3,
-      out_prefix = output_prefix + ".size_vs_af_distribution",
-      g2c_analysis_docker = g2c_analysis_docker
+  Array[File] short_joint_distribs = select_first([CollectSnvMetrics.size_vs_af_distrib, []])
+  Array[File] sv_joint_distribs = select_first([CollectSvMetrics.size_vs_af_distrib, []])
+  Array[File] joint_distrib_shards = flatten([short_joint_distribs, sv_joint_distribs])
+  if ( length(joint_distrib_shards) > 0 ) {
+    call QcTasks.SumCompressedDistribs as SumJointDistribs {
+      input:
+        distrib_tsvs = joint_distrib_shards,
+        n_key_columns = 3,
+        out_prefix = output_prefix + ".size_vs_af_distribution",
+        g2c_analysis_docker = g2c_analysis_docker
+    }
   }
 
   output {
-    File snv_sites_bed = ConcatSnvs.merged_file
-    File indel_sites_bed = ConcatIndels.merged_file
-    File sv_sites_bed = ConcatSvs.merged_file
-    File size_distrib = SumSizeDistribs.merged_distrib
-    File af_distrib = SumAfDistribs.merged_distrib
-    File size_vs_af_distrib = SumJointDistribs.merged_distrib
+    File? snv_sites_bed = ConcatSnvs.merged_file
+    File? indel_sites_bed = ConcatIndels.merged_file
+    File? sv_sites_bed = ConcatSvs.merged_file
+    File? size_distrib = SumSizeDistribs.merged_distrib
+    File? af_distrib = SumAfDistribs.merged_distrib
+    File? size_vs_af_distrib = SumJointDistribs.merged_distrib
   }
 }
 
