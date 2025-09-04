@@ -44,6 +44,17 @@ workflow PreprocessGnomadSiteMetrics {
                   defined(sv_scatter_intervals) &&
                   defined(sv_n_samples)
 
+  # Reconcile differences in minimum possible AF between SNVs & SVs, if necessary
+  if (do_snv || do_sv) {
+    call SetDefaultMinAf {
+      input:
+        snv_n_samples = snv_n_samples,
+        sv_n_samples = sv_n_samples,
+        docker = g2c_analysis_docker
+    }
+  }
+  Float min_af_use = select_first([min_af_bin, SetDefaultMinAf.default_min_af])
+
   # Process SNVs, if provided
   if ( do_snv ) {
     File use_snv_vcf = select_first([snv_vcf])
@@ -97,6 +108,36 @@ workflow PreprocessGnomadSiteMetrics {
         output_filename = output_prefix + ".snv.sites.bed.gz",
         docker = g2c_pipeline_docker
     }
+
+    # Collapse indel metrics from SNV input (if any)
+    Array[File] short_indel_beds = select_all(CollectSnvMetrics.indel_sites)
+    if ( length(short_indel_beds) > 0 ) {
+      call QcTasks.ConcatTextFiles as ConcatShortIndels {
+        input:
+          shards = short_indel_beds,
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".short_indel.sites.bed.gz",
+          docker = g2c_pipeline_docker
+      }
+    }
+
+    # Collapse SV metrics from SNV input (if any)
+    Array[File] short_sv_beds = select_all(CollectSnvMetrics.sv_sites)
+    if ( length(short_sv_beds) > 0 ) {
+      call QcTasks.ConcatTextFiles as ConcatShortSvs {
+        input:
+          shards = short_sv_beds,
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".short_sv.sites.bed.gz",
+          docker = g2c_pipeline_docker
+      }
+    }
   }
 
   # Process SVs, if provided
@@ -118,7 +159,7 @@ workflow PreprocessGnomadSiteMetrics {
     scatter ( sv_interval_info in sv_interval_infos ) {
 
       String sv_interval_coords = sv_interval_info[1]
-      String sv_shard_prefix = output_prefix + ".snv." + sv_interval_info[0]
+      String sv_shard_prefix = output_prefix + ".sv." + sv_interval_info[0]
 
       # Slice gnomAD SV VCF to interval and drop unnecessary annotations
       call SliceVcf as SliceSvShard {
@@ -140,34 +181,63 @@ workflow PreprocessGnomadSiteMetrics {
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
+
+    # Collapse indel metrics from SV input (if any)
+    Array[File] long_indel_beds = select_all(CollectSvMetrics.indel_sites)
+    if ( length(long_indel_beds) > 0 ) {
+      call QcTasks.ConcatTextFiles as ConcatLongIndels {
+        input:
+          shards = long_indel_beds,
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+          compression_command = "bgzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".long_indel.sites.bed.gz",
+          docker = g2c_pipeline_docker
+      }
+    }
+
+    # Collapse SV metrics from SV input
+    call QcTasks.ConcatTextFiles as ConcatLongSvs {
+      input:
+        shards = select_all(CollectSvMetrics.sv_sites),
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".long_sv.sites.bed.gz",
+        docker = g2c_pipeline_docker
+    }
   }
 
   # Concatenate sites BEDs for indels
-  Array[File] indel_beds = flatten(select_all([select_all(select_first([CollectSnvMetrics.indel_sites, []])), 
-                                               select_all(select_first([CollectSvMetrics.indel_sites, []]))]))
-  call QcTasks.ConcatTextFiles as ConcatIndels {
-    input:
-      shards = indel_beds,
-      concat_command = "zcat",
-      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-      compression_command = "bgzip -c",
-      input_has_header = true,
-      output_filename = output_prefix + ".indel.sites.bed.gz",
-      docker = g2c_pipeline_docker
+  Array[File] indel_beds = select_all([ConcatShortIndels.merged_file, ConcatLongIndels.merged_file])
+  if ( length(indel_beds) > 0 ) {
+    call QcTasks.ConcatTextFiles as ConcatIndels {
+      input:
+        shards = indel_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".indel.sites.bed.gz",
+        docker = g2c_pipeline_docker
+    }    
   }
 
   # Concatenate sites BEDs for SVs
-  Array[File] sv_beds = flatten(select_all([select_all(select_first([CollectSnvMetrics.sv_sites, []])), 
-                                            select_all(select_first([CollectSvMetrics.sv_sites, []]))]))
-  call QcTasks.ConcatTextFiles as ConcatSvs {
-    input:
-      shards = sv_beds,
-      concat_command = "zcat",
-      sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
-      compression_command = "bgzip -c",
-      input_has_header = true,
-      output_filename = output_prefix + ".sv.sites.bed.gz",
-      docker = g2c_pipeline_docker
+  Array[File] sv_beds = select_all([ConcatShortSvs.merged_file, ConcatLongSvs.merged_file])
+  if ( length(sv_beds) > 0 ) {
+    call QcTasks.ConcatTextFiles as ConcatSvs {
+      input:
+        shards = sv_beds,
+        concat_command = "zcat",
+        sort_command = "sort -Vk1,1 -k2,2n -k3,3n",
+        compression_command = "bgzip -c",
+        input_has_header = true,
+        output_filename = output_prefix + ".sv.sites.bed.gz",
+        docker = g2c_pipeline_docker
+    }
   }
 
   # Collapse size distributions
@@ -297,6 +367,55 @@ task SliceVcf {
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
     max_retries: 2
+  }
+}
+
+
+task SetDefaultMinAf {
+  input {
+    Int? snv_n_samples
+    Int? sv_n_samples
+    String docker
+  }
+
+  command <<<
+    python3 << 'EOF'
+import math
+
+# Handle missingness
+snv = ~{default="None" snv_n_samples}
+sv = ~{default="None" sv_n_samples}
+
+# Parse to int or None
+snv = None if snv == "None" else int(snv)
+sv  = None if sv == "None" else int(sv)
+
+vals = []
+for x in [snv, sv]:
+    if x is not None and x > 0:
+        vals.append(1.0 / (2.0 * x))
+
+if vals:
+    result = max(vals)
+else:
+    result = 0.0  # or some other sentinel default
+
+with open("out.txt", "w") as f:
+    f.write(str(result) + "\n")
+EOF
+  >>>
+
+  output {
+    Float default_min_af = read_float("out.txt")
+  }
+
+  runtime {
+    docker: docker
+    memory: "2 GB"
+    cpu: 1
+    disks: "local-disk 20 HDD"
+    preemptible: 3
+    max_retries: 1
   }
 }
 
