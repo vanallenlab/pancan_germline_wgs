@@ -26,7 +26,7 @@ EOF
 wid_or_list=$1
 EXEC_BUCKET=$2 # Optional prefix for Cromwell execution bucket
 if [ $# -lt 1 ]; then
-  echo -e "\nError: must supply workflow ID as first positional argument"
+  echo -e "\nError: must supply workflow ID as first positional argument" >&2
   usage
   exit
 fi
@@ -45,6 +45,12 @@ else
   echo "$wid_or_list" > $WRKDIR/wids.list
 fi
 
+# Determine number of processors to use for parallelism
+PROCS=$(( $(nproc) * 2 ))
+if [ $PROCS -gt 64 ]; then
+  PROCS=64
+fi
+
 # Loop over each workflow ID and process all logs in serial
 echo -e "#task\tresource\tallocated\tpeak_used" > $WRKDIR/resources.tsv
 while read wid; do
@@ -57,8 +63,8 @@ while read wid; do
   gsutil -m ls $EXEC_BUCKET/*/$wid/**monitoring.log 2>/dev/null \
   > $SUBDIR/log.uris.list 
   if [ $( cat $SUBDIR/log.uris.list | wc -l ) -lt 1 ]; then
-    echo -e "\nError: no files named monitoring.log found in $EXEC_BUCKET/$wid/\n"
-    exit 1
+    echo -e "\nWarning: no files named monitoring.log found in $EXEC_BUCKET/*/$wid/" >&2
+    continue
   fi
 
   # Localize monitoring logs while mapping to directory structure of URIs
@@ -74,11 +80,10 @@ while read wid; do
   done < $SUBDIR/log.uris.list \
   > $SUBDIR/log.loc.map.tsv
   cat $SUBDIR/log.loc.map.tsv \
-  | xargs -n 2 -P 16 sh -c 'gsutil -m cp "$1" "$2"' _ 2>/dev/null
+  | xargs -n 2 -P $PROCS sh -c 'gsutil -m cp "$1" "$2"' _ 2>/dev/null
   n_logs_local=$( find $SUBDIR/ -name "*monitoring.log" | wc -l )
   if [ $n_logs_remote -ne $n_logs_local ]; then
-    echo -e "\nError: only successfully localized $n_logs_local of $n_logs_remote logs for $wid\n"
-    exit 1
+    echo -e "\nWarning: only successfully localized $n_logs_local of $n_logs_remote logs for $wid\n" >&2
   fi
 
   # Extract resource information from each monitoring log
