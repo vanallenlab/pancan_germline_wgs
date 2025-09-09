@@ -76,7 +76,7 @@ workflow Preprocess1kgpVcfs {
     File srwgs_snv_vcf = DownloadSrwgsSnvVcf.downloaded_file
     File srwgs_snv_tbi = DownloadSrwgsSnvTbi.downloaded_file
 
-    call Utils.ParseIntervals as MakeSrwgsSnvIntervals {
+    call QcTasks.ParseIntervals as MakeSrwgsSnvIntervals {
       input:
         intervals_list = snv_scatter_interval,
         docker = "marketplace.gcr.io/google/ubuntu1804"
@@ -188,6 +188,7 @@ task CurateSrwgsSnvs {
     | bcftools +fill-tags \
     | bcftools annotate -h ~{supp_vcf_header} \
     | bcftools annotate --threads 2 \
+      --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT,^FILTER/PASS" \
       -Oz -o "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"
@@ -304,6 +305,7 @@ task CurateLrwgsSnvs {
     | bcftools view -c 1 \
     | bcftools +fill-tags \
     | bcftools annotate --threads 2 \
+      --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT" \
       -Oz -o "~{out_vcf_fname}"
     tabix -f -p vcf "~{out_vcf_fname}"

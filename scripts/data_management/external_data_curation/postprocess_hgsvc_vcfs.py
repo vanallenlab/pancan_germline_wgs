@@ -64,15 +64,16 @@ def format_sv(record, minimal=False):
     svlen = record.info.get('SVLEN', 0)
     if isinstance(svlen, Iterable):
         svlen = int(svlen[0])
+    svlen = int(np.abs(svlen))
 
-    record.info['SVLEN'] = int(np.abs(svlen))
+    record.info['SVLEN'] = svlen
 
     # Make new record as a near identical copy of the original
     if minimal:
         newrec = record
     else:
         if svtype == 'DEL':
-            svlen = record.info['SVLEN']
+            svlen = svlen
         elif svtype == 'INS':
             svlen = 1
         newrec = record.copy()

@@ -282,7 +282,7 @@ gsutil -m cp \
 # Write input .json for SV curation workflow
 cat << EOF | python -m json.tool > cromshell/inputs/PreprocessAouSvs.inputs.json
 {
- "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:7d94d38",
+ "PreprocessAouSvs.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:050a724",
  "PreprocessAouSvs.srwgs_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.no_srwgs_flagged.samples.list",
  "PreprocessAouSvs.lrwgs_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/aou_ids.present_after_calling.complete_lrwgs.samples.list"
 }
