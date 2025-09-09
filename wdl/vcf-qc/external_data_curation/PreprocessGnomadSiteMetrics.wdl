@@ -92,7 +92,7 @@ workflow PreprocessGnomadSiteMetrics {
           vcf = SliceSnvShard.cleaned_vcf,
           vcf_idx = SliceSnvShard.cleaned_vcf_idx,
           n_samples = use_snv_n_samples,
-          min_af_bin = min_af_bin,
+          min_af_bin = min_af_use,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -177,7 +177,7 @@ workflow PreprocessGnomadSiteMetrics {
           vcf = SliceSvShard.cleaned_vcf,
           vcf_idx = SliceSvShard.cleaned_vcf_idx,
           n_samples = use_sv_n_samples,
-          min_af_bin = min_af_bin,
+          min_af_bin = min_af_use,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -382,13 +382,11 @@ task SetDefaultMinAf {
     python3 << 'EOF'
 import math
 
-# Handle missingness
-snv = ~{default="None" snv_n_samples}
-sv = ~{default="None" sv_n_samples}
-
-# Parse to int or None
-snv = None if snv == "None" else int(snv)
-sv  = None if sv == "None" else int(sv)
+# Always interpolate as *strings*, then decode in Python
+snv_raw = "~{default="NA" snv_n_samples}"
+sv_raw  = "~{default="NA" sv_n_samples}"
+snv = None if snv_raw == "NA" else int(snv_raw)
+sv  = None if sv_raw == "NA" else int(sv_raw)
 
 vals = []
 for x in [snv, sv]:

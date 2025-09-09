@@ -98,6 +98,7 @@ task CleanSnvs {
     | bcftools annotate -h ~{supp_vcf_header} -x "^FORMAT/GT" \
     | bcftools +fill-tags \
     | bcftools annotate --threads 2 \
+      --set-id +'%CHROM\_%POS\_%REF\_%FIRST_ALT' \
       -x "^INFO/END,INFO/SVTYPE,INFO/SVLEN,INFO/AN,INFO/AC,INFO/AF,INFO/CN_NONREF_COUNT,INFO/CN_NONREF_FREQ,INFO/AC_Het,INFO/AC_Hom,INFO/AC_Hemi,INFO/HWE,^FORMAT/GT" \
     | bcftools sort -m ~{sort_mem}G -Oz -o "~{outfile_name}"
     tabix -f -p vcf "~{outfile_name}"

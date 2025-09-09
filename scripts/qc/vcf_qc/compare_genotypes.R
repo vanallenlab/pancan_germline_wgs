@@ -130,16 +130,16 @@ parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric"
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("variant_map" = "~/Downloads/gt_bench_dev_data/revised.vid_map.tsv.gz",
-#              "source_site_metrics" = "~/Downloads/gt_bench_dev_data/source.metrics.bed.gz",
-#              "sample_map" = "~/Downloads/gt_bench_dev_data/sample.map.tsv",
-#              "source_gt_dir" = "~/Downloads/gt_bench_dev_data/",
-#              "target_gt_dir" = "~/Downloads/gt_bench_dev_data/",
-#              "gt_tsv_suffix" = ".gt.tsv.gz",
-#              "report_by_genotype" = TRUE,
-#              "invert_sid" = FALSE,
-#              "common_af" = 0.01,
-#              "out_prefix" = "~/scratch/gt_comparison_dev")
+# args <- list("variant_map" = "~/scratch/dbg_data/giab_hard.external_lrwgs_vs_dfci-g2c.v1.initial_qc.chr19.variant_id_map.tsv.gz",
+#              "source_site_metrics" = "~/scratch/dbg_data/source.metrics.bed.gz",
+#              "sample_map" = "~/scratch/dbg_data/sample.map.tsv",
+#              "source_gt_dir" = "~/scratch/dbg_data/source_gts/",
+#              "target_gt_dir" = "~/scratch/dbg_data/target_gts/",
+#              "gt_tsv_suffix" = ".gt.sub.tsv.gz",
+#              "report_by_genotype" = FALSE,
+#              "invert_sid" = TRUE,
+#              "common_af" = 0.001,
+#              "out_prefix" = "~/scratch/giab_hard.external_lrwgs.dfci-g2c.v1.initial_qc.chr19.23")
 
 # Load input data
 vid.map <- tryCatch(load.vid.map(args$variant_map, args$source_site_metrics, args$common_af),

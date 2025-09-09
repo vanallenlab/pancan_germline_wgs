@@ -269,6 +269,7 @@ task SubsetTargetVcf {
         -Oz -o ~{filtered_dense_vcf_fname} \
         ~{vcf}
       cp ~{filtered_dense_vcf_fname} ~{filtered_sites_vcf_fname}
+      
     else
 
       # Make a dense VCF of overlapping samples

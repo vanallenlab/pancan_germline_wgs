@@ -144,7 +144,6 @@ workflow BenchmarkSites {
     }
   }
 
-
   # Detect runs of false positive/negative SNVs
   Array[File] all_common_snv_ppv_beds = select_all(BenchmarkTask.common_snv_ppv_bed)
   if ( length(all_common_snv_ppv_beds) > 0 ) {

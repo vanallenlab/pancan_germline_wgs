@@ -28,6 +28,9 @@ task BenchmarkGenotypes {
 
     Boolean report_by_gt = false
     Float common_af_cutoff = 0.01
+
+    Float mem_gb = 7.5
+    Int n_cpu = 4
     
     String g2c_analysis_docker
   }
@@ -49,13 +52,13 @@ task BenchmarkGenotypes {
     set -eu -o pipefail
 
     # Prep variant ID lists & metric files
-    zcat ~{variant_id_map} | cut -f1 | sort -V | uniq > source.vids.list
-    zcat ~{source_site_metrics} | head -n1 | fgrep "#" > site_metrics.header || true
+    zcat ~{variant_id_map} | cut -f1 | sort | uniq > source.vids.list
+    zcat ~{source_site_metrics} | sed -n '1p' | fgrep "#" > site_metrics.header
     zcat ~{source_site_metrics} | fgrep -wf source.vids.list \
     | cat site_metrics.header - | bgzip -c \
-    > source.metrics.bed.gz || true
+    > source.metrics.bed.gz
     rm ~{source_site_metrics}
-    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort -V | uniq > target.vids.list || true
+    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort | uniq > target.vids.list
 
     # If there are no source and target variants, there's no need to run the rest of this task
     if [ $( cat source.vids.list | wc -l ) -eq 0 ] && \
@@ -77,8 +80,8 @@ task BenchmarkGenotypes {
       else
         cp ~{sample_id_map} sample.map.tsv
       fi
-      cut -f1 sample.map.tsv > source.samples.list
-      cut -f2 sample.map.tsv > target.samples.list
+      cut -f1 sample.map.tsv | sort > source.samples.list
+      cut -f2 sample.map.tsv | sort > target.samples.list
 
       # Unpack source GTs and subset to samples of interest
       mkdir source_gts_raw
@@ -87,8 +90,9 @@ task BenchmarkGenotypes {
       mkdir source_gts/
       while read sid; do
         find source_gts_raw/ -name "$sid.gt.tsv.gz" \
-        | xargs -I {} zcat {} | fgrep -wf source.vids.list \
-        | gzip -c > source_gts/$sid.gt.sub.tsv.gz || true
+        | xargs -I {} zcat {} | sort -k1 \
+        | join -t$'\t' - source.vids.list \
+        | gzip -c > source_gts/$sid.gt.sub.tsv.gz
       done < source.samples.list
       rm -rf source_gts_raw source_gt_tarball.tar.gz
       echo "Contents of source_gts:"
@@ -101,8 +105,9 @@ task BenchmarkGenotypes {
       mkdir target_gts/
       while read sid; do
         find target_gts_raw/ -name "$sid.gt.tsv.gz" \
-        | xargs -I {} zcat {} | fgrep -wf target.vids.list \
-        | gzip -c > target_gts/$sid.gt.sub.tsv.gz || true
+        | xargs -I {} zcat {} | sort -k1 \
+        | join -t$'\t' - target.vids.list \
+        | gzip -c > target_gts/$sid.gt.sub.tsv.gz
       done < target.samples.list
       rm -rf target_gts_raw target_gt_tarball.tar.gz
       echo "Contents of target_gts:"
@@ -133,9 +138,9 @@ task BenchmarkGenotypes {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: "3.5 GB"
-    cpu: 2
-    maxRetries: 3
+    memory: "~{mem_gb} GB"
+    cpu: n_cpu
+    maxRetries: 1
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
   }

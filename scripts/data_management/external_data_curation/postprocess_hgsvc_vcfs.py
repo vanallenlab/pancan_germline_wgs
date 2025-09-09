@@ -72,15 +72,15 @@ def format_sv(record, minimal=False):
         newrec = record
     else:
         if svtype == 'DEL':
-            svlen = -svlen
+            svlen = record.info['SVLEN']
         elif svtype == 'INS':
             svlen = 1
         newrec = record.copy()
-        newrec.stop = record.pos + svlen
         if len(newrec.ref) > 1:
             newrec.ref = 'N'
         if not newrec.alts[0].startswith('<'):
             newrec.alts = ('<{}>'.format(svtype), )
+        newrec.stop = newrec.pos + svlen
 
     return newrec
 
@@ -112,12 +112,21 @@ def main():
         fout = pysam.VariantFile(args.vcf_out, 'w', header=vcf.header)
 
     # Process each record from input VCF
-    for r in vcf:
+    for rec in vcf:
+
+        # Copy record to allow edits
+        newrec = rec.copy()
+
+        # Clean up genotypes
         if not args.no_gt:
-            r = clean_gts(r)
+            newrec = clean_gts(newrec)
+
+        # Reformat SVs
         if args.sv or args.minimal_sv:
-            r = format_sv(r, minimal=args.minimal_sv)
-        fout.write(r)
+            newrec = format_sv(newrec, minimal=args.minimal_sv)
+
+        # Write cleaned record to file
+        fout.write(newrec)
 
     fout.close()
 
