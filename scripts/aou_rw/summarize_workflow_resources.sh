@@ -7,9 +7,6 @@
 
 # Summarize resource usage for all tasks from single Cromwell workflow
 
-wid=$1
-EXEC_BUCKET=$2 # Optional prefix for Cromwell execution bucket
-
 usage() {
 cat << EOF
 
@@ -17,43 +14,87 @@ USAGE: ./summarize_workflow_resources.sh workflow_id [execution_bucket]
 
        Collates data from montitoring logs from a workflow executed via Cromwell
 
-       Can optionally provide execution bucket URI
-       (default: \$WORKSPACE_BUCKET/cromwell-execution/)
+       Options:
+       - Can provide a file listing multiple workflow IDs instead of single workflow ID
+       - Can provide execution bucket URI as a second argument
+         (default bucket: \$WORKSPACE_BUCKET/cromwell-execution/)
 
 EOF
 }
 
-
 # Parse arguments
+wid_or_list=$1
+EXEC_BUCKET=$2 # Optional prefix for Cromwell execution bucket
 if [ $# -lt 1 ]; then
-  echo -e "\nERROR: must supply workflow ID as first positional argument"
+  echo -e "\nError: must supply workflow ID as first positional argument"
   usage
   exit
 fi
 
 if [ -z $EXEC_BUCKET ]; then
-  BUCKET="$WORKSPACE_BUCKET/cromwell-execution"
+  EXEC_BUCKET="$WORKSPACE_BUCKET/cromwell-execution"
 fi
 
 WRKDIR=`mktemp -d`
 
-# Gather list of monitoring.logs
-gsutil -m ls $EXEC_BUCKET/$wid/**monitoring.log \
-> $WRKDIR/log.uris.list
-if [ $( cat $WRKDIR/log.uris.list | wc -l ) -lt 1 ]; then
-  echo -e "Error: no files named monitoring.log found in $EXEC_BUCKET/$wid/\n"
-  exit 1
+# Determine list of WIDs to process
+if [ -s $wid_or_list ]; then
+  # echo -e "Reading workflow IDs from $wid_or_list\n"
+  cp $wid_or_list $WRKDIR/wids.list
+else
+  echo "$wid_or_list" > $WRKDIR/wids.list
 fi
 
-# Localize monitoring logs while mapping to directory structure of URIs
-while read uri; do
-  # Recursively create all subdirectories
-  # Copy log to local
-done < $WRKDIR/log.uris.list
+# Loop over each workflow ID and process all logs in serial
+echo -e "#task\tresource\tallocated\tpeak_used" > $WRKDIR/resources.tsv
+while read wid; do
 
-# Extract resource information from each monitoring log
+  # Make workflow-specific staging directory
+  mkdir $WRKDIR/$wid
+  SUBDIR=$WRKDIR/$wid
 
-# Summarize resources by task & print to stdout
+  # Gather list of monitoring.logs
+  gsutil -m ls $EXEC_BUCKET/*/$wid/**monitoring.log 2>/dev/null \
+  > $SUBDIR/log.uris.list 
+  if [ $( cat $SUBDIR/log.uris.list | wc -l ) -lt 1 ]; then
+    echo -e "\nError: no files named monitoring.log found in $EXEC_BUCKET/$wid/\n"
+    exit 1
+  fi
+
+  # Localize monitoring logs while mapping to directory structure of URIs
+  n_logs_remote=$( cat $SUBDIR/log.uris.list | wc -l )
+  # echo -e "Identified $n_logs_remote logs for workflow $wid. Now localizing.\n"
+  while read uri; do
+    # Recursively create all subdirectories
+    local_log_dir=$SUBDIR/$( dirname $( echo $uri | sed "s/$wid\//\t/g" | awk '{ print $2 }' ) )
+    mkdir -p $local_log_dir
+    
+    # Print source and destination to stream to gsutil cp -I
+    echo -e "$uri\t$local_log_dir/monitoring.log"
+  done < $SUBDIR/log.uris.list \
+  > $SUBDIR/log.loc.map.tsv
+  cat $SUBDIR/log.loc.map.tsv \
+  | xargs -n 2 -P 16 sh -c 'gsutil -m cp "$1" "$2"' _ 2>/dev/null
+  n_logs_local=$( find $SUBDIR/ -name "*monitoring.log" | wc -l )
+  if [ $n_logs_remote -ne $n_logs_local ]; then
+    echo -e "\nError: only successfully localized $n_logs_local of $n_logs_remote logs for $wid\n"
+    exit 1
+  fi
+
+  # Extract resource information from each monitoring log
+  SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+  while read uri loc_log; do
+    $SCRIPT_DIR/parse_cromwell_monitoring_log.py $loc_log
+  done < $SUBDIR/log.loc.map.tsv \
+  >> $WRKDIR/resources.tsv
+
+  # Clean up intermediate garbage
+  rm -rf $SUBDIR
+
+done < $WRKDIR/wids.list
+
+# Summarize resources across all workflows by task & print to stdout
+$SCRIPT_DIR/summarize_workflow_resource_distribs.R $WRKDIR/resources.tsv
 
 # Clean up
 rm -rf $WRKDIR

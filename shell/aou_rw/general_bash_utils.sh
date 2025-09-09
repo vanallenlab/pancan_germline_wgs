@@ -154,36 +154,7 @@ gather_resource_usage() {
     echo "Must pass a single workflow ID as input"
     return
   fi
-
-  echo -e "task_name\ttask_disk\ttask_mem\ttask_cpu\tmax_disk\tmax_mem"
-  while read uri; do
-
-    # make local copy of log for ease of parsing
-    gsutil -m cp $uri ./ 2> /dev/null
-    lfile=$( basename $uri )
-
-    for wrapper in 1; do
-
-      # Task name
-      dirname $( echo $uri | cut -d\/ -f 7- | sed -e 's/shard-[0-9]*\///g' \
-                 | sed -e 's/attempt-[0-9]*\///g' | sed 's/call-//g' )
-
-      # Task disk, mem, cpu
-      fgrep "Total Disk space" $lfile | awk '{ print $4 }'
-      fgrep "Total Memory" $lfile | awk '{ print $3 }'
-      fgrep "Num processors" $lfile | awk '{ print $3 }'
-
-      # Max used disk
-      grep '^[0-9]' $lfile | cut -f5 | sort -nr | head -n1
-
-      # Max used mem
-      grep '^[0-9]' $lfile | cut -f3 | sort -nr | head -n1
-    done | paste -s
-
-    # Clean up
-    rm $lfile
-
-  done < <( gsutil -m ls $WORKSPACE_BUCKET/cromwell-execution/*/$1/**monitoring.log )
+  ~/code/scripts/summarize_workflow_resources.sh $wid
 }
 
 
@@ -234,6 +205,7 @@ monitor_workflow() {
   while true; do
     echo -e "\n\n\n\n"
     date
+    echo -e "Current Cromwell server load: $( gcloud compute instances list | wc -l ) active VMs"
     cromshell -t 150 --no_turtle counts -x $1 2>/dev/null
     echo -e "Waiting $monitor_gate minutes before checking again...\n"
     sleep ${monitor_gate}m

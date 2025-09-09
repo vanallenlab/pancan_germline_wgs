@@ -30,6 +30,7 @@ done
 gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 find code/ -name "*.R" | xargs -I {} chmod a+x {}
+find code/ -name "*.sh" | xargs -I {} chmod a+x {}
 
 # Source .bashrc and bash utility functions
 . code/refs/dotfiles/aou.rw.bashrc

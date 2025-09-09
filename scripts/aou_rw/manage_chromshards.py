@@ -174,8 +174,8 @@ def relocate_outputs(workflow_id, staging_bucket, wdl_name, output_json_uri,
     remove(json_fout)
 
 
-def submit_workflow(contig, wdl, input_template, input_json, prev_wids, 
-                    dependencies_zip=None, contig_var_overrides=None, 
+def submit_workflow(contig, wdl, input_template, input_json, options_json, 
+                    prev_wids, dependencies_zip=None, contig_var_overrides=None, 
                     dry_run=False, quiet=False, verbose=False, validate=False):
     """
     Submit a workflow for a single contig to Cromwell and log the workflow ID
@@ -204,7 +204,7 @@ def submit_workflow(contig, wdl, input_template, input_json, prev_wids,
 
     # Build the workflow submission command
     cmd = 'cromshell --no_turtle -t 120 -mc submit'
-    cmd += ' --options-json code/refs/json/aou.cromwell_options.default.json'
+    cmd += ' --options-json ' + cromwell_options_json
     if dependencies_zip is not None:
         cmd += ' --dependencies-zip ' + dependencies_zip
     if not validate:
@@ -260,6 +260,8 @@ def main():
                         'each chromosome will have outputs staged in separate ' +
                         'directory.')
     parser.add_argument('-D', '--dependencies-zip', help='WDL dependencies .zip')
+    parser.add_argument('-O', '--cromwell-options-json', help='Cromwell options .zip',
+                        default='code/refs/json/aou.cromwell_options.default.json')
     parser.add_argument('-V', '--contig-variable-overrides', help='Optional .json ' +
                         'of { $contig : { variable : value, ...} } pairs ' +
                         'that will be treated as environment variables for ' +
@@ -391,6 +393,7 @@ def main():
             startup_report({'Method name' : method_name,
                             'WDL' : args.wdl,
                             'Input .json template' : args.input_json_template,
+                            'Cromwell options .json' : args.cromwell_options_json,
                             'WDL dependencies .zip' : args.dependencies_zip,
                             'Status tracker .tsv' : args.status_tsv,
                             'Workspace bucket' : bucket,
@@ -595,7 +598,9 @@ def main():
                                 aborted = g2cpy.abort_workflow(wid)
                             status = submit_workflow(contig, args.wdl, 
                                                      args.input_json_template, 
-                                                     input_json, prev_wids, 
+                                                     input_json, 
+                                                     args.cromwell_options_json,
+                                                     prev_wids, 
                                                      args.dependencies_zip, 
                                                      args.contig_variable_overrides, 
                                                      args.dry_run, args.quiet, 
