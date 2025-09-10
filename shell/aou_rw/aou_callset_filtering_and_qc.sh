@@ -654,7 +654,7 @@ echo "{ " > $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.js
 while read contig; do
   kc=$( fgrep -v "@" \
           $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
-        | wc -l | awk '{ printf "%i\n", $1 }' )
+        | wc -l | awk '{ printf "%i\n", $1 / 10 }' )
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc,"
   echo "\"CONTIG_VCFS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.identical.reclustered.posthoc_filtered.vcf.gz\"],"
   echo "\"CONTIG_VCF_IDXS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.identical.reclustered.posthoc_filtered.vcf.gz.tbi\"] },"
@@ -680,6 +680,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
+  "CollectVcfQcMetrics.concat_vcfs_for_trio_analysis": true,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:3b2d16f",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",

@@ -46,7 +46,7 @@ task BenchmarkGenotypes {
 
   String gt_report_cmd = if report_by_gt then "--report-by-genotype" else ""
   String invert_sid_cmd = if invert_sample_map then "--invert-sid" else ""
-  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 10
+  Int disk_gb = ceil(4 * size([source_gt_tarball, target_gt_tarball, source_site_metrics], "GB")) + 5
 
   command <<<
     set -eu -o pipefail
@@ -166,7 +166,7 @@ task CollectSampleGenotypeMetrics {
   String distrib_cmd = if defined(site_metrics) then "--site-metrics ~{site_metrics_basename} --distrib-out ~{out_base}.gt_distrib.tsv.gz" else ""
   String common_cmd = if defined(site_metrics) && defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
 
-  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 5
 
   command <<<
     set -eu -o pipefail
@@ -210,7 +210,7 @@ task CollectSiteMetrics {
   }
 
   String out_prefix = basename(vcf, ".vcf.gz")
-  Int disk_gb = ceil(2 * size(vcf, "GB")) + 10
+  Int disk_gb = ceil(2 * size(vcf, "GB")) + 5
 
   String min_af_cmd = if defined(min_af_bin) then "--min-af-bin ~{min_af_bin}" else ""
   String common_cmd = if defined(common_af_cutoff) then "--common-af ~{common_af_cutoff}" else ""
@@ -282,8 +282,8 @@ task CollectSiteMetrics {
 
   runtime {
     docker: g2c_analysis_docker
-    memory: "3.5 GB"
-    cpu: 2
+    memory: "2 GB"
+    cpu: 1
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
     maxRetries: 3
@@ -344,7 +344,7 @@ task ConcatTextFiles {
     String docker
   }
 
-  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
+  Int disk_gb = ceil(2 * size(shards, "GB")) + 5
   String sort = if defined(sort_command) then " | " + select_first([sort_command, ""]) else ""
   String compress = if defined(compression_command) then " | " + select_first([compression_command, ""]) else ""
   String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
@@ -553,7 +553,7 @@ task MakeTabixIndex {
   }
 
   String outfile = basename(input_file, "gz") + "gz.tbi"
-  Int disk_gb = ceil(1.25 * size(input_file, "GB")) + 20
+  Int disk_gb = ceil(1.25 * size(input_file, "GB")) + 5
 
   command <<<
     set -eu -o pipefail
@@ -616,8 +616,8 @@ task McnvHeaderCheck {
 
   runtime {
     docker: docker
-    memory: "3.75 GB"
-    cpu: 2
+    memory: "1.75 GB"
+    cpu: 1
     disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
     maxRetries: 2
@@ -741,7 +741,7 @@ task ShardIntervals {
     String g2c_analysis_docker
   }
 
-  Int default_disk_gb = ceil(10 * size(intervals_bed, "GB")) + 15
+  Int default_disk_gb = ceil(10 * size(intervals_bed, "GB")) + 5
 
   command <<<
     set -eu -o pipefail
@@ -992,7 +992,7 @@ task SubsetVcfByVids {
   }
 
   String out_fname = basename(vcf, ".vcf.gz") + ".subset.vcf.gz"
-  Int use_disk_gb = select_first([disk_gb, ceil(3 * size(vcf, "GB")) + 20])
+  Int use_disk_gb = select_first([disk_gb, ceil(2 * size(vcf, "GB")) + 10])
 
   command <<<
     set -eu -o pipefail
@@ -1011,8 +1011,8 @@ task SubsetVcfByVids {
   }
 
   runtime {
-    cpu: 2
-    memory: "3.75 GiB"
+    cpu: 1
+    memory: "2 GiB"
     disks: "local-disk " + use_disk_gb + " HDD"
     bootDiskSizeGb: 10
     docker: bcftools_docker

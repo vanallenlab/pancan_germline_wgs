@@ -17,6 +17,7 @@ workflow BenchmarkTrios {
     Array[File] vcfs
     Array[File] vcf_idxs
     File sites_bed
+    Boolean concat_vcfs = false
 
     File trios_fam
     File trios_samples_list
@@ -40,6 +41,20 @@ workflow BenchmarkTrios {
       docker = bcftools_docker
   }
 
+  # Concatenate VCF shards, if optioned
+  if ( concat_vcfs ) {
+    call QcTasks.ConcatVcfs as ConcatShards {
+      input:
+        vcfs = vcfs,
+        vcf_idxs = vcf_idxs,
+        out_prefix = output_prefix + ".merged_shards_for_trio_bench",
+        bcftools_concat_options = "--allow-overlaps",
+        bcftools_docker = bcftools_docker
+    }
+  }
+  Array[File] vcfs_use = if concat_vcfs then select_all([ConcatShards.merged_vcf]) else vcfs
+  Array[File] vcf_idxs_use = if concat_vcfs then select_all([ConcatShards.merged_vcf_idx]) else vcf_idxs
+
   # Keep benchmarking results separate for each evaluation interval set
   Int n_eval_intervals = length(eval_interval_beds)
   scatter ( i in range(n_eval_intervals) ) {
@@ -59,7 +74,7 @@ workflow BenchmarkTrios {
     }
 
     # Benchmark trios in each VCF
-    Array[Pair[File, File]] vcf_infos = zip(vcfs, vcf_idxs)
+    Array[Pair[File, File]] vcf_infos = zip(vcfs_use, vcf_idxs_use)
     scatter ( vcf_info in vcf_infos ) {
       call BenchmarkTrios {
         input:
@@ -103,13 +118,13 @@ task BenchmarkTrios {
     Float common_af_cutoff = 0.01
     String output_prefix
     
-    Float mem_gb = 3.75
-    Int n_cpu = 2
+    Float mem_gb = 1.75
+    Int n_cpu = 1
     String g2c_analysis_docker
   }
 
   String out_fname = "~{output_prefix}.mendelian_violations.distribs.tsv.gz"
-  Int disk_gb = ceil(3 * size([vcf, eligible_sites_bed], "GB")) + 10
+  Int disk_gb = ceil(2 * size([vcf, eligible_sites_bed], "GB")) + 5
 
   command <<<
     set -eu -o pipefail

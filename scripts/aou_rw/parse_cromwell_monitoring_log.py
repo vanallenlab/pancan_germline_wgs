@@ -65,6 +65,18 @@ def main():
     # Read the body of the monitor log as a pd.DataFrame
     df = pd.read_csv(args.log, skiprows=8, sep='\t', header=None, names=header)
 
+    # Open connection to output file and optionally write header
+    if args.outfile in 'stdout /dev/stdout -'.split():
+        fout = stdout
+    else:
+        fout = open(args.outfile, 'w')
+    if args.header:
+        fout.write('\t'.join('#task resource allocated peak_used'.split()) + '\n')
+
+    # If no monitoring data is available, exit without doing anything else
+    if len(df) == 0:
+        quit()
+
     # Compute peak stats
     h, m, s = map(int, df.ElapsedTime.iloc[-1].split(':'))
     peak = {
@@ -73,14 +85,6 @@ def main():
         'cpu' : res_alloc.get('cpu', 1) * df.CPU.max() / 100,
         'runtime' : max([10, (3600 * h) + (60 * m) + s])
     }
-
-    # Open connection to output file and optionally write header
-    if args.outfile in 'stdout /dev/stdout -'.split():
-        fout = stdout
-    else:
-        fout = open(args.outfile, 'w')
-    if args.header:
-        fout.write('\t'.join('#task resource allocated peak_used'.split()) + '\n')
 
     # Report results to output file
     for key, val in peak.items():

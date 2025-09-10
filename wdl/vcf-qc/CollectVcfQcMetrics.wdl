@@ -50,6 +50,7 @@ workflow CollectVcfQcMetrics {
                                                    # with high priority tier in this file; otherwise, sample overlaps will be 
                                                    # left to random chance, which will often be suboptimal.
     Int n_for_sample_level_analyses = 1000         # Number of samples to use for all sample-level analyses, including trio/twin/benchmarking
+    Boolean concat_vcfs_for_trio_analysis = false  # Should VCFs be concatenated into a single VCF prior to trio analysis?
 
     Array[File?] snv_site_benchmark_beds           # BED files for SNV site benchmarking; one per reference dataset or cohort
     Array[File?] indel_site_benchmark_beds         # BED files for SNV site benchmarking; one per r`eference dataset or cohort
@@ -724,7 +725,8 @@ task CalcLd {
     
     String out_prefix
     String g2c_analysis_docker
-    Int min_disk_gb = 100
+    Int min_disk_gb = 10
+    Int max_disk_gb = 500
   }
 
   Boolean has_snvs = defined(common_snvs_bed)
@@ -734,8 +736,8 @@ task CalcLd {
   Boolean has_svs = defined(common_svs_bed)
   String sv_opt = if has_svs then "--sv-list sv.list" else ""
 
-  Int disk_gb_auto = ceil(20 * size(vcf, "GB")) + 10
-  Int disk_gb_ceil = if disk_gb_auto > 1000 then 1000 else disk_gb_auto
+  Int disk_gb_auto = ceil(2 * size(vcf, "GB")) + 10
+  Int disk_gb_ceil = if disk_gb_auto > max_disk_gb then max_disk_gb else disk_gb_auto
   Int disk_gb = if disk_gb_ceil < min_disk_gb then min_disk_gb else disk_gb_ceil
 
   command <<<
@@ -904,7 +906,7 @@ task ChooseTargetSamples {
     docker: g2c_analysis_docker
     memory: "3.75 GB"
     cpu: 2
-    disks: "local-disk 20 HDD"
+    disks: "local-disk 10 HDD"
     preemptible: 3
   }
 }
@@ -1000,7 +1002,7 @@ task CleanFam {
     docker: docker
     memory: "3.75 GB"
     cpu: 2
-    disks: "local-disk 20 HDD"
+    disks: "local-disk 10 HDD"
     preemptible: 3
   }
 }
@@ -1059,7 +1061,7 @@ task CleanTwins {
     docker: docker
     memory: "3.75 GB"
     cpu: 2
-    disks: "local-disk 20 HDD"
+    disks: "local-disk 10 HDD"
     preemptible: 3
   }
 }
