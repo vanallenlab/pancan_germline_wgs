@@ -552,12 +552,12 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
 
   # Add axes & title
   mtext(3, text=title)
-  clean.axis(1, label.units=label.units, infinite=T, max.ticks=4,
+  clean.axis(1, label.units=label.units, infinite=T, min.ticks=2, max.ticks=4,
              title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[1]],
                                   axis.lab.suffix),
                             error=function(e){"X"}),
              label.line=-0.85, title.line=0, max.label.decimals=1)
-  clean.axis(2, label.units=label.units, infinite=T, max.ticks=4,
+  clean.axis(2, label.units=label.units, infinite=T, min.ticks=2, max.ticks=4,
              title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[2]],
                                   axis.lab.suffix),
                             error=function(e){"Y"}),

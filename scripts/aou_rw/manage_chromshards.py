@@ -204,7 +204,7 @@ def submit_workflow(contig, wdl, input_template, input_json, options_json,
 
     # Build the workflow submission command
     cmd = 'cromshell --no_turtle -t 120 -mc submit'
-    cmd += ' --options-json ' + cromwell_options_json
+    cmd += ' --options-json ' + options_json
     if dependencies_zip is not None:
         cmd += ' --dependencies-zip ' + dependencies_zip
     if not validate:

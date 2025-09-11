@@ -742,6 +742,7 @@ task ShardIntervals {
   }
 
   Int default_disk_gb = ceil(10 * size(intervals_bed, "GB")) + 5
+  Int n_shards_use = if n_shards < 1 then 1 else n_shards
 
   command <<<
     set -eu -o pipefail
@@ -757,7 +758,7 @@ task ShardIntervals {
 
     # Estimate total size per shard
     shard_size=$( zcat intervals.prepped.bed.gz \
-                  | awk -v denom=~{n_shards} \
+                  | awk -v denom=~{n_shards_use} \
                     '{ sum+=$3-$2 }END{ printf "%.0f", sum / denom }' )
 
     # Ensure no interval is larger than shard_size

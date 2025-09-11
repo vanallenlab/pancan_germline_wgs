@@ -141,8 +141,13 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   }
   ylims <- c(if(add.ref){-1}else{0}, length(k)+bar.sep)
   bar.cols <- var.class.colors[df$class]
-  bar.labs <- sapply(10^k, clean.numeric.labels,acceptable.decimals=0,
-                     min.label.length=3)
+  bar.labs <- sapply(10^k, function(lk){
+    if(lk < 10000){
+      prettyNum(lk, big.mark=",")
+    }else{
+      clean.numeric.labels(lk, acceptable.decimals=0, min.label.length=3)
+    }
+  })
 
   # Prep plot area
   prep.plot.area(xlims, ylims, parmar)
@@ -546,7 +551,7 @@ plot.af.distribs <- function(af.df, breaks, ref.af.df=NULL, colors=NULL,
   }else{
     ymin <- max(c(0, (floor(10 * min(sapply(af.dat, function(l){l$y}))) / 10) - 0.1))
   }
-  ymax <- (ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.25
+  ymax <- ceiling((ceiling(10 * max(sapply(af.dat, function(l){l$y}))) / 10) + 0.25)
   ylims <- c(ymin, ymax)
   if(is.null(colors)){
     colors <- rev(greyscale.palette(length(af.dat)))
