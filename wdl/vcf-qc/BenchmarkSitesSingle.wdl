@@ -442,13 +442,13 @@ task CompareSites {
     String prefix
 
     Int? disk_gb
-    Float mem_gb = 2
-    Int n_cpu = 1
+    Float mem_gb = 4
+    Int n_cpu = 2
 
     String g2c_analysis_docker
   }
 
-  Int default_disk_gb = ceil(1.5 * size([query_bed, ref_bed], "GB")) + 5
+  Int default_disk_gb = ceil(2 * size([query_bed, ref_bed], "GB")) + 10
   Int use_disk_gb = select_first([disk_gb, default_disk_gb])
   String degen_cmd = if degenerate then "--one-to-many" else ""
 
