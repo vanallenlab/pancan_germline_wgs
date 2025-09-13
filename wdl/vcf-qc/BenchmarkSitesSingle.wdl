@@ -46,6 +46,9 @@ workflow BenchmarkSitesSingle {
 
     Boolean make_full_id_maps = false
 
+    Float compare_sites_mem_gb = 3.75
+    Float snv_mem_scalar = 2.0
+
     String bcftools_docker
     String g2c_analysis_docker
   }
@@ -113,6 +116,7 @@ workflow BenchmarkSitesSingle {
           mode = "exact",
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".snv." + shard_prefix,
+          mem_gb = snv_mem_scalar * compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
 
@@ -125,6 +129,7 @@ workflow BenchmarkSitesSingle {
           common_af = common_af_cutoff,
           degenerate = true,
           prefix = sens_prefix + ".snv." + shard_prefix,
+          mem_gb = snv_mem_scalar * compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -161,6 +166,7 @@ workflow BenchmarkSitesSingle {
           mode = "both",
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".indel." + shard_prefix,
+          mem_gb = compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
 
@@ -173,6 +179,7 @@ workflow BenchmarkSitesSingle {
           common_af = common_af_cutoff,
           degenerate = true,
           prefix = sens_prefix + ".indel." + shard_prefix,
+          mem_gb = compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -210,6 +217,7 @@ workflow BenchmarkSitesSingle {
           overlap_pad = 2,
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".sv." + shard_prefix,
+          mem_gb = compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
 
@@ -223,6 +231,7 @@ workflow BenchmarkSitesSingle {
           common_af = common_af_cutoff,
           degenerate = true,
           prefix = sens_prefix + ".sv." + shard_prefix,
+          mem_gb = compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -443,11 +452,12 @@ task CompareSites {
 
     Int? disk_gb
     Float mem_gb = 4
-    Int n_cpu = 2
+    Int? n_cpu
 
     String g2c_analysis_docker
   }
 
+  Int n_cpu_default = floor(ceil(mem_gb) / 2)
   Int default_disk_gb = ceil(2 * size([query_bed, ref_bed], "GB")) + 10
   Int use_disk_gb = select_first([disk_gb, default_disk_gb])
   String degen_cmd = if degenerate then "--one-to-many" else ""
@@ -480,7 +490,7 @@ task CompareSites {
   runtime {
     docker: g2c_analysis_docker
     memory: "~{mem_gb} GB"
-    cpu: n_cpu
+    cpu: select_first([n_cpu, n_cpu_default])
     disks: "local-disk ~{use_disk_gb} HDD"
     preemptible: 3
   }
