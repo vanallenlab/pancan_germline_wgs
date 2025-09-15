@@ -42,6 +42,8 @@ workflow BenchmarkSites {
 
     Boolean make_full_id_maps = false
 
+    Float snv_mem_scalar = 2.0
+
     String bcftools_docker
     String g2c_analysis_docker
   }
@@ -139,6 +141,7 @@ workflow BenchmarkSites {
         common_af_cutoff = common_af_cutoff,
         total_shards = shards_per_eval_bed,
         make_full_id_maps = make_full_id_maps,
+        snv_mem_scalar = snv_mem_scalar,
         bcftools_docker = bcftools_docker,
         g2c_analysis_docker = g2c_analysis_docker
     }

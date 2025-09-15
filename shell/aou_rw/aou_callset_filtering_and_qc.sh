@@ -679,6 +679,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.easy.\$CONTIG.bed.gz",
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
+  "CollectVcfQcMetrics.BenchmarkSites.snv_mem_scalar": 4.0,
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.concat_vcfs_for_trio_analysis": true,
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:0b4d304",
@@ -726,7 +727,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
 }
 EOF
 
-# Submit, monitor, stage, and cleanup QC metadata workflow
+# Submit, monitor, stage, and cleanup QC metric collection workflows
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/pancan_germline_wgs/vcf-qc/CollectVcfQcMetrics.wdl \
   --input-json-template $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json \

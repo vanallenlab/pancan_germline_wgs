@@ -493,6 +493,7 @@ task CompareSites {
     cpu: select_first([n_cpu, n_cpu_default])
     disks: "local-disk ~{use_disk_gb} HDD"
     preemptible: 3
+    max_retries: 1
   }
 }
 
