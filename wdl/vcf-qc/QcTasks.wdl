@@ -52,13 +52,9 @@ task BenchmarkGenotypes {
     set -eu -o pipefail
 
     # Prep variant ID lists & metric files
-    zcat ~{variant_id_map} | cut -f1 | sort | uniq > source.vids.list
-    zcat ~{source_site_metrics} | sed -n '1p' | fgrep "#" > site_metrics.header
-    zcat ~{source_site_metrics} | fgrep -wf source.vids.list \
-    | cat site_metrics.header - | bgzip -c \
-    > source.metrics.bed.gz
-    rm ~{source_site_metrics}
-    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort | uniq > target.vids.list
+    touch source.vids.list target.vids.list
+    zcat ~{variant_id_map} | cut -f1 | sort | uniq > source.vids.list || true
+    zcat ~{variant_id_map} | cut -f2 | fgrep -xv "NA" | sort | uniq > target.vids.list || true
 
     # If there are no source and target variants, there's no need to run the rest of this task
     if [ $( cat source.vids.list | wc -l ) -eq 0 ] && \
@@ -73,6 +69,13 @@ task BenchmarkGenotypes {
       fi
 
     else
+
+      # Prep variant metric files
+      zcat ~{source_site_metrics} | sed -n '1p' | fgrep "#" > site_metrics.header
+      zcat ~{source_site_metrics} | fgrep -wf source.vids.list \
+      | cat site_metrics.header - | bgzip -c \
+      > source.metrics.bed.gz
+      rm ~{source_site_metrics}
 
       # Prep sample lists
       if ~{invert_sample_map}; then
@@ -111,7 +114,7 @@ task BenchmarkGenotypes {
       done < target.samples.list
       rm -rf target_gts_raw target_gt_tarball.tar.gz
       echo "Contents of target_gts:"
-      ls -lh source_gts/
+      ls -lh target_gts/
 
       # Benchmark genotypes
       echo "Now benchmarking..."

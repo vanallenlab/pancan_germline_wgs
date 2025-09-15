@@ -48,6 +48,7 @@ workflow BenchmarkSitesSingle {
 
     Float compare_sites_mem_gb = 3.75
     Float snv_mem_scalar = 2.0
+    Float indel_mem_scalar = 1.0
 
     String bcftools_docker
     String g2c_analysis_docker
@@ -166,7 +167,7 @@ workflow BenchmarkSitesSingle {
           mode = "both",
           common_af = common_af_cutoff,
           prefix = ppv_prefix + ".indel." + shard_prefix,
-          mem_gb = compare_sites_mem_gb,
+          mem_gb = indel_mem_scalar * compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
 
@@ -179,7 +180,7 @@ workflow BenchmarkSitesSingle {
           common_af = common_af_cutoff,
           degenerate = true,
           prefix = sens_prefix + ".indel." + shard_prefix,
-          mem_gb = compare_sites_mem_gb,
+          mem_gb = indel_mem_scalar * compare_sites_mem_gb,
           g2c_analysis_docker = g2c_analysis_docker
       }
     }
@@ -458,7 +459,7 @@ task CompareSites {
   }
 
   Int n_cpu_default = floor(ceil(mem_gb) / 2)
-  Int default_disk_gb = ceil(2 * size([query_bed, ref_bed], "GB")) + 10
+  Int default_disk_gb = ceil(2 * size([query_bed, ref_bed], "GB")) + 20
   Int use_disk_gb = select_first([disk_gb, default_disk_gb])
   String degen_cmd = if degenerate then "--one-to-many" else ""
 

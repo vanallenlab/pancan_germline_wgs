@@ -679,6 +679,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.benchmark_interval_beds": ["gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.easy.\$CONTIG.bed.gz",
                                                   "gs://dfci-g2c-refs/giab/\$CONTIG/giab.hg38.broad_callable.hard.\$CONTIG.bed.gz"],
   "CollectVcfQcMetrics.benchmark_interval_bed_names": ["giab_easy", "giab_hard"],
+  "CollectVcfQcMetrics.BenchmarkSites.indel_mem_scalar": 2.0,
   "CollectVcfQcMetrics.BenchmarkSites.snv_mem_scalar": 4.0,
   "CollectVcfQcMetrics.common_af_cutoff": 0.001,
   "CollectVcfQcMetrics.concat_vcfs_for_trio_analysis": true,
