@@ -19,7 +19,9 @@ import sys
 from g2cpy import classify_variant, name_variant
 
 
-mv_labels = 'denovo impossible_hom obligate_carrier obligate_hom pass'.split()
+mv_labels = 'denovo impossible_hom obligate_carrier obligate_hom ' + \
+            'pass_transmitted pass_untransmitted'
+mv_labels = mv_labels.split()
 
 
 def load_trios(trios_in, all_samples):
@@ -81,7 +83,7 @@ def mendelian_eval(record, pro, fa, mo):
     # Work through decision tree of possible GT configurations
     if pro_gt == 'ref':
         if n_hom_par == 0:
-            return 'pass'
+            return 'pass_untransmitted'
         elif n_hom_par == 2:
             return 'obligate_hom'
         else:
@@ -94,13 +96,13 @@ def mendelian_eval(record, pro, fa, mo):
         if n_hom_par == 2:
             return 'obligate_hom'
         else:
-            return 'pass'
+            return 'pass_transmitted'
 
     elif pro_gt == 'hom':
         if n_ref_par > 0:
             return 'impossible_hom'
         else:
-            return 'pass'
+            return 'pass_transmitted'
 
     else:
         print('Unexpected genotype configuration. Debug now:')

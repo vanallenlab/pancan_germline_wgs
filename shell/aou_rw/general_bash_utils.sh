@@ -205,7 +205,8 @@ monitor_workflow() {
   while true; do
     echo -e "\n\n\n\n"
     date
-    echo -e "Current Cromwell server load: $( gcloud compute instances list | wc -l ) active VMs"
+    njobs=$( gcloud compute instances list | wc -l )
+    echo -e "Current Cromwell server load: $(( $njobs - 4 )) active VMs"
     cromshell -t 150 --no_turtle counts -x $1 2>/dev/null
     echo -e "Waiting $monitor_gate minutes before checking again...\n"
     sleep ${monitor_gate}m

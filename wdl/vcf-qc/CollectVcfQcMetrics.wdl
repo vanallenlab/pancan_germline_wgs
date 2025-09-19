@@ -68,7 +68,7 @@ workflow CollectVcfQcMetrics {
 
     Array[File]? benchmark_interval_beds           # BED files of intervals to consider for benchmarking evaluation
     Array[String]? benchmark_interval_bed_names    # Descriptive names for each set of evaluation intervals
-    Int benchmarking_shards = 2500                 # Number of parallel tasks to use for site and sample benchmarking
+    Int benchmarking_shards = 2500                 # Number of total parallel tasks to use for site and sample benchmarking
     Int min_samples_per_bench_shard = 10           # Minimum number of samples per shard to allow for sample benchmarking
 
     String output_prefix

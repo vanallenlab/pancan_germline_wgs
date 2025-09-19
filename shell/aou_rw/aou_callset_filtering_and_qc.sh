@@ -654,7 +654,7 @@ echo "{ " > $staging_dir/CollectInitialVcfQcMetrics.contig_variable_overrides.js
 while read contig; do
   kc=$( fgrep -v "@" \
           $staging_dir/calling_intervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
-        | wc -l | awk '{ printf "%i\n", $1 / 10 }' )
+        | wc -l | awk '{ printf "%i\n", $1 / 3 }' )
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc,"
   echo "\"CONTIG_VCFS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.identical.reclustered.posthoc_filtered.vcf.gz\"],"
   echo "\"CONTIG_VCF_IDXS\" : [\"$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/ExcludeSnvOutliersFromSvCallset/$contig/HardFilterPart2/dfci-g2c.v1.$contig.concordance.gq_recalibrated.identical.reclustered.posthoc_filtered.vcf.gz.tbi\"] },"
