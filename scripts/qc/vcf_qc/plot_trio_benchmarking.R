@@ -23,7 +23,7 @@ load.constants("all")
 ##################
 # Main wrapper to plot all benchmarking strata
 plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
-                                     parmar=c(1, 2.55, 1.8, 2.5)){
+                                       denovo.only=FALSE, parmar=c(1, 2.55, 1.8, 2.5)){
   # Check what vcs are present in data
   vcs <- unique(as.character(sapply(bench.dat, function(d){d$class})))
 
@@ -32,6 +32,33 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
 
   # Get AF cutoff for common vs. rare
   af.cutoff <- min(unique(clean.breaks(unique(bench.dat[[1]]$freq_bin))))
+
+  # Set mode for analysis from child or full trio POV
+  if(denovo.only){
+    metric.prefix <- "child_proportion_inherited"
+    out.prefix <- paste(out.prefix, "child_pov", sep=".")
+    pov <- "child"
+    title.prefix <- "Inheritance rate"
+    metric.name <- "Proportion inherited"
+  }else{
+    metric.prefix <- "mendelian_concordance_rate"
+    pov <- "trio"
+    title.prefix <- "Mendelian assessment"
+    metric.name <- "Concordance rate"
+  }
+  bench.dat <- lapply(bench.dat, function(bdf){
+    pass.cidxs <- grep("^pass_", colnames(bdf))
+    if(denovo.only){
+      bdf$pass <- bdf$pass_transmitted
+      other.cols <- setdiff(colnames(bdf)[-c(1:4)], "denovo")
+      zero.cols <- other.cols[grep("^pass", other.cols, invert=T)]
+      bdf[, zero.cols] <- 0
+    }else{
+      bdf$pass <- apply(bdf[, pass.cidxs], 1, sum)
+    }
+    bdf[, pass.cidxs] <- NULL
+    return(bdf)
+  })
 
   # Prepare collection dataframe for summary stat logging
   ss.df <- data.frame("analysis"=character(), "measure"=character(),
@@ -42,15 +69,16 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
   plot.dat <- get.gt.bench.plot.data(bench.dat, trio.mode=TRUE)
   ss.df <- rbind(ss.df,
                  calc.gt.bench.ss(plot.dat, paste(ss.prefix, "all", sep="."),
-                                         trio.mode=TRUE))
+                                  trio.mode=TRUE))
   vpg <- calc.gt.bench.vpg(plot.dat)
-  plot.title <- paste("Mendelian assessment of\n", clean.numeric.labels(vpg),
-                      "variants/trio in", clean.numeric.labels(n.trios), "trios")
+  plot.title <- paste(title.prefix, " of\n", clean.numeric.labels(vpg),
+                      " variants/", pov, " in ", clean.numeric.labels(n.trios),
+                      " trios", sep="")
   pdf(paste(out.prefix, "all.barplot.pdf", sep="."), height=2.25, width=2.2)
   plot.gt.bench(plot.dat=plot.dat,
                 strata.names=c("Rare", "Common"),
                 set.colors=set.colors,
-                metric.name="Concordance rate",
+                metric.name=metric.name,
                 title=plot.title, trio.mode=TRUE,
                 parmar=parmar)
   dev.off()
@@ -62,15 +90,16 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
                    calc.gt.bench.ss(plot.dat, paste(ss.prefix, vc, sep="."),
                                     trio.mode=TRUE))
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste("Mendelian assessment of\n",
+    plot.title <- paste(title.prefix, " of\n",
                         clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
                         " ", gsub("I", "i", paste(var.class.abbrevs[vc], "s", sep="")),
-                        " / trio in ", clean.numeric.labels(n.trios), " trios", sep="")
+                        " / ", pov, " in ", clean.numeric.labels(n.trios),
+                        " trios", sep="")
     pdf(paste(out.prefix, vc, "barplot.pdf", sep="."), height=2.25, width=2.2)
     plot.gt.bench(plot.dat=plot.dat,
                   strata.names=c("Rare", "Common"),
                   set.colors=set.colors,
-                  metric.name="Concordance rate",
+                  metric.name=metric.name,
                   title=plot.title, trio.mode=TRUE,
                   parmar=parmar)
     dev.off()
@@ -89,16 +118,16 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
     short.ss.df <- calc.gt.bench.ss(plot.dat, ss.prefix, summarize.all=FALSE, trio.mode=TRUE)
     ss.df <- rbind(ss.df, short.ss.df)
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste("Mendelian assessment of\n",
+    plot.title <- paste(title.prefix, " of\n",
                         clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
-                        " short vars/trio in ",
-                        clean.numeric.labels(n.trios), " trios", sep="")
+                        " short vars/", pov, " in ", clean.numeric.labels(n.trios),
+                        " trios", sep="")
     pdf(paste(out.prefix, "short_variants.by_subclass.barplot.pdf", sep="."),
         height=2.25, width=1.05+(1.3*length(short.vscs)/3))
     plot.gt.bench(plot.dat=plot.dat,
                   strata.names=var.subclass.abbrevs[short.vscs],
                   set.colors=set.colors,
-                  metric.name="Concordance rate",
+                  metric.name=metric.name,
                   title=plot.title, trio.mode=TRUE,
                   parmar=parmar)
     dev.off()
@@ -118,16 +147,16 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
                                  trio.mode=TRUE)
     ss.df <- rbind(ss.df, sv.ss.df)
     vpg <- calc.gt.bench.vpg(plot.dat)
-    plot.title <- paste("Mendelian assessment of\n",
+    plot.title <- paste(title.prefix, " of\n",
                         clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
-                        " SVs per trio in ", clean.numeric.labels(n.trios),
+                        " SVs/", pov, " in ", clean.numeric.labels(n.trios),
                         " trios", sep="")
     pdf(paste(out.prefix, "SVs.by_subclass.barplot.pdf", sep="."),
         height=2.25, width=1.05+(1.4*length(sv.vscs)/3))
     plot.gt.bench(plot.dat=plot.dat,
                   strata.names=var.subclass.abbrevs[sv.vscs],
                   set.colors=set.colors,
-                  metric.name="Concordance rate",
+                  metric.name=metric.name,
                   title=plot.title, trio.mode=TRUE,
                   parmar=parmar)
     dev.off()
@@ -135,8 +164,8 @@ plot.all.trio.bench.strata <- function(bench.dat, out.prefix, set.colors,
 
   # Return summary statistics for logging
   med.ridx <- which(ss.df$measure == "median")
-  ss.df$measure[med.ridx] <- paste(ss.df$measure[med.ridx], "mendelian_concordance_rate", sep="_")
-  ss.df$measure[-med.ridx] <- paste("mendelian_concordance_rate", ss.df$measure[-med.ridx], sep="_")
+  ss.df$measure[med.ridx] <- paste(ss.df$measure[med.ridx], metric.prefix, sep="_")
+  ss.df$measure[-med.ridx] <- paste(metric.prefix, ss.df$measure[-med.ridx], sep="_")
   return(ss.df)
 }
 
@@ -167,7 +196,7 @@ args <- parser$parse_args()
 #              "common_af" = 0.001,
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
-# Load concordance data & simplify into Mendelian concordant/nonconcordant
+# Load trio concordance data
 bench.dat <- load.gt.benchmark.tsvs(args$bench_tsv, args$set_name,
                                     key.cols=1:4, trio.mode=TRUE)
 
@@ -181,8 +210,13 @@ set.colors <- rev(RLCtools::categorical.rainbow(2))
 # Transform reference title to safe string for filenames
 out.prefix.base <- paste(args$out_prefix, "trio_concordance", sep=".")
 
-# Plot concordance
+# Plot overall Mendelian concordance
 ss.df <- plot.all.trio.bench.strata(bench.dat, out.prefix.base, set.colors)
+
+# Plot proportion of child variants that were inherited from a parent
+ss.df.2 <- plot.all.trio.bench.strata(bench.dat, out.prefix.base,
+                                      set.colors, denovo.only=TRUE)
+ss.df <- rbind(ss.df, ss.df.2)
 
 # Write summary stats to output file for logging
 ss.df$n[which(is.na(ss.df$n))] <- n.trios
