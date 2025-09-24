@@ -98,11 +98,17 @@ filter.gt.counts <- function(gt.counts, vc=NULL, vsc=NULL, freq=NULL){
 }
 
 # Compute a summary metric across a subset of gt counts
-calc.gt.ss <- function(gt.counts, samples, zyg=NA, summary.fx=median){
-  # Sum counts for each sample
+calc.gt.ss <- function(gt.counts, samples, zyg=NA, summary.fx=median,
+                       calc.heterozygosity=FALSE){
+  # Calculate heterozygosity, if needed
+  if(calc.heterozygosity){
+    gt.counts$hzg <- gt.counts$het / apply(gt.counts[, c("het", "hom")], 1, sum)
+  }
+  # Sum counts (or calc heterozygosity) for each sample
   k <- sapply(samples, function(sid){
     s.k <- gt.counts[which(gt.counts$sample == sid),
-                     if(is.na(zyg)){c("het", "hom")}else{zyg}]
+                     if(calc.heterozygosity){"hzg"}else
+                       if(is.na(zyg)){c("het", "hom")}else{zyg}]
     if(length(s.k) == 0){0}else{sum(as.numeric(unlist(s.k)))}
   })
   if(is.null(summary.fx)){
@@ -114,30 +120,43 @@ calc.gt.ss <- function(gt.counts, samples, zyg=NA, summary.fx=median){
 
 # Main wrapper function to collect all per-sample summary stats
 gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
-  as.data.frame(do.call("rbind", lapply(unique(gt.counts$class), function(vc){
+  ss.df <- as.data.frame(do.call("rbind", lapply(unique(gt.counts$class), function(vc){
     vc.prefix <- paste("variants_per_genome", vc, sep=".")
     vc.df <- filter.gt.counts(gt.counts, vc=vc)
 
     do.call("rbind", lapply(unique(vc.df$subclass), function(vsc){
-      vsc.prefix <- paste(vc.prefix, vsc, sep=".")
+      vsc.prefix <- gsub("\\.NA$", "", paste(vc.prefix, vsc, sep="."))
       vsc.df <- filter.gt.counts(vc.df, vsc=vsc)
 
       do.call("rbind", lapply(unique(vsc.df$freq_bin), function(freq){
-        freq.prefix <- paste(vsc.prefix, paste("AF", freq, sep="_"), sep=".")
+        freq.prefix <- gsub("\\.AF_NA$", "",
+                            paste(vsc.prefix, paste("AF", freq, sep="_"), sep="."))
         freq.df <- filter.gt.counts(vsc.df, freq=freq)
 
         do.call("rbind", lapply(c(NA, "het", "hom"), function(zyg){
-          zyg.prefix <- sub(".NA", "", paste(freq.prefix, zyg, sep="."), fixed=T)
+          zyg.prefix <- sub("\\.NA$", "", paste(freq.prefix, zyg, sep="."))
           med.v <- calc.gt.ss(freq.df, samples=samples, zyg=zyg, summary.fx=median)
           phi.v <- calc.gt.ss(freq.df, samples=samples, zyg=zyg,
                               summary.fx=RLCtools::dynamic.range)
           zyg.sub.res <- data.frame("analysis"=zyg.prefix,
                                     "measure"=c("median", "dynamic_range"),
                                     "value"=c(med.v, phi.v), "n"=length(samples))
+          if(is.na(zyg)){
+            med.hzg <- calc.gt.ss(freq.df, samples=samples, summary.fx=median,
+                                calc.heterozygosity=TRUE)
+            phi.hzg <- calc.gt.ss(freq.df, samples=samples,
+                                  summary.fx=RLCtools::dynamic.range,
+                                  calc.heterozygosity=TRUE)
+            zyg.hzg.res <- data.frame("analysis"=gsub("variants_per_genome", "heterozygosity", zyg.prefix),
+                                      "measure"=c("median", "dynamic_range"),
+                                      "value"=c(med.hzg, phi.hzg),
+                                      "n"=length(samples))
+            zyg.sub.res <- rbind(zyg.sub.res, zyg.hzg.res)
+          }
 
           if(!is.null(pop)){
             zyg.sub.add <- do.call("rbind", lapply(unique(pop), function(p){
-              pop.prefix <- sub(".NA", "", paste(zyg.prefix, p, sep="."), fixed=T)
+              pop.prefix <- gsub("\\.NA$", "", paste(zyg.prefix, p, sep="."))
               pop.samples <- names(pop)[which(pop == p)]
               med.v <- calc.gt.ss(freq.df, samples=pop.samples, zyg=zyg, summary.fx=median)
               phi.v <- calc.gt.ss(freq.df, samples=pop.samples, zyg=zyg,
@@ -146,10 +165,22 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
                                         "measure"=c("median", "dynamic_range"),
                                         "value"=c(med.v, phi.v),
                                         "n"=length(pop.samples))
+              if(is.na(zyg)){
+                med.hzg <- calc.gt.ss(freq.df, samples=pop.samples, summary.fx=median,
+                                      calc.heterozygosity=TRUE)
+                phi.hzg <- calc.gt.ss(freq.df, samples=pop.samples,
+                                      summary.fx=RLCtools::dynamic.range,
+                                      calc.heterozygosity=TRUE)
+                zyg.hzg.res <- data.frame("analysis"=gsub("variants_per_genome", "heterozygosity", pop.prefix),
+                                          "measure"=c("median", "dynamic_range"),
+                                          "value"=c(med.hzg, phi.hzg),
+                                          "n"=length(pop.samples))
+                zyg.sub.add <- rbind(zyg.sub.add, zyg.hzg.res)
+              }
 
               if(!is.null(pheno)){
                 zyg.sub.add.pw <- do.call("rbind", lapply(unique(pheno), function(ph){
-                  pw.prefix <- sub(".NA", "", paste(pop.prefix, ph, sep="."), fixed=T)
+                  pw.prefix <- gsub("\\.NA$", "", paste(pop.prefix, ph, sep="."))
                   pheno.samples <- names(pheno)[which(pheno == ph)]
                   pw.samples <- intersect(pop.samples, pheno.samples)
                   if(length(pw.samples) == 0){
@@ -158,8 +189,22 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
                   med.v <- calc.gt.ss(freq.df, samples=pw.samples, zyg=zyg, summary.fx=median)
                   phi.v <- calc.gt.ss(freq.df, samples=pw.samples, zyg=zyg,
                                       summary.fx=RLCtools::dynamic.range)
-                  data.frame("analysis"=pw.prefix, "measure"=c("median", "dynamic_range"),
-                             "value"=c(med.v, phi.v), "n"=length(pw.samples))
+                  zyg.sub.add.pw <- data.frame("analysis"=pw.prefix,
+                                               "measure"=c("median", "dynamic_range"),
+                                               "value"=c(med.v, phi.v),
+                                               "n"=length(pw.samples))
+                  if(is.na(zyg)){
+                    med.hzg <- calc.gt.ss(freq.df, samples=pw.samples, summary.fx=median,
+                                          calc.heterozygosity=TRUE)
+                    phi.hzg <- calc.gt.ss(freq.df, samples=pw.samples,
+                                          summary.fx=RLCtools::dynamic.range,
+                                          calc.heterozygosity=TRUE)
+                    zyg.hzg.res <- data.frame("analysis"=gsub("variants_per_genome", "heterozygosity", pw.prefix),
+                                              "measure"=c("median", "dynamic_range"),
+                                              "value"=c(med.hzg, phi.hzg),
+                                              "n"=length(pw.samples))
+                    zyg.sub.add.pw <- rbind(zyg.sub.add.pw, zyg.hzg.res)
+                  }
                 }))
                 zyg.sub.add <- rbind(zyg.sub.add, zyg.sub.add.pw)
               }
@@ -170,21 +215,38 @@ gather.count.sumstats <- function(gt.counts, samples, pop=NULL, pheno=NULL){
 
           if(!is.null(pheno)){
             zyg.sub.add <- do.call("rbind", lapply(unique(pheno), function(p){
-              pheno.prefix <- sub(".NA", "", paste(zyg.prefix, p, sep="."), fixed=T)
+              pheno.prefix <- gsub("\\.NA$", "", paste(zyg.prefix, p, sep="."))
               pheno.samples <- names(pheno)[which(pheno == p)]
               med.v <- calc.gt.ss(freq.df, samples=pheno.samples, zyg=zyg, summary.fx=median)
               phi.v <- calc.gt.ss(freq.df, samples=pheno.samples, zyg=zyg,
                                   summary.fx=RLCtools::dynamic.range)
-              data.frame("analysis"=pheno.prefix, "measure"=c("median", "dynamic_range"),
-                         "value"=c(med.v, phi.v), "n"=length(pheno.samples))
+              zyg.sub.add.ph <- data.frame("analysis"=pheno.prefix,
+                                           "measure"=c("median", "dynamic_range"),
+                                           "value"=c(med.v, phi.v),
+                                           "n"=length(pheno.samples))
+              if(is.na(zyg)){
+                med.hzg <- calc.gt.ss(freq.df, samples=pheno.samples, summary.fx=median,
+                                      calc.heterozygosity=TRUE)
+                phi.hzg <- calc.gt.ss(freq.df, samples=pheno.samples,
+                                      summary.fx=RLCtools::dynamic.range,
+                                      calc.heterozygosity=TRUE)
+                zyg.hzg.res <- data.frame("analysis"=gsub("variants_per_genome", "heterozygosity", pheno.prefix),
+                                          "measure"=c("median", "dynamic_range"),
+                                          "value"=c(med.hzg, phi.hzg),
+                                          "n"=length(pheno.samples))
+                zyg.sub.add.ph <- rbind(zyg.sub.add.ph, zyg.hzg.res)
+              }
+              return(zyg.sub.add.ph)
             }))
             zyg.sub.res <- rbind(zyg.sub.res, zyg.sub.add)
           }
           return(zyg.sub.res)
         }))
+
       }))
     }))
   })))
+  return(unique(ss.df))
 }
 
 
@@ -552,13 +614,14 @@ interclass.scatter <- function(plot.df, pop=NULL, title=NULL, label.units=NULL,
 
   # Add axes & title
   mtext(3, text=title)
+  ext.vc.abbrevs <- c("all" = "Total", var.class.abbrevs)
   clean.axis(1, label.units=label.units, infinite=T, min.ticks=2, max.ticks=4,
-             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[1]],
+             title=tryCatch(paste(ext.vc.abbrevs[colnames(plot.df)[1]],
                                   axis.lab.suffix),
                             error=function(e){"X"}),
              label.line=-0.85, title.line=0, max.label.decimals=1)
   clean.axis(2, label.units=label.units, infinite=T, min.ticks=2, max.ticks=4,
-             title=tryCatch(paste(var.class.abbrevs[colnames(plot.df)[2]],
+             title=tryCatch(paste(ext.vc.abbrevs[colnames(plot.df)[2]],
                                   axis.lab.suffix),
                             error=function(e){"Y"}),
              label.line=-0.75, title.line=0.75, max.label.decimals=1)
@@ -724,38 +787,3 @@ args <- parser$parse_args()
 #              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
 #              "out_prefix" = "~/scratch/ufc_sv_qc_dev")
-
-# Load sample genotype counts
-gt.counts <- load.gt.counts(args$genotype_dist_tsv)
-samples <- unique(gt.counts$sample)
-
-# Load sample ancestry and phenotypes, if optioned
-pop <- load.labels(args$ancestry_labels, samples)
-pheno <- load.labels(args$phenotype_labels, samples)
-
-# Triple waterfall plot of counts per sample by class
-main.waterfall(gt.counts, args$out_prefix, pop, pheno)
-
-# Collect median counts per sample by class, subclass, frequency, zygosity, pop, and pheno
-count.ss <- gather.count.sumstats(gt.counts, samples, pop, pheno)
-
-# TODO: maybe add Sankey diagrams here
-
-# Inter-class comparisions across samples
-ic.ss <- lapply(list(c("snv", "indel"), c("snv", "sv"), c("indel", "sv")), function(vcs){
-  vc1 <- vcs[1]; vc2 <- vcs[2]
-  if(all(vcs %in% gt.counts$class)){
-    plot.vc.comparisons(gt.counts, vc1, vc2, args$out_prefix, pop)
-  }
-})
-if(length(ic.ss) > 0){
-  ic.ss <- as.data.frame(do.call("rbind", ic.ss))
-}
-if(nrow(ic.ss) > 0){
-  count.ss <- as.data.frame(rbind(count.ss, ic.ss))
-}
-
-# Write summary statistics to output file
-colnames(count.ss)[1] <- paste("#", colnames(count.ss)[1], sep="")
-write.table(count.ss, paste(args$out_prefix, "variants_per_sample.summary_metrics.tsv", sep="."),
-            col.names=T, row.names=F, sep="\t", quote=F)

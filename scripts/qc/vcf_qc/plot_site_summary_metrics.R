@@ -110,7 +110,29 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
       rep(sum(df[which(df$subclass == vsc), -(1:2)]), 2))
   })))
   colnames(vc.counts) <- colnames(vsc.counts) <- colnames(ss.df)
-  ss.df <- as.data.frame(rbind(ss.df, vc.counts, vsc.counts))
+  if(has.short.variants){
+    n.snv <- as.numeric(vc.counts[vc.counts$analysis == "site_count.snv", "n"])
+    titv.r <- as.numeric(vsc.counts[vsc.counts$analysis == "site_count.ti", "n"]) / n.snv
+    n.indel <- as.numeric(vc.counts[vc.counts$analysis == "site_count.indel", "n"])
+    insdel.r <- as.numeric(vsc.counts[vsc.counts$analysis == "site_count.ins", "n"]) / n.indel
+    short.ratios <- data.frame("analysis"=rep("site_ratios", 2),
+                               "measure"=c("snv_ti_tv_ratio", "indel_ins_del_ratio"),
+                               "value"=c(titv.r, insdel.r),
+                               "n"=c(n.snv, n.indel))
+  }else{
+    short.ratios <- data.frame("analysis"=character(), "measure"=character(),
+                               "value"=numeric(), "n"=numeric())
+  }
+  if(has.svs){
+    n.sv <- as.numeric(vc.counts[vc.counts$analysis == "site_count.sv", "n"])
+    DUPDEL.r <- sum(as.numeric(vsc.counts[vsc.counts$analysis %in% c("site_count.DUP", "site_count.INS"), "n"])) / n.sv
+    sv.ratios <- data.frame("analysis"="site_ratios", "measure"="SV_DUP_DEL_ratio",
+                               "value"=DUPDEL.r, "n"=n.sv)
+  }else{
+    sv.ratios <- data.frame("analysis"=character(), "measure"=character(),
+                            "value"=numeric(), "n"=numeric())
+  }
+  ss.df <- as.data.frame(rbind(ss.df, vc.counts, vsc.counts, short.ratios, sv.ratios))
 
   # Simplify count data
   k <- log10(apply(df[, -c(1:2)], 1, sum))
@@ -697,7 +719,7 @@ parser$add_argument("--ref-size-distrib", metavar=".tsv", type="character",
 parser$add_argument("--ref-af-distrib", metavar=".tsv", type="character",
                     help=paste("Precomputed binned variant AF distribution ",
                                "for a desired external reference dataset"))
-parser$add_argument("--ref-title", metavar="path", type="character",
+parser$add_argument("--ref-title", metavar="string", type="character",
                     help="String title for --ref-size-distrib / --ref-af-distrib")
 parser$add_argument("--sv-sites", metavar=".bed", type="character",
                     help="SV sites .bed file")

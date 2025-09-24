@@ -20,7 +20,7 @@ workflow PlotVcfQcMetrics {
     Array[File] af_distribution_tsvs
     Array[File] size_vs_af_distribution_tsvs
     Array[File] sample_genotype_distribution_tsvs
-    Array[File] peak_ld_stat_tsvs
+    Array[File]? peak_ld_stat_tsvs
 
     Array[File]? ref_size_distribution_tsvs
     Array[File]? ref_af_distribution_tsvs
@@ -258,19 +258,22 @@ workflow PlotVcfQcMetrics {
   File gt_distrib = select_first([SumGtDistribs.merged_distrib, sample_genotype_distribution_tsvs[0]])
 
   # If necessary, collapse peak LD stats
-  if ( length(peak_ld_stat_tsvs) > 1 ) {
-    call QcTasks.ConcatTextFiles as CollapseLdStats {
-      input:
-        shards = peak_ld_stat_tsvs,
-        concat_command = "zcat",
-        sort_command = "sort -Vk1,1 -k2,2V",
-        compression_command = "gzip -c",
-        input_has_header = true,
-        output_filename = output_prefix + ".peak_ld_stats.tsv.gz",
-        docker = linux_docker
+  if ( defined(peak_ld_stat_tsvs) ) {
+    Array[File] peak_ld_stat_tsv_use = select_first([peak_ld_stat_tsvs])
+    if ( length(peak_ld_stat_tsv_use) > 1 ) {
+      call QcTasks.ConcatTextFiles as CollapseLdStats {
+        input:
+          shards = peak_ld_stat_tsv_use,
+          concat_command = "zcat",
+          sort_command = "sort -Vk1,1 -k2,2V",
+          compression_command = "gzip -c",
+          input_has_header = true,
+          output_filename = output_prefix + ".peak_ld_stats.tsv.gz",
+          docker = linux_docker
+      }
     }
+    File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsv_use[0]])
   }
-  File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsvs[0]])
 
   # Preprocess site benchmarking, if provided
   if (has_site_benchmarking) {
@@ -892,7 +895,7 @@ CODE
         cmd="$cmd --svs $sv_bed"
       fi
       cmd="$cmd --common-af ~{common_af_cutoff} --ref-title \"~{ref_dataset_title}\""
-      cmd="$cmd --combine --out-prefix ~{outdir}/~{outdir}.$set_name"
+      cmd="$cmd --combine --out-prefix ~{outdir}/~{outdir}.$set_name --set-name $set_name"
       echo -e "Now performing pointwise site benchmarking as follows:\n$cmd"
       eval "$cmd"
     done < pointwise.in.tsv
@@ -954,7 +957,7 @@ task PlotSiteMetrics {
     File? common_indels_bed
     File? common_svs_bed
 
-    File ld_stats_tsv
+    File? ld_stats_tsv
 
     String output_prefix
     String? ref_title
@@ -996,6 +999,10 @@ task PlotSiteMetrics {
   Boolean has_common_svs = defined(common_svs_bed)
   String common_sv_bname = if has_common_svs then basename(select_first([common_svs_bed])) else ""
   String pw_sv_cmd = if has_common_svs then "--svs ~{common_sv_bname}" else ""
+
+  Boolean has_ld = defined(ld_stats_tsv)
+  String ld_stat_bname = if has_ld then basename(select_first([ld_stats_tsv])) else ""
+  String ld_cmd = if has_ld then "--ld-stats ~{ld_stat_bname}" else ""
 
   Boolean has_common_variants = has_common_snvs || has_common_indels || has_common_svs
 
@@ -1042,14 +1049,26 @@ task PlotSiteMetrics {
 
     # Plot site-level metrics for common variants
     if ~{has_common_variants}; then
+
+      # Symlink LD stats to working directory, if provided
+      if ~{has_ld}; then
+        ln -s ~{default="" ld_stats_tsv} ~{ld_stat_bname}
+      fi
+
+      # Plot pointwise QC
       /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_site_pointwise_metrics.R \
-        --ld-stats ~{ld_stats_tsv} \
         ~{pw_snv_cmd} \
         ~{pw_indel_cmd} \
         ~{pw_sv_cmd} \
         --combine \
         --common-af ~{common_af_cutoff} \
         --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
+
+      # Append summary stats to previous stats file
+      fgrep -v "#" \
+        ~{output_prefix}.site_metrics/~{output_prefix}.pointwise_summary_metrics.tsv \
+      >> ~{output_prefix}.site_metrics/~{output_prefix}.summary_metrics.tsv
+      rm ~{output_prefix}.site_metrics/~{output_prefix}.pointwise_summary_metrics.tsv
     fi
 
     # Compress outputs

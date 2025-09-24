@@ -477,8 +477,12 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
 
   # Return summary statistics for logging
   med.ridx <- which(ss.df$measure == "median")
-  ss.df$measure[med.ridx] <- paste(ss.df$measure[med.ridx], tolower(metric.name), sep="_")
-  ss.df$measure[-med.ridx] <- paste(tolower(metric.name), ss.df$measure[-med.ridx], sep="_")
+  ss.df$measure[med.ridx] <- sub("[ /]+", "_",
+                                 paste(ss.df$measure[med.ridx],
+                                       tolower(metric.name), sep="_"))
+  ss.df$measure[-med.ridx] <- sub("[ /]+", "_",
+                                  paste(tolower(metric.name),
+                                        ss.df$measure[-med.ridx], sep="_"))
   return(ss.df)
 }
 

@@ -142,7 +142,7 @@ pointwise.plots <- function(df, out.prefix, fname.suffix="all",
 
   ss.df <- data.frame("analysis"=character(), "measure"=character(),
                       "value"=numeric(), "n"=numeric())
-  ss.prefix <- gsub("[ ]+", "_", paste(ref.prefix, fname.suffix, sep="."))
+  ss.prefix <- gsub("[ ]+", "_", paste(tolower(ref.prefix), fname.suffix, sep="."))
 
   # AF correlation plot as .png
   png(paste(out.prefix, fname.suffix, "af_cor.png", sep="."),
@@ -177,6 +177,8 @@ parser$add_argument("--ref-title", metavar="string", type="character",
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     help="String or path to use as prefix for output plots",
                     default="./vcf_qc")
+parser$add_argument("--set-name", metavar="string",
+                    help=paste("Optional suffix for summary statistics reporting"))
 args <- parser$parse_args()
 
 # # DEV:
@@ -186,7 +188,8 @@ args <- parser$parse_args()
 #              "combine" = TRUE,
 #              "common_af" = 0.001,
 #              "ref_title" = "gnomAD v4.1",
-#              "out_prefix" = "~/scratch/qc.test")
+#              "out_prefix" = "~/scratch/qc.test",
+#              "set_name" = "easy")
 
 # Ensure at least one of --snvs, --indels, or --svs is present
 if(is.null(args$snvs) & is.null(args$indels) & is.null(args$svs)){
@@ -251,6 +254,9 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
 
 # Combine summary statistics and write to .tsv
 ss.out <- do.call("rbind", list(snv.ss, indel.ss, sv.ss, all.ss))
+if(!is.null(args$set_name)){
+  ss.out$analysis <- paste(ss.out$analysis, args$set_name, sep=".")
+}
 colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
 write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)

@@ -264,6 +264,18 @@ pointwise.plots <- function(df, ld, out.prefix, fname.suffix="all",
   dev.off()
   ss.df[1, ] <- c(paste(ss.prefix, "common_hwe", sep="."), "pct_pass", m.tmp)
 
+  # Exit now if LD stats are not provided
+  if(is.null(ld)){
+    return(ss.df)
+  }
+
+  # Compute LD tag rate
+  ld.sub <- ld[which(ld$vid %in% rownames(df)), ]
+  n.tagged <- length(unique(ld.sub[which(ld.sub$ld_r2 >= 0.5), "vid"]))
+  n.elig <- length(unique(ld.sub$vid))
+  ss.df[nrow(ss.df)+1, ] <- c(paste(ss.prefix, "common_ld", "any", sep="."),
+                              "tag_rate", n.tagged / n.elig, n.elig)
+
   # Peak LD vs. AF as .png (one for each other variant class)
   for(vc2 in c("any", unique(ld$other_vc))){
     png(paste(out.prefix, fname.suffix, vc2, "peak_ld.png", sep="."),
@@ -283,8 +295,6 @@ pointwise.plots <- function(df, ld, out.prefix, fname.suffix="all",
 ###########
 # Parse command line arguments and opions
 parser <- ArgumentParser(description="Plot pointwise variant metrics")
-parser$add_argument("--ld-stats", metavar=".tsv", type="character", required=TRUE,
-                    help="Peak LD R2 per variant for each other variant class")
 parser$add_argument("--snvs", metavar=".bed", type="character",
                     help="SNV site metrics from clean_site_metrics.py")
 parser$add_argument("--indels", metavar=".bed", type="character",
@@ -295,18 +305,20 @@ parser$add_argument("--combine", action="store_true", default=FALSE,
                     help="Also generate a combined set of plots for all variant types")
 parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
                     help="Allele frequency threshold for common variants")
+parser$add_argument("--ld-stats", metavar=".tsv", type="character",
+                    help="Peak LD R2 per variant for each other variant class")
 parser$add_argument("--out-prefix", metavar="path", type="character",
                     help="String or path to use as prefix for output plots",
                     default="./vcf_qc")
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("ld_stats" = "~/scratch/renamed.common.peak_ld_by_vc.tsv.gz",
-#              "snvs" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.snv.sites.common.bed.gz",
+# args <- list("snvs" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.snv.sites.common.bed.gz",
 #              "indels" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.indel.sites.common.bed.gz",
 #              "svs" = "~/scratch/dfci-g2c.v1.chr22.0.norm.posthoc_filtered.sites.sv.sites.common.bed.gz",
 #              "combine" = TRUE,
 #              "common_af" = 0.001,
+#              "ld_stats" = "~/scratch/renamed.common.peak_ld_by_vc.tsv.gz",
 #              "out_prefix" = "~/scratch/qc.test")
 
 # Ensure at least one of --snvs, --indels, or --svs is present
@@ -314,10 +326,14 @@ if(is.null(args$snvs) & is.null(args$indels) & is.null(args$svs)){
   stop("At least one of --snvs, --indels, or --svs must be provided")
 }
 
-# Load LD stats
-ld <- read.table(args$ld_stats, header=T, sep="\t", check.names=F,
-                 quote="", comment.char="")
-colnames(ld)[1] <- gsub("#", "", colnames(ld)[1])
+# Load LD stats, if provided
+if(!is.null(args$ld_stats)){
+  ld <- read.table(args$ld_stats, header=T, sep="\t", check.names=F,
+                   quote="", comment.char="")
+  colnames(ld)[1] <- gsub("#", "", colnames(ld)[1])
+}else{
+  ld <- NULL
+}
 
 # Load & plot SNVs, if provided
 if(!is.null(args$snvs)){
@@ -374,6 +390,6 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
 # Combine summary statistics and write to .tsv
 ss.out <- do.call("rbind", list(snv.ss, indel.ss, sv.ss, all.ss))
 colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
-write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),
+write.table(ss.out, paste(args$out_prefix, "pointwise_summary_metrics.tsv", sep="."),
             col.names=T, row.names=F, sep="\t", quote=F)
 
