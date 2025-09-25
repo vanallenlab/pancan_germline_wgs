@@ -476,6 +476,10 @@ workflow PlotVcfQcMetrics {
   call PackageOutputs {
     input:
       tarballs = all_out_tarballs,
+      ref_cohort_prefix = ref_cohort_prefix,
+      ref_cohort_plot_title = ref_cohort_plot_title,
+      sample_benchmark_prefixes = select_all(sample_benchmark_dataset_prefixes),
+      sample_benchmark_titles = select_all(sample_benchmark_dataset_titles),
       out_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
@@ -490,9 +494,16 @@ workflow PlotVcfQcMetrics {
 task PackageOutputs {
   input {
     Array[File] tarballs
+    String ref_cohort_prefix
+    String ref_cohort_plot_title
+    Array[String] sample_benchmark_prefixes
+    Array[String] sample_benchmark_titles
     String out_prefix
     String g2c_analysis_docker
   }
+
+  String gb_prefix_cmd = "--sample-benchmarking-prefix " + "~{sep=' --sample-benchmarking-prefix ' sample_benchmark_prefixes}"
+  String gb_title_cmd = "--sample-benchmarking-title " + "~{sep=' --sample-benchmarking-title ' sample_benchmark_titles}"
 
   Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
 
@@ -503,6 +514,7 @@ task PackageOutputs {
     for subset in plots stats; do
       mkdir ~{out_prefix}.$subset
     done
+    mkdir ~{out_prefix}.plots/~{out_prefix}.qc_summary
 
     # Unpack all plots
     while read tb; do
@@ -520,7 +532,13 @@ task PackageOutputs {
     | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
     | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> \
     ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
-    # TODO: plot bars here
+    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R \
+      --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv \
+      --site-ref-prefix "~{ref_cohort_prefix}" \
+      --site-ref-title "~{ref_cohort_plot_title}" \
+      ~{gb_prefix_cmd} \
+      ~{gb_title_cmd} \
+      --out-prefix ~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}
 
     # Compress outputs
     for subset in plots stats; do
@@ -1062,6 +1080,7 @@ task PlotSiteMetrics {
         ~{pw_sv_cmd} \
         --combine \
         --common-af ~{common_af_cutoff} \
+        ~{ld_cmd} \
         --out-prefix ~{output_prefix}.site_metrics/~{output_prefix}
 
       # Append summary stats to previous stats file

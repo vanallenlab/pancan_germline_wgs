@@ -240,7 +240,7 @@ if(!is.null(args$svs)){
 }
 
 # Combine & plot all variant types, if optioned
-if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
+if(args$combine){
   # Merge all data
   all.df <- do.call("rbind", list(snv.df, indel.df, sv.df))
 
@@ -255,7 +255,9 @@ if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
 # Combine summary statistics and write to .tsv
 ss.out <- do.call("rbind", list(snv.ss, indel.ss, sv.ss, all.ss))
 if(!is.null(args$set_name)){
-  ss.out$analysis <- paste(ss.out$analysis, args$set_name, sep=".")
+  if(args$set_name != "All"){
+    ss.out$analysis <- paste(ss.out$analysis, tolower(args$set_name), sep=".")
+  }
 }
 colnames(ss.out)[1] <- paste("#", colnames(ss.out)[1], sep="")
 write.table(ss.out, paste(args$out_prefix, "summary_metrics.tsv", sep="."),

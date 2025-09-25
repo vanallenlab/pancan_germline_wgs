@@ -115,8 +115,8 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
     titv.r <- as.numeric(vsc.counts[vsc.counts$analysis == "site_count.ti", "n"]) / n.snv
     n.indel <- as.numeric(vc.counts[vc.counts$analysis == "site_count.indel", "n"])
     insdel.r <- as.numeric(vsc.counts[vsc.counts$analysis == "site_count.ins", "n"]) / n.indel
-    short.ratios <- data.frame("analysis"=rep("site_ratios", 2),
-                               "measure"=c("snv_ti_tv_ratio", "indel_ins_del_ratio"),
+    short.ratios <- data.frame("analysis"=c("site_ratios.snv", "site_ratios.indel"),
+                               "measure"=c("ti_tv_ratio", "ins_del_ratio"),
                                "value"=c(titv.r, insdel.r),
                                "n"=c(n.snv, n.indel))
   }else{
@@ -126,7 +126,7 @@ plot.counts.by.vsc <- function(df, has.short.variants=TRUE, has.svs=TRUE,
   if(has.svs){
     n.sv <- as.numeric(vc.counts[vc.counts$analysis == "site_count.sv", "n"])
     DUPDEL.r <- sum(as.numeric(vsc.counts[vsc.counts$analysis %in% c("site_count.DUP", "site_count.INS"), "n"])) / n.sv
-    sv.ratios <- data.frame("analysis"="site_ratios", "measure"="SV_DUP_DEL_ratio",
+    sv.ratios <- data.frame("analysis"="site_ratios.sv", "measure"="DUP_DEL_ratio",
                                "value"=DUPDEL.r, "n"=n.sv)
   }else{
     sv.ratios <- data.frame("analysis"=character(), "measure"=character(),

@@ -376,7 +376,7 @@ if(!is.null(args$svs)){
 }
 
 # Combine & plot all variant types, if optioned
-if(args$combine & sum(sapply(list(snv.df, indel.df, sv.df), is.null)) < 2){
+if(args$combine){
   # Merge all data
   all.df <- do.call("rbind", list(snv.df, indel.df, sv.df))
 

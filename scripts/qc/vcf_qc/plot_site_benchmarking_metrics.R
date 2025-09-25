@@ -385,8 +385,8 @@ args <- parser$parse_args()
 #              "out_prefix" = "~/scratch/g2c.qc.test")
 
 # Load sensitivity & PPV data
-sens.by.af <- load.benchmark.tsvs(args$sens_by_af, args$set_name)
-ppv.by.af <- load.benchmark.tsvs(args$ppv_by_af, args$set_name)
+sens.by.af <- load.benchmark.tsvs(args$sens_by_af, tolower(args$set_name))
+ppv.by.af <- load.benchmark.tsvs(args$ppv_by_af, tolower(args$set_name))
 
 # Define palette for sets
 set.colors <- rev(RLCtools::categorical.rainbow(2))

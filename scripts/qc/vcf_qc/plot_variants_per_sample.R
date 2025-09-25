@@ -787,3 +787,40 @@ args <- parser$parse_args()
 #              "ancestry_labels" = "~/scratch/dfci-g2c.v1.qc_ancestry.tsv",
 #              "phenotype_labels" = "~/scratch/dfci-g2c.v1.qc_phenotype.tsv",
 #              "out_prefix" = "~/scratch/ufc_sv_qc_dev")
+
+# Load sample genotype counts
+gt.counts <- load.gt.counts(args$genotype_dist_tsv)
+samples <- unique(gt.counts$sample)
+
+# Load sample ancestry and phenotypes, if optioned
+pop <- load.labels(args$ancestry_labels, samples)
+pheno <- load.labels(args$phenotype_labels, samples)
+
+# Triple waterfall plot of counts per sample by class
+main.waterfall(gt.counts, args$out_prefix, pop, pheno)
+
+# Collect median counts per sample by class, subclass, frequency, zygosity, pop, and pheno
+count.ss <- gather.count.sumstats(gt.counts, samples, pop, pheno)
+
+# TODO: maybe add Sankey diagrams here
+
+# Inter-class comparisions across samples
+ic.ss <- lapply(list(c("all", "snv"), c("all", "indel"), c("all", "sv"),
+                     c("snv", "indel"), c("snv", "sv"), c("indel", "sv")),
+                function(vcs){
+  vc1 <- vcs[1]; vc2 <- vcs[2]
+  if(all(vcs %in% gt.counts$class)){
+    plot.vc.comparisons(gt.counts, vc1, vc2, args$out_prefix, pop)
+  }
+})
+if(length(ic.ss) > 0){
+  ic.ss <- as.data.frame(do.call("rbind", ic.ss))
+}
+if(nrow(ic.ss) > 0){
+  count.ss <- as.data.frame(rbind(count.ss, ic.ss))
+}
+
+# Write summary statistics to output file
+colnames(count.ss)[1] <- paste("#", colnames(count.ss)[1], sep="")
+write.table(count.ss, paste(args$out_prefix, "variants_per_sample.summary_metrics.tsv", sep="."),
+            col.names=T, row.names=F, sep="\t", quote=F)
