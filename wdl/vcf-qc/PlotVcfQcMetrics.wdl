@@ -532,7 +532,8 @@ task PackageOutputs {
     | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
     | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> \
     ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
-    /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R \
+    Rscript \
+      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R \
       --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv \
       --site-ref-prefix "~{ref_cohort_prefix}" \
       --site-ref-title "~{ref_cohort_plot_title}" \
@@ -552,7 +553,7 @@ task PackageOutputs {
   }
 
   runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
+    docker: g2c_analysis_docker
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
