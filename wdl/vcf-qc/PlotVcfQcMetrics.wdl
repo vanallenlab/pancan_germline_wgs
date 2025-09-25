@@ -502,9 +502,6 @@ task PackageOutputs {
     String g2c_analysis_docker
   }
 
-  String gb_prefix_cmd = "--sample-benchmarking-prefix " + "~{sep=' --sample-benchmarking-prefix ' sample_benchmark_prefixes}"
-  String gb_title_cmd = "--sample-benchmarking-title " + "~{sep=' --sample-benchmarking-title ' sample_benchmark_titles}"
-
   Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
 
   command <<<
@@ -532,14 +529,19 @@ task PackageOutputs {
     | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
     | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> \
     ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
-    Rscript \
-      /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R \
-      --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv \
-      --site-ref-prefix "~{ref_cohort_prefix}" \
-      --site-ref-title "~{ref_cohort_plot_title}" \
-      ~{gb_prefix_cmd} \
-      ~{gb_title_cmd} \
-      --out-prefix ~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}
+    cmd="Rscript /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R"
+    cmd="$cmd --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv"
+    cmd="$cmd --site-ref-prefix \"~{ref_cohort_prefix}\""
+    cmd="$cmd --site-ref-title \"~{ref_cohort_plot_title}\""
+    while read sbp; do
+      cmd="$cmd --sample-benchmarking-prefix \"$sbp\""
+    done < ~{write_lines(sample_benchmark_prefixes)}
+    while read sbt; do
+      cmd="$cmd --sample-benchmarking-title \"$sbt\""
+    done < ~{write_lines(sample_benchmark_titles)}
+    cmd="$cmd --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
+    echo -e "Now generating summary plots as follows:\n\n$cmd"
+    eval $cmd
 
     # Compress outputs
     for subset in plots stats; do
