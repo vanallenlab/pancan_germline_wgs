@@ -686,7 +686,7 @@ cat << EOF > $staging_dir/CollectInitialVcfQcMetrics.inputs.template.json
   "CollectVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:75e54bf",
   "CollectVcfQcMetrics.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
   "CollectVcfQcMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-  "CollectVcfQcMetrics.n_for_sample_level_analyses": 2000,
+  "CollectVcfQcMetrics.n_for_sample_level_analyses": 5000,
   "CollectVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc.\$CONTIG",
   "CollectVcfQcMetrics.PreprocessVcf.mem_gb": 15.5,
   "CollectVcfQcMetrics.PreprocessVcf.n_cpu": 4,
