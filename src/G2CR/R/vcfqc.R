@@ -463,7 +463,7 @@ plot.all.gt.bench.strata <- function(bench.dat, out.prefix, set.colors,
     vpg <- calc.gt.bench.vpg(plot.dat)
     plot.title <- paste(metric.name, title.preps[1],
                         clean.numeric.labels(vpg, min.label.length=2, acceptable.decimals=1),
-                        "SVs per genome\n", title.preps[2],
+                        "SVs/genome\n", title.preps[2],
                         clean.numeric.labels(n.samples), ref.title, "samples")
     pdf(paste(out.prefix, "SVs.by_subclass.barplot.pdf", sep="."),
         height=2.25, width=1.05+(1.4*length(sv.vscs)/3))

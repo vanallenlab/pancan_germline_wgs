@@ -35,7 +35,8 @@ load.ss <- function(tsv.in, ref.prefix=NULL, gb.prefixes=c()){
   colnames(ss) <- c("analysis", "measure", "value", "n")
   ss <- invert.dynamic.ranges(ss)
 
-  lapply(c("all", names(var.class.abbrevs)), function(vc){
+  vcs <- c("all", names(var.class.abbrevs))
+  ss.l <- lapply(vcs, function(vc){
 
     # Counts
     if(vc == "all"){
@@ -44,23 +45,30 @@ load.ss <- function(tsv.in, ref.prefix=NULL, gb.prefixes=c()){
       count.suffix <- vc
     }
     prop.rare <- ss[which(ss$analysis == paste("pct_rare", vc, sep=".")), ]
+    rare.k <- if(nrow(prop.rare) > 0){round(prop.rare$value * prop.rare$n, 0)}else{0}
+    rare.n <- if(nrow(prop.rare) > 0){prop.rare$n}else{0}
     prop.stn <- ss[which(ss$analysis == paste("pct_singletons", vc, sep=".")), ]
+    stn.k <- if(nrow(prop.stn) > 0){round(prop.stn$value * prop.stn$n, 0)}else{0}
+    stn.n <- if(nrow(prop.stn) > 0){prop.stn$n}else{0}
     count.df <- as.data.frame(rbind(
       ss[which(ss$analysis == paste("site_count", count.suffix, sep=".")), ],
-      c(paste("site_count.rare", count.suffix, sep="."), "count",
-        round(prop.rare$value * prop.rare$n, 0), prop.rare$n),
-      c(paste("site_count.singletons", count.suffix, sep="."), "count",
-        round(prop.stn$value * prop.stn$n, 0), prop.stn$n)
+      c(paste("site_count.rare", count.suffix, sep="."), "count", rare.k, rare.n),
+      c(paste("site_count.singletons", count.suffix, sep="."), "count", stn.k, stn.n),
+      ss[which(ss$analysis == paste("variants_per_genome", vc, sep=".")
+               & ss$measure == "median"), ]
     ))
 
     # Site benchmarking
     sb.df <- as.data.frame(rbind(
       ss[which(ss$analysis == paste(vc, "common_hwe", sep=".")), ],
+      ss[which(ss$analysis == paste(vc, "common_ld.any", sep=".")
+               & ss$measure == "tag_rate"), ],
       if(vc == "all"){
         data.frame("analysis" = "site_ratios.all", "measure" = NA, "value" = NA, "n" = NA)
       }else{
         ss[which(ss$analysis == paste("site_ratios", vc, sep=".")), ]
       },
+      ss[which(ss$analysis == paste(ref.prefix, vc, "common_af_cor", sep=".")), ],
       ss[which(ss$analysis == gsub("^\\.|\\.$", "",
                                    paste(ref.prefix, "sensitivity.common",
                                          if(vc!="all"){vc}, sep="."))), ],
@@ -79,6 +87,12 @@ load.ss <- function(tsv.in, ref.prefix=NULL, gb.prefixes=c()){
                & ss$measure == "median_match_rate"), ],
       ss[which(ss$analysis == paste("gt_benchmarking.twin_replicate", vc, sep=".")
                & ss$measure == "match_rate_inverted_dynamic_range"), ],
+      ss[which(ss$analysis == paste("heterozygosity", vc, sep=".")
+               & ss$measure == "median"), ],
+      ss[which(ss$analysis == paste("heterozygosity", vc, sep=".")
+               & ss$measure == "inverted_dynamic_range"), ],
+      ss[which(ss$analysis == paste("variants_per_genome", vc, sep=".")
+               & ss$measure == "inverted_dynamic_range"), ],
       do.call("rbind", lapply(gb.prefixes, function(gbp){
         rbind(ss[which(ss$analysis %in% paste("gt_benchmarking", gbp, vc, sep=".")
                        & ss$measure == "median_sensitivity"), ],
@@ -92,14 +106,42 @@ load.ss <- function(tsv.in, ref.prefix=NULL, gb.prefixes=c()){
     ))
 
     # Inter-class benchmarking
-    inter.df <- data.frame()
+    inter.df <- as.data.frame(rbind(
+      do.call("rbind", lapply(c("heterozygosity_cor", "variant_count_cor"), function(suf){
+        do.call("rbind", lapply(setdiff(vcs, "all"), function(vc2){
+          ordered.vcs <- if(vc != vc2){intersect(vcs, c(vc, vc2))}else{rep(vc, 2)}
+          inter.prefix <- paste(ordered.vcs[1], "vs", ordered.vcs[2], sep="_")
+          vc.n <- ss$n[which(ss$analysis == paste("variants_per_genome", vc, sep="."))]
+          if(length(vc.n) == 0){
+            vc.n <- NA
+          }
+          if(vc == vc2){
+            data.frame("analysis" = paste(inter.prefix, suf, sep="."),
+                       "measure" = "r2", "value" = 1, "n" = vc.n)
+          }else{
+            ss[which(ss$analysis == paste(inter.prefix, suf, sep=".")), ]
+          }
+        }))
+      }))
+    ))
 
     # Structured output
-    list("counts" = count.df,
-         "site_bench" = sb.df,
-         "gt_bench" = gb.df,
-         "interclass" = inter.df)
+    list("counts" = count.df[which(count.df$n > 0 & !is.na(count.df$n)
+                                   & !is.infinite(count.df$value)
+                                   & !is.na(count.df$value)), ],
+         "site_bench" = sb.df[which((sb.df$n > 0 & !is.na(sb.df$n)
+                                     & !is.infinite(sb.df$value)
+                                     & !is.na(sb.df$value))
+                                    | (vc == "all" & sb.df$analysis == "site_ratios.all")), ],
+         "gt_bench" = gb.df[which(gb.df$n > 0 & !is.na(gb.df$n)
+                                  & !is.infinite(gb.df$value)
+                                  & !is.na(gb.df$value)), ],
+         "interclass" = inter.df[which(inter.df$n > 0 & !is.na(inter.df$n)
+                                       & !is.infinite(inter.df$value)
+                                       & !is.na(inter.df$value)), ])
   })
+  names(ss.l) <- vcs
+  return(ss.l)
 }
 
 
@@ -131,7 +173,7 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV (SINGLE CLASS)
-# args <- list("stats" = "~/Downloads/dfci-ufc.sv.v1.initial_qc.stats/dfci-ufc.sv.v1.initial_qc.all_qc_summary_metrics.tsv",
+# args <- list("stats" = "~/Downloads/dfci-ufc.sv.v1.InitialVcfQcMetrics.stats/dfci-ufc.sv.v1.InitialVcfQcMetrics.all_qc_summary_metrics.tsv",
 #              "site_ref_prefix" = "gnomad-sv_v4.1",
 #              "site_ref_title" = "gnomAD-SV v4.1",
 #              "sample_benchmarking_prefix" = c("external_srwgs", "external_lrwgs"),
