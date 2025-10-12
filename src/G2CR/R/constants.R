@@ -267,7 +267,9 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                           "parent-child" = "#FF6103",
                           "siblings" = "#FFB14D",
                           "unrelated" = "#AAAAAA"),
-    "annotation.color" = "gray75")
+    "annotation.color" = "gray75",
+    "boolean.colors" = c("TRUE" = "#59D05B",
+                         "FALSE" = "#f76f57"))
 
   # Define scales
   logscale.major <- 10^(-10:10)

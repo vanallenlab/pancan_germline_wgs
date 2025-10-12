@@ -68,6 +68,10 @@ workflow PlotVcfQcMetrics {
     Array[Array[File?]] twin_genotype_benchmark_distribs = [[]]
     Array[Array[File?]] trio_mendelian_violation_distribs = [[]]
 
+    # Optionally, you can provide the all_stats_tsv output from a prior run for comparison
+    File? previous_stats
+    File? custom_qc_target_metrics
+
     String output_prefix
 
     String bcftools_docker
@@ -476,10 +480,12 @@ workflow PlotVcfQcMetrics {
   call PackageOutputs {
     input:
       tarballs = all_out_tarballs,
+      previous_stats = previous_stats,
       ref_cohort_prefix = ref_cohort_prefix,
       ref_cohort_plot_title = ref_cohort_plot_title,
       sample_benchmark_prefixes = select_all(sample_benchmark_dataset_prefixes),
       sample_benchmark_titles = select_all(sample_benchmark_dataset_titles),
+      custom_targets = custom_qc_target_metrics,
       out_prefix = output_prefix,
       g2c_analysis_docker = g2c_analysis_docker
   }
@@ -487,6 +493,7 @@ workflow PlotVcfQcMetrics {
   output {
     File plots_tarball = PackageOutputs.plots_tarball
     File stats_tarball = PackageOutputs.stats_tarball
+    File all_stats_tsv = PackageOutputs.all_stats_tsv
   }
 }
 
@@ -494,10 +501,12 @@ workflow PlotVcfQcMetrics {
 task PackageOutputs {
   input {
     Array[File] tarballs
+    File? previous_stats
     String ref_cohort_prefix
     String ref_cohort_plot_title
     Array[String] sample_benchmark_prefixes
     Array[String] sample_benchmark_titles
+    File? custom_targets
     String out_prefix
     String g2c_analysis_docker
   }
@@ -528,9 +537,15 @@ task PackageOutputs {
     find ~{out_prefix}.stats/ -name "*.summary_metrics.tsv" \
     | xargs -I {} cat {} | grep -ve '^#' | grep -ve '^analysis' \
     | sort -Vk1,1 -k2,2V -k3,3n -k4,4n >> \
-    ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
+    ~{out_prefix}.all_qc_summary_metrics.tsv
+    cp \
+      ~{out_prefix}.all_qc_summary_metrics.tsv \
+      ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
     cmd="Rscript /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R"
     cmd="$cmd --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv"
+    if ~{defined(previous_stats)}; then
+      cmd='$cmd --previous-stats ~{default='' previous_stats}'
+    fi
     cmd="$cmd --site-ref-prefix \"~{ref_cohort_prefix}\""
     cmd="$cmd --site-ref-title \"~{ref_cohort_plot_title}\""
     while read sbp; do
@@ -539,6 +554,9 @@ task PackageOutputs {
     while read sbt; do
       cmd="$cmd --sample-benchmarking-title \"$sbt\""
     done < ~{write_lines(sample_benchmark_titles)}
+    if ~{defined(custom_targets)}; then
+      cmd='$cmd --custom-targets ~{default='' custom_targets}'
+    fi
     cmd="$cmd --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
     echo -e "Now generating summary plots as follows:\n\n$cmd"
     eval $cmd
@@ -552,6 +570,7 @@ task PackageOutputs {
   output {
     File plots_tarball = "~{out_prefix}.plots.tar.gz"
     File stats_tarball = "~{out_prefix}.stats.tar.gz"
+    File all_stats_tsv = "~{out_prefix}.all_qc_summary_metrics.tsv"
   }
 
   runtime {
@@ -841,6 +860,7 @@ CODE
       if [ -s snv_sens_beds.txt ]; then
         while read main_bed sens_uri; do
           gsutil -m cat $sens_uri \
+          | gunzip -c \
           | awk -v FS="\t" -v OFS="\t" \
             '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
           | cat <( zcat $main_bed ) - \
@@ -861,6 +881,7 @@ CODE
       if [ -s indel_sens_beds.txt ]; then
         while read main_bed sens_uri; do
           gsutil -m cat $sens_uri \
+          | gunzip -c \
           | awk -v FS="\t" -v OFS="\t" \
             '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
           | cat <( zcat $main_bed ) - \
@@ -881,6 +902,7 @@ CODE
       if [ -s sv_sens_beds.txt ]; then
         while read main_bed sens_uri; do
           gsutil -m cat $sens_uri \
+          | gunzip -c \
           | awk -v FS="\t" -v OFS="\t" \
             '{ if ($9=="NA") print $1, $2, $3, "FN_"$4, $5, $6, $7, $10, $9, $8, $11 }' \
           | cat <( zcat $main_bed ) - \

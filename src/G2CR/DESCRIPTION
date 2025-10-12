@@ -23,6 +23,7 @@ Suggests:
     argparse,
     caret,
     DescTools,
+    MASS,
     readxl,
     survival,
     zoo

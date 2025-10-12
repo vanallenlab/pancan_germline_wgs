@@ -47,36 +47,68 @@ read.bed <- function(bed.in, common_af=0, autosomes.only=T){
 ######################
 # Plotting Functions #
 ######################
+# Custom palette function for HWE topo maps
+hwe.topo.pal <- function(N){
+  c("black", viridis(N-1))
+}
+
 # HWE ternary plot
 hwe.plot <- function(df, title="All variants", pt.cex=NULL, pt.pch=NULL,
-                     pt.alpha=NULL, parmar=c(1.75, 2, 1.25, 1)){
-  # Get plot data
+                     pt.alpha=NULL, style="scatter", max.points=1000000,
+                     parmar=c(1.75, 2, 1.25, 1)){
+  # Clean input data and determine overall statistics
   df <- df[which(!is.na(df$hwe.x) & !is.na(df$hwe.y) & !is.na(df$hwe)), ]
-  ytop <- sin(60 * pi / 180)
   bonf.p <- 0.05 / nrow(df)
+  n.all <- nrow(df)
+  n.pass <- sum(df$hwe >= bonf.p)
+  pct.pass <- n.pass / n.all
+
+  # Downsample scatterplot to max.points if more complete cases are provided
+  if(style == "scatter" & nrow(df) > max.points){
+    set.seed(2025)
+    df <- df[sample(1:nrow(df), max.points), ]
+  }
+
+  # Get plot parameters
+  ytop <- sin(60 * pi / 180)
   n.p.bins <- floor(10 * -log10(bonf.p))
 
   # Dynamically determine point properties
-  pt.params <- scatterplot.point.params(nrow(df), cex.start=0.3)
-  if(is.null(pt.cex)){
-    pt.cex <- pt.params$cex
+  if(style == "scatter"){
+    pt.params <- scatterplot.point.params(nrow(df), cex.start=0.3)
+    if(is.null(pt.cex)){
+      pt.cex <- pt.params$cex
+    }
+    if(is.null(pt.pch)){
+      pt.pch <- pt.params$pch
+    }
+    if(is.null(pt.alpha)){
+      pt.alpha <- pt.params$alpha
+    }
+    p.pal <- rev(viridis(n.p.bins + 1, begin=0.1, end=0.95))
+    pt.cols <- p.pal[sapply(floor(10 * -log10(df$hwe)),
+                            function(v){min(v, n.p.bins)}) + 1]
+    pt.cols <- adjustcolor(pt.cols, alpha=pt.alpha)
+  }else{
+    pt.params <- NULL
   }
-  if(is.null(pt.pch)){
-    pt.pch <- pt.params$pch
-  }
-  if(is.null(pt.alpha)){
-    pt.alpha <- pt.params$alpha
-  }
-  p.pal <- rev(viridis(n.p.bins + 1, begin=0.1, end=0.95))
-  pt.cols <- p.pal[sapply(floor(10 * -log10(df$hwe)),
-                          function(v){min(v, n.p.bins)}) + 1]
-  pt.cols <- adjustcolor(pt.cols, alpha=pt.alpha)
 
   # Prep plot area
   prep.plot.area(c(0, 1), c(0, 1), parmar)
+
+  # Add heatmap for topo style
+  if(style != "scatter"){
+    density.topomap(df$hwe.x, df$hwe.y, contour.levels=6, res=200,
+                    palette.fxn=hwe.topo.pal,
+                    xlims=c(0, 1), ylims=c(0, ytop))
+    polygon(x=c(0, 0.5, 0, 0), y=c(0, ytop, ytop, 0),
+            col="white", border="white")
+    polygon(x=c(0.5, 1, 1, 0.5), y=c(ytop, ytop, 0, ytop),
+            col="white", border="white")
+  }
   segments(x0=c(0, 0.5, 1), x1=c(0.5, 1, 0),
            y0=c(0, ytop, 0), y1=c(ytop, 0, 0),
-           col=annotation.color)
+           col=annotation.color, xpd=T)
 
   # Add bottom X axis
   clean.axis(1, at=seq(0, 1, 0.25), label.units="percent", label.line=-1,
@@ -99,57 +131,58 @@ hwe.plot <- function(df, title="All variants", pt.cex=NULL, pt.pch=NULL,
        srt=60, labels="Heterozygotes", xpd=T)
 
   # Add legend
-  legend.left <- 0.75
-  legend.right <- 0.8
-  legend.y.breaks <- seq(2*ytop/3, ytop, length.out=4)
-  legend.col.breaks <- c(0, floor(10 * -log10(0.05)),
-                         floor(10 * -log10(bonf.p)), length(p.pal))
-  hwe.leg.labs <- list(format.pval(0.05, equality=">="),
-                       format.pval(0.05, equality="<"),
-                       format.pval(bonf.p, equality="<"))
-  text(x=legend.left+0.025, y=mean(legend.y.breaks[3:4]),
-       pos=2, labels=bquote(italic(P)))
-  sapply(1:3, function(i){
-    k.range <- legend.col.breaks[i]:legend.col.breaks[i+1]
-    k.rect.y.breaks <- seq(legend.y.breaks[i], legend.y.breaks[i+1],
-                           length.out=length(k.range))
-    rect(xleft=rep(legend.left, length(k.range)),
-         xright=rep(legend.right, length(k.range)),
-         ybottom=k.rect.y.breaks[-length(k.rect.y.breaks)],
-         ytop=k.rect.y.breaks[-c(1)], col=p.pal[k.range],
-         border=p.pal[k.range], lwd=0.5)
-    text(x=legend.left-0.015,
-         y=mean(legend.y.breaks[c(i, i+1)]),
-         pos=4, cex=5/6, xpd=T,
-         labels=if(i==1){
-           expression("" > 0.05)
-         }else if(i==2){
-           expression("" <= 0.05)
-         }else if(i==3){
-           expression("" < "Bonf.")
-         })
-  })
-  rect(xleft=rep(legend.left, 3), xright=rep(legend.right, 3),
-       ybottom=legend.y.breaks[1:3], ytop=legend.y.breaks[2:4],
-       col=NA, xpd=T, border="white")
-  rect(xleft=legend.left, xright=legend.right,
-       ybottom=legend.y.breaks[1], ytop=legend.y.breaks[4],
-       col=NA)
+  if(style == "scatter"){
+    legend.left <- 0.75
+    legend.right <- 0.8
+    legend.y.breaks <- seq(2*ytop/3, ytop, length.out=4)
+    legend.col.breaks <- c(0, floor(10 * -log10(0.05)),
+                           floor(10 * -log10(bonf.p)), length(p.pal))
+    hwe.leg.labs <- list(format.pval(0.05, equality=">="),
+                         format.pval(0.05, equality="<"),
+                         format.pval(bonf.p, equality="<"))
+    text(x=legend.left+0.025, y=mean(legend.y.breaks[3:4]),
+         pos=2, labels=bquote(italic(P)))
+    sapply(1:3, function(i){
+      k.range <- legend.col.breaks[i]:legend.col.breaks[i+1]
+      k.rect.y.breaks <- seq(legend.y.breaks[i], legend.y.breaks[i+1],
+                             length.out=length(k.range))
+      rect(xleft=rep(legend.left, length(k.range)),
+           xright=rep(legend.right, length(k.range)),
+           ybottom=k.rect.y.breaks[-length(k.rect.y.breaks)],
+           ytop=k.rect.y.breaks[-c(1)], col=p.pal[k.range],
+           border=p.pal[k.range], lwd=0.5)
+      text(x=legend.left-0.015,
+           y=mean(legend.y.breaks[c(i, i+1)]),
+           pos=4, cex=5/6, xpd=T,
+           labels=if(i==1){
+             expression("" > 0.05)
+           }else if(i==2){
+             expression("" <= 0.05)
+           }else if(i==3){
+             expression("" < "Bonf.")
+           })
+    })
+    rect(xleft=rep(legend.left, 3), xright=rep(legend.right, 3),
+         ybottom=legend.y.breaks[1:3], ytop=legend.y.breaks[2:4],
+         col=NA, xpd=T, border="white")
+    rect(xleft=legend.left, xright=legend.right,
+         ybottom=legend.y.breaks[1], ytop=legend.y.breaks[4],
+         col=NA)
+  }
 
   # Add title & subtitle
   mtext(3, line=0.4, text=title)
-  n.all <- nrow(df)
-  n.pass <- sum(df$hwe >= bonf.p)
   n.formatted <- clean.numeric.labels(c(n.pass, n.all), acceptable.decimals=2)
   n.formatted[1] <- gsub("k|M|B|T", "", n.formatted[1])
-  pct.pass <- n.pass / n.all
   subtitle <- paste(n.formatted[1], " / ",
                     n.formatted[2], " (", round(100*pct.pass, 1),
                     "%) pass HWE", sep="")
   mtext(3, cex=5/6, text=subtitle, line=-0.4)
 
   # Add points
-  points(df$hwe.x, df$hwe.y, pch=1, cex=pt.cex, col=pt.cols, xpd=T)
+  if(style == "scatter"){
+    points(df$hwe.x, df$hwe.y, pch=1, cex=pt.cex, col=pt.cols, xpd=T)
+  }
 
   return(c(pct.pass, n.all))
 }
@@ -175,9 +208,6 @@ ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
 
   # Get plot parameters
   min.af <- round(min(plot.df$af), 0)
-  pt.params <- scatterplot.point.params(nrow(plot.df), cex.start=0.3)
-  p.pal <- viridis(margin.n.bins+1, begin=0.1, end=0.95)
-  pt.cols <- p.pal[floor(margin.n.bins * plot.df$ld_r2) + 1]
   bar.pal <- greyscale.palette(margin.n.bins, buffer=margin.n.bins/2)
   right.bar.xmax <- abs(min.af) * right.margin.hex
   bar.x.add <- abs(min.af) * bar.buffer.hex
@@ -187,17 +217,14 @@ ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
   # Prep plot area
   prep.plot.area(c(min.af, right.bar.xmax+bar.x.add), c(0, 1),
                  parmar=parmar, xaxs="r", yaxs="r")
-  segments(x0=par("usr")[1], x1=0, y0=ld.cutoffs,
-           y1=ld.cutoffs, col=annotation.color)
+  segments(x0=par("usr")[1], x1=0, y0=ld.cutoffs, y1=ld.cutoffs, col=annotation.color)
 
   # Plot points
-  points(plot.df, col=adjustcolor(pt.cols, alpha=pt.params$alpha),
-         cex=pt.params$cex, pch=pt.params$pch, xpd=T)
+  density.topomap(plot.df$af, plot.df$ld_r2, xlims=c(min.af, 0), ylims=c(0, 1), ncol=48)
 
   # Add X axis for AF
   ax.tick.at <- 0:min.af
-  ax.tick.labs <- paste('"', paste(100 * (10^(0:-3)), "%", sep=""),
-                        '"', sep="")
+  ax.tick.labs <- paste('"', paste(100 * (10^(0:-3)), "%", sep=""), '"', sep="")
   if(length(ax.tick.at) > length(ax.tick.labs)){
     ax.tick.labs <- c(ax.tick.labs,
                       paste("10 ^ -",
@@ -212,6 +239,8 @@ ld.plot <- function(df, ld, vc2, title, ld.cutoffs=c(0.2, 0.5, 0.8),
   axis(1, at=mean(c(min.af, 0)), tick=F, line=0, labels=paste(title, "AF"))
 
   # Add axes & title
+  segments(x0=par("usr")[1], x1=0, y0=ld.cutoffs, y1=ld.cutoffs,
+           col=adjustcolor("white", alpha=0.3), lty=3)
   if(vc2 == "any"){
     clean.axis(2, at=ld.bin.breaks, label.line=-0.75, title.line=0.1,
                title=bquote("Best" ~ R^2))
@@ -257,12 +286,17 @@ pointwise.plots <- function(df, ld, out.prefix, fname.suffix="all",
                       "value"=numeric(), "n"=numeric())
   ss.prefix <- gsub("[ ]+", "_", fname.suffix)
 
-  # HWE plot as .png
+  # HWE scatterplot as .png
   png(paste(out.prefix, fname.suffix, "hwe.png", sep="."),
       height=2.25*300, width=2.25*300, res=300)
   m.tmp <- hwe.plot(df, title=paste(title, "s", sep=""))
   dev.off()
   ss.df[1, ] <- c(paste(ss.prefix, "common_hwe", sep="."), "pct_pass", m.tmp)
+
+  # HWE topo heatmap as .pdf
+  pdf(paste(out.prefix, fname.suffix, "hwe.topo.pdf", sep="."), height=2.25, width=2.25)
+  m.tmp <- hwe.plot(df, title=paste(title, "s", sep=""), style="topo")
+  dev.off()
 
   # Exit now if LD stats are not provided
   if(is.null(ld)){
@@ -276,10 +310,10 @@ pointwise.plots <- function(df, ld, out.prefix, fname.suffix="all",
   ss.df[nrow(ss.df)+1, ] <- c(paste(ss.prefix, "common_ld", "any", sep="."),
                               "tag_rate", n.tagged / n.elig, n.elig)
 
-  # Peak LD vs. AF as .png (one for each other variant class)
+  # Peak LD vs. AF as topo .pdf (one for each other variant class)
   for(vc2 in c("any", unique(ld$other_vc))){
-    png(paste(out.prefix, fname.suffix, vc2, "peak_ld.png", sep="."),
-        height=2.25*300, width=2.6*300, res=300)
+    pdf(paste(out.prefix, fname.suffix, vc2, "peak_ld.pdf", sep="."),
+        height=2.25, width=2.6)
     m.tmp <- ld.plot(df, ld, vc2, title=title)
     dev.off()
     ss.df[nrow(ss.df)+1, ] <- c(paste(ss.prefix, "common_ld", vc2, sep="."),
@@ -355,7 +389,7 @@ if(!is.null(args$indels)){
 
   # Plot indel metrics
   indel.ss <- pointwise.plots(indel.df, ld, args$out_prefix, fname.suffix="indel",
-                  title="Common indel")
+                              title="Common indel")
 
 }else{
   indel.df <- NULL
@@ -369,7 +403,7 @@ if(!is.null(args$svs)){
 
   # Plot SV metrics
   sv.ss <- pointwise.plots(sv.df, ld, args$out_prefix, fname.suffix="sv",
-                  title="Common SV")
+                           title="Common SV")
 }else{
   sv.df <- NULL
   sv.ss <- NULL
@@ -382,7 +416,7 @@ if(args$combine){
 
   # Plot all metrics
   all.ss <- pointwise.plots(all.df, ld, args$out_prefix, fname.suffix="all",
-                  title="All common variant")
+                            title="All common variant")
 }else{
   all.ss <- NULL
 }

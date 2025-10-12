@@ -36,9 +36,11 @@
 #' @export scatterplot.point.params
 #' @export
 scatterplot.point.params <- function(n,
-                                     cex.floor=1000, cex.ceiling=100000, cex.start=0.6, cex.end=0.05,
+                                     cex.floor=1000, cex.ceiling=100000,
+                                     cex.start=0.6, cex.end=0.05,
                                      pch.cutoff=10000, pch.big=1, pch.small=19,
-                                     alpha.floor=100000, alpha.ceiling=1000000, alpha.start=1, alpha.end=0.01){
+                                     alpha.floor=100000, alpha.ceiling=1000000,
+                                     alpha.start=1, alpha.end=0.01){
   # Logscale all counts and ranges
   n <- log10(n)
   cex.range <- sort(log10(c(cex.floor, cex.ceiling)))
