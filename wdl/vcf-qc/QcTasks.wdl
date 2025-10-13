@@ -344,10 +344,11 @@ task ConcatTextFiles {
 
     Float mem_gb = 1.75
     Int n_cpu = 1
+    Int? disk_gb
     String docker
   }
 
-  Int disk_gb = ceil(2 * size(shards, "GB")) + 5
+  Int disk_gb_use = select_first([disk_gb, ceil(2 * size(shards, "GB")) + 10])
   String sort = if defined(sort_command) then " | " + select_first([sort_command, ""]) else ""
   String compress = if defined(compression_command) then " | " + select_first([compression_command, ""]) else ""
   String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
@@ -373,7 +374,7 @@ task ConcatTextFiles {
     docker: docker
     memory: "~{mem_gb} GB"
     cpu: n_cpu
-    disks: "local-disk " + disk_gb + " HDD"
+    disks: "local-disk " + disk_gb_use + " HDD"
     preemptible: 3
   }
 }
