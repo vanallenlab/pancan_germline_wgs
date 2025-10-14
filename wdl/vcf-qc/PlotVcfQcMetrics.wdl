@@ -510,6 +510,8 @@ task PackageOutputs {
     String g2c_analysis_docker
   }
 
+  String targets_opt = if defined(custom_targets) then "--custom-targets ~{basename(select_first([custom_targets, 'not_real.txt']))}" else ""
+
   Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
 
   command <<<
@@ -530,6 +532,11 @@ task PackageOutputs {
     for suffix in tsv tsv.gz txt txt.gz; do
       find ~{out_prefix}.plots -name "*.$suffix" || true
     done | xargs -I {} mv {} ~{out_prefix}.stats/ || true
+
+    # Link custom targets to pwd if provided
+    if ~{defined(custom_targets)}; then
+      ln -s ~{default="" custom_targets} ./
+    fi
 
     # Collapse all summary stats and generate summary barplots
     echo -e "#analysis\tmeasure\tvalue\tn" > ss.all.tsv
@@ -553,12 +560,9 @@ task PackageOutputs {
     while read sbt; do
       cmd="$cmd --sample-benchmarking-title \"$sbt\""
     done < ~{write_lines(sample_benchmark_titles)}
-    if ~{defined(custom_targets)}; then
-      cmd='$cmd --custom-targets ~{default='' custom_targets}'
-    fi
-    cmd="$cmd --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
+    cmd="$cmd ~{targets_opt} --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
     echo -e "Now generating summary plots as follows:\n\n$cmd"
-    eval $cmd
+    eval "$cmd"
 
     # Compress outputs
     for subset in plots stats; do
