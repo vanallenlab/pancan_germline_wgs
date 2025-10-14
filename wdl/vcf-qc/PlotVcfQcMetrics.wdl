@@ -76,7 +76,6 @@ workflow PlotVcfQcMetrics {
 
     String bcftools_docker
     String g2c_analysis_docker
-    String linux_docker
   }
 
   Int n_bench_intervals = length(select_first([benchmark_interval_names]))
@@ -273,7 +272,7 @@ workflow PlotVcfQcMetrics {
           compression_command = "gzip -c",
           input_has_header = true,
           output_filename = output_prefix + ".peak_ld_stats.tsv.gz",
-          docker = linux_docker
+          docker = bcftools_docker
       }
     }
     File ld_stats_tsv = select_first([CollapseLdStats.merged_file, peak_ld_stat_tsv_use[0]])
