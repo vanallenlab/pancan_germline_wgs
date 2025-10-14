@@ -354,7 +354,13 @@ task ConcatTextFiles {
   String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
 
   command <<<
-    set -eu -o pipefail
+    set -eux -o pipefail
+
+    # Helper debugging code for silent failures
+    cat ${write_lines(shards)} > shards.list
+    echo "Files to merge:"
+    cat shards.list || true
+    sleep 30  # give Cromwell time to capture stdout
 
     if [ "~{input_has_header}" == "true" ]; then
       ~{concat_command} ~{shards[0]} \
@@ -363,7 +369,7 @@ task ConcatTextFiles {
       touch header.txt
     fi
 
-    cat ~{write_lines(shards)} | xargs -I {} ~{concat_command} {} ~{posthoc_cmds} > ~{output_filename} || true
+    cat shards.list | xargs -I {} ~{concat_command} {} ~{posthoc_cmds} > ~{output_filename} || true
   >>>
 
   output {
