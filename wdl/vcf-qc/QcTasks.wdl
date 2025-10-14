@@ -348,7 +348,7 @@ task ConcatTextFiles {
     String docker
   }
 
-  Int disk_gb_use = select_first([disk_gb, ceil(2 * size(shards, "GB")) + 5])
+  Int disk_gb_use = select_first([disk_gb, ceil(2 * size(shards, "GB")) + 10])
   String sort = if defined(sort_command) then " | " + select_first([sort_command, ""]) else ""
   String compress = if defined(compression_command) then " | " + select_first([compression_command, ""]) else ""
   String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
@@ -357,7 +357,7 @@ task ConcatTextFiles {
     set -eux -o pipefail
 
     # Helper debugging code for silent failures
-    cat ${write_lines(shards)} > shards.list
+    cat ~{write_lines(shards)} > shards.list
     echo "Files to merge:"
     cat shards.list || true
     sleep 30  # give Cromwell time to capture stdout
