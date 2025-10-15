@@ -510,6 +510,7 @@ task PackageOutputs {
     String g2c_analysis_docker
   }
 
+  String previous_opt = if defined(previous_stats) then "--previous-stats ~{basename(select_first([previous_stats, 'not_real.txt']))}" else ""
   String targets_opt = if defined(custom_targets) then "--custom-targets ~{basename(select_first([custom_targets, 'not_real.txt']))}" else ""
 
   Int disk_gb = ceil(10 * size(tarballs, "GB")) + 10
@@ -549,9 +550,7 @@ task PackageOutputs {
       ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv
     cmd="Rscript /opt/pancan_germline_wgs/scripts/qc/vcf_qc/plot_overall_qc_summary.R"
     cmd="$cmd --stats ~{out_prefix}.stats/~{out_prefix}.all_qc_summary_metrics.tsv"
-    if ~{defined(previous_stats)}; then
-      cmd='$cmd --previous-stats ~{default='' previous_stats}'
-    fi
+    cmd="$cmd ~{previous_opt} ~{targets_opt}"
     cmd="$cmd --site-ref-prefix \"~{ref_cohort_prefix}\""
     cmd="$cmd --site-ref-title \"~{ref_cohort_plot_title}\""
     while read sbp; do
@@ -560,7 +559,7 @@ task PackageOutputs {
     while read sbt; do
       cmd="$cmd --sample-benchmarking-title \"$sbt\""
     done < ~{write_lines(sample_benchmark_titles)}
-    cmd="$cmd ~{targets_opt} --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
+    cmd="$cmd --out-prefix \"~{out_prefix}.plots/~{out_prefix}.qc_summary/~{out_prefix}\""
     echo -e "Now generating summary plots as follows:\n\n$cmd"
     eval "$cmd"
 
