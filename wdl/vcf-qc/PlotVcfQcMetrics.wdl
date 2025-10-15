@@ -534,7 +534,10 @@ task PackageOutputs {
       find ~{out_prefix}.plots -name "*.$suffix" || true
     done | xargs -I {} mv {} ~{out_prefix}.stats/ || true
 
-    # Link custom targets to pwd if provided
+    # Link previous stats and custom targets to pwd if provided
+    if ~{defined(previous_stats)}; then
+      ln -s ~{default="" previous_stats} ./
+    fi
     if ~{defined(custom_targets)}; then
       ln -s ~{default="" custom_targets} ./
     fi
