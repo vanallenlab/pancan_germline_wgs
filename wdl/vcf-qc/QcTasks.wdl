@@ -472,11 +472,12 @@ task MakeDummyFile {
   }
 
   runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
+    docker: "ubuntu:plucky-20251001"
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk 15 HDD"
     preemptible: 3
+    maxRetries: 2
   }
 }
 
@@ -536,12 +537,12 @@ task MakeHeaderFiller {
   }
 
   runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
+    docker: "ubuntu:plucky-20251001"
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk 20 HDD"
     preemptible: 3
-    max_retries: 1
+    max_retries: 2
   }
 }
 
