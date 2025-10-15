@@ -429,7 +429,7 @@ task CollectTrioSVdat {
 
 
   command <<<
-    set -eu
+    set -eu -o pipefail
     
     # Make list of all samples in famfile
     awk -v OFS="\n" '{ print $2, $3, $4 }' ~{famfile} > samples.list
@@ -442,7 +442,7 @@ task CollectTrioSVdat {
       while read vcf_idx; do
 
         # Localize VCF from remote bucket while subsetting to samples in trios
-        vcf="$( echo $vcf_idx | sed 's/\.tbi$//g' | sed 's/\/cromwell_root/gs\:\//g' )"
+        vcf="$( echo $vcf_idx | sed 's/\.tbi$//g' | sed 's/cromwell_root/\t/g' | cut -f2 | awk '{ print \"gs:/\"$1 }' )"
         subset_vcf="$( basename $vcf | sed 's/\.vcf\.gz/\.subsetted\.vcf\.gz/g' )"
         mv $vcf_idx ./ #VCF index must be in execution directory for remote streaming to work
         export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
