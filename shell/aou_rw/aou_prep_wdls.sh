@@ -50,7 +50,7 @@ if [ $# -gt 0 ] && [ $1 == "all" ]; then
   cp gatk-sv/wdl/*.wdl $WRKDIR/wdl/gatk-sv/
   cp gatk4-germline-snps-indels/*.wdl $WRKDIR/wdl/gatk-hc/
   cp utility-wdls/*.wdl $WRKDIR/wdl/gatk-hc/
-  cp warp/tasks/broad/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
+  cp warp/tasks/wdl/JointGenotypingTasks.wdl $WRKDIR/wdl/gatk-hc/
 
   # Add legacy version of GATK-SV WDLs from most recent branch with working copy of minGQ
   cd gatk-sv && \
