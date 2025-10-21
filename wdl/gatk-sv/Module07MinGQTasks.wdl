@@ -107,15 +107,22 @@ task ConcatTarball {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -e
+    set -eu -o pipefail
 
+    # Make nested directory structure to avoid overwriting results
+    mkdir decomp_inputs
+
+    # Decompress each output into safe directory
     while read tarball; do
-      tar xzf $tarball
+      tname=$( basename "$tarball" | sed 's/\.tar\.gz//g' )
+      mkdir decomp_inputs/$tname
+      tar -C decomp_inputs/$tname -xzf $tarball
     done < ~{write_lines(tarballs)}
-    find . -name trio_variant_info.txt.gz > files.txt
-    mkdir -p out
-    NUM_SHARDS=$(cat files.txt | sed 's/\/cacheCopy//g' | sed 's/\/attempt-[2-9]//g' | tr '/' '\t' | cut -f7 | sort | uniq | wc -l)
+    find decomp_inputs/ -name trio_variant_info.txt.gz > files.txt
 
+    # Organize output
+    mkdir -p out
+    NUM_SHARDS=$( cat files.txt | xargs -I {} dirname {} | sed 's/\/cacheCopy//g' | sed 's/\/attempt-[2-9]//g' | awk -v FS="/" '{ print $NF }' | sort | uniq | wc -l )
     for (( i=0; i<$NUM_SHARDS; i++ )); do
       fgrep "/shard-$i/" files.txt > shard.txt
       mkdir -p "out/shard-$i/"
@@ -123,8 +130,6 @@ task ConcatTarball {
       sed 1q shard.txt | xargs -n1 gunzip -c | bgzip > $OUT
       cat shard.txt | tail -n+2 | xargs -n1 gunzip -c | { grep -v ^# || true; } | bgzip >> $OUT
     done
-
-    echo "test1"
     tar -czf "out.tar.gz" out/
   >>>
 
