@@ -64,11 +64,12 @@ EOF
     fi
 
     # Write .json snippet for variable overrides for this contig
+    idx_uris=$( gsutil cat $contig_json | jq --arg k "$idx_key" '.[$k]' )
     cat << EOF > $WRKDIR/$contig.overrides.json
 {
   "$contig" : {
-      "CONTIG_VCFS": $( gsutil cat $contig_json | jq .$vcf_key ),
-      "CONTIG_VCF_IDXS": $( gsutil cat $contig_json | jq .$idx_key )
+      "CONTIG_VCFS": $( gsutil cat $contig_json | jq --arg key "$vcf_key" '[.[$key]] | flatten' ),
+      "CONTIG_VCF_IDXS": $( gsutil cat $contig_json | jq --arg key "$idx_key" '[.[$key]] | flatten' )
     }
 }
 EOF
