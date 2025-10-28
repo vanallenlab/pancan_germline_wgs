@@ -44,7 +44,10 @@ RUN apt-get clean && \
       libpadwalker-perl \
       libtest-warn-perl \
       libipc-run-perl \
-      cpanminus
+      cpanminus \
+      libpng-dev \
+      libfreetype6-dev \
+      uuid-dev
 
 # Install additional Perl modules needed for VEP + plugins
 RUN cpanm --quiet --notest \
@@ -66,11 +69,15 @@ ARG HTSLIB_VERSION=1.18
 RUN cd /opt/ && \
     wget https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2 && \
     tar xjf htslib-${HTSLIB_VERSION}.tar.bz2 && \
+    rm htslib-${HTSLIB_VERSION}.tar.bz2 && \
     cd htslib-${HTSLIB_VERSION} && \
-    ./configure && \
+    ./configure --prefix=/opt/htslib-1.18 --enable-shared && \
     make && \
     make install && \
     cd -
+ENV CFLAGS="-I/opt/htslib-1.18/include"
+ENV LDFLAGS="-L/opt/htslib-1.18/lib"
+ENV LD_LIBRARY_PATH="/opt/htslib-1.18/lib:$LD_LIBRARY_PATH"
 
 # Clone Ensembl repos
 RUN cd /opt && \
@@ -79,10 +86,10 @@ RUN cd /opt && \
     git clone https://github.com/Ensembl/Bio-DB-HTS.git && \
     git clone https://github.com/Ensembl/ensembl-vep.git && \
     cd -
-
 ENV PERL5LIB=/opt/ensembl/modules:/opt/ensembl-test/modules:/opt/Bio-DB-HTS/lib
 
 # Install Bio::DB::HTS
+ENV HTSLIB_DIR=/opt/htslib-1.18
 RUN cd /opt/Bio-DB-HTS && \
     perl Build.PL && \
     ./Build && \
@@ -92,8 +99,44 @@ RUN cd /opt/Bio-DB-HTS && \
     perl -e "use Bio::DB::HTS" && \
     cd -
 
+# Install libBigWig and UCSC Kent source
+RUN cd /opt && \
+    git clone https://github.com/dpryan79/libBigWig.git && \
+    cd libBigWig && \
+    make && \
+    make install && \
+    cd -
+RUN cd /opt && \
+    wget http://hgdownload.cse.ucsc.edu/admin/jksrc.zip && \
+    unzip jksrc.zip && \
+    rm jksrc.zip && \
+    cd kent/src/lib && \
+    CXXFLAGS=-fPIC CFLAGS=-fPIC CPPFLAGS=-fPIC make && \
+    cd - 
+
+# Ensure the Kent library is located where expected by Bio::DB::BigWig
+RUN if [ /opt/kent/src/lib/$MACHTYPE ]; then \
+        mkdir /opt/kent/src/lib/$MACHTYPE; \
+        cp $( find /opt/kent/src/lib/ -name "jkweb.a" ) /opt/kent/src/lib/$MACHTYPE/ ; \
+    fi
+ENV KENT_SRC=/opt/kent/src
+
+# Install Bio::DB::Big with cpanm
+RUN cpanm --quiet --notest Bio::DB::Big
+
+# install Bio::DB::BigWig via manual CPAN tarball build (non-interactive)
+RUN cd /opt && \
+    wget http://www.cpan.org/authors/id/L/LD/LDS/Bio-BigFile-1.07.tar.gz && \
+    tar xzf Bio-BigFile-1.07.tar.gz && \
+    cd Bio-BigFile-1.07 && \
+    perl Build.PL  --extra_linker_flags="-L${HTSLIB_DIR} -lhts" && \
+    ./Build && \
+    ./Build install && \
+    cd - && \
+    rm -rf /opt/Bio-BigFile-1.07 /opt/Bio-BigFile-1.07.tar.gz
+
 # Install VEP
-ARG VEP_VERSION=113
+ARG VEP_VERSION=115
 RUN cd /opt/ensembl-vep && \
     perl INSTALL.pl \
       --NO_HTSLIB \

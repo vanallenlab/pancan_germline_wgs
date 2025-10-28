@@ -744,6 +744,30 @@ code/scripts/manage_chromshards.py \
   --max-attempts 3
 
 
+#####################
+# Curate QC targets #
+#####################
+
+# Reaffirm staging directory
+staging_dir=staging/qc_targets
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# Estimate number of variants per genome in gnomAD for the necessary contigs
+for k in $( seq 1 22 ) X Y; do
+  gsutil cat \
+    gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/chr$k/gnomad.v4.1.chr$k.*.sites.bed.gz
+done | gunzip -c \
+| code/scripts/estimate_vpg_from_sites.py \
+| fgrep -v "#" \
+| awk -v OFS="\t" '{ print "variants_per_genome."$1":median", $2 }' \
+> $staging_dir/dfci-g2c.v1.qc_targets.tsv
+
+# Copy QC targets to central bucket for reference by Cromwell
+gsutil -m cp \
+  $staging_dir/dfci-g2c.v1.qc_targets.tsv \
+  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/
+
+
 ##########################################
 # Analyze & visualize initial QC metrics #
 ##########################################
@@ -859,10 +883,14 @@ cat << EOF | python -m json.tool > cromshell/inputs/PlotInitialVcfQcMetrics.inpu
   "PlotVcfQcMetrics.common_snv_beds": $( collapse_txt $staging_dir/common_snvs_bed.uris.list ),
   "PlotVcfQcMetrics.common_indel_beds": $( collapse_txt $staging_dir/common_indels_bed.uris.list ),
   "PlotVcfQcMetrics.common_sv_beds": $( collapse_txt $staging_dir/common_svs_bed.uris.list ),
-  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:1832a16",
-  "PlotVcfQcMetrics.linux_docker": "ubuntu:plucky-20251001",
+  "PlotVcfQcMetrics.custom_qc_target_metrics": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/qc-filtering/initial-qc/dfci-g2c.v1.qc_targets.tsv",
+  "PlotVcfQcMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:8c7214e",
   "PlotVcfQcMetrics.output_prefix": "dfci-g2c.v1.initial_qc",
   "PlotVcfQcMetrics.peak_ld_stat_tsvs": $( collapse_txt $staging_dir/ld_stats.uris.list ),
+  "PlotVcfQcMetrics.PlotSiteBenchmarking.mem_gb": 32,
+  "PlotVcfQcMetrics.PlotSiteBenchmarking.n_cpu": 8,
+  "PlotVcfQcMetrics.PlotSiteMetrics.mem_gb": 32,
+  "PlotVcfQcMetrics.PlotSiteMetrics.n_cpu": 8,
   "PlotVcfQcMetrics.ref_af_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_af_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_size_distribution_tsvs": $( collapse_txt $staging_dir/gnomAD_size_distribution.uris.list ),
   "PlotVcfQcMetrics.ref_cohort_prefix": "gnomAD_v4.1",

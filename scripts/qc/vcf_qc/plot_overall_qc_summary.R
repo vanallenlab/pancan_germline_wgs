@@ -226,15 +226,15 @@ get.inter <- function(ss, vc, vcs){
   rownames(inter.df) <-
     unlist(sapply(apply(inter.df[, c("analysis", "measure")], 1, paste, collapse="."),
                   function(qstr){
-                    sapply(c("snv", "indel", "sv"), function(vc2){
-                      if(grepl(vc, qstr) & grepl(vc2, qstr)){
-                        if(endsWith(qstr, "heterozygosity_cor.r2")){
-                          return(paste(vc2, "heterozyg_cor", sep="."))
-                        }else if(endsWith(qstr, "count_cor.r2")){
-                          return(paste(vc2, "count_cor", sep="."))
-                        }
-                      }
-                    })
+                    qstr.prefix <- unlist(strsplit(qstr, split=".", fixed=T))[1]
+                    vcs.in.qstr <- unique(unlist(strsplit(qstr.prefix, split="_vs_")))
+                    vc2.in.qstr <- setdiff(vcs.in.qstr, vc)
+                    out.prefix <- if(length(vc2.in.qstr) > 0){vc2.in.qstr[1]}else{vc}
+                    if(endsWith(qstr, "heterozygosity_cor.r2")){
+                      return(paste(out.prefix, "heterozyg_cor", sep="."))
+                    }else if(endsWith(qstr, "count_cor.r2")){
+                      return(paste(out.prefix, "count_cor", sep="."))
+                    }
                   }))
 
   return(inter.df)
@@ -356,7 +356,7 @@ get.layout <- function(ss, margin.vex=0.075, do.layout=TRUE,
   vcs <- names(ss)[which(sapply(ss, function(ss.l){nrow(do.call("rbind", ss.l)) > 0}))]
   groups <- unique(unlist(lapply(ss, names)))
   rows <- lapply(groups, function(g){
-    unique(unlist(sapply(ss, function(ss.l){
+    unique(unlist(lapply(ss, function(ss.l){
       rownames(ss.l[[g]])
     })))
   })
@@ -602,7 +602,7 @@ plot.ss.bars <- function(ss, vc, annotate.targets=TRUE, prev.ss=NULL,
              lend="butt", lwd=1, col=MixColor(bar.color, "black"))
     label.widths <- bar.vals
     sapply(1:length(bar.vals), function(x){
-      bar.label <- clean.numeric.labels(10^bar.vals[x])
+      bar.label <- clean.numeric.labels(10^bar.vals[x], min.label.length=2)
       if(is.na(bar.vals[x]) | is.infinite(bar.vals[x])){
         return()
       }
@@ -731,11 +731,11 @@ plot.ss <- function(ss, out.prefix, prev.ss=NULL, ref.title=NULL,
       # Set consistent filename suffix
       out.suffix <- paste(if(do.target){"w_targets"}else{NULL},
                           if(do.prev){"w_previous"}else{NULL},
-                          "pdf", sep=".")
-      out.suffix <- gsub("^\\.", "", gsub("[\\.]+", ".", out.suffix))
+                          sep=".")
+      out.suffix <- gsub("\\.$", "", gsub("^\\.", "", gsub("[\\.]+", ".", out.suffix)))
 
       # Plot left axis titles
-      pdf(paste(out.prefix, "legend", out.suffix, sep="."),
+      pdf(paste(out.prefix, "legend", out.suffix, "pdf", sep="."),
           height=pdf.height, width=left.width)
       plot.left.labels(ss, ref.title, sb_prefixes, sb_titles,
                        add.previous=do.prev, add.target=do.target)
@@ -782,14 +782,14 @@ parser$add_argument("--out-prefix", metavar="path", type="character",
 args <- parser$parse_args()
 
 # # DEV (SINGLE CLASS)
-# args <- list("stats" = "~/Downloads/dfci-ufc.sv.v1.QcPostFilterGenotypes.all_qc_summary_metrics.tsv",
-#              "previous_stats" = "~/Downloads/dfci-ufc.sv.v1.InitialVcfQcMetrics.stats/dfci-ufc.sv.v1.InitialVcfQcMetrics.all_qc_summary_metrics.tsv",
-#              "site_ref_prefix" = "gnomad-sv_v4.1",
+# args <- list("stats" = "~/scratch/dfci-g2c.v1.initial_qc.all_qc_summary_metrics.tsv",
+#              "previous_stats" = NULL,
+#              "site_ref_prefix" = "gnomad_v4.1",
 #              "site_ref_title" = "gnomAD v4.1",
 #              "sample_benchmarking_prefix" = c("external_srwgs", "external_lrwgs"),
 #              "sample_benchmarking_title" = c("External srWGS", "External lrWGS"),
-#              "custom_targets" = "~/scratch/custom_targets.test.tsv",
-#              "out_prefix" = "~/scratch/ufc_sv.postFilterGT.test")
+#              "custom_targets" = "~/scratch/dfci-g2c.v1.qc_targets.tsv",
+#              "out_prefix" = "~/scratch/dfci-g2c.v1.initial_qc")
 
 # Load and organize summary stats
 ss <- load.ss(args$stats, args$site_ref_prefix, args$sample_benchmarking_prefix)
