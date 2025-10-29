@@ -11,9 +11,9 @@
 FROM condaforge/mambaforge:24.9.2-0
 MAINTAINER "Ryan Collins <Ryan_Collins@dfci.harvard.edu>"
 
-# Install git
+# Install git & curl
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-upgrade --no-install-recommends git
+    apt-get -qqy install --no-upgrade --no-install-recommends git curl unzip
 
 # Clone pancan_germline_wgs repo and check out specified hash
 # Note that this is only used for pulling the version-tracked conda environment .yaml

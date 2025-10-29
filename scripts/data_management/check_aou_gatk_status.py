@@ -15,7 +15,7 @@ Check completion status of a variant calling workflow for a single All of Us sam
 import argparse
 import pandas as pd
 import subprocess
-from g2cpy import check_workflow_status, check_gcp_uris, collect_gcp_garbage, relocate_uri
+from g2cpy import check_workflow_status, check_gcp_uris, collect_workflow_trash, relocate_uri
 from os import getenv, path
 from re import sub
 from sys import stdout, stderr
@@ -228,31 +228,6 @@ def relocate_outputs(workflow_id, bucket, staging_bucket, sid, mode,
                 relocate_uri(src_uri + '.tbi', dest_uri + '.tbi', action, verbose)
 
 
-def collect_trash(workflow_ids, bucket, dumpster_path, mode, sample_id, 
-                  staging_bucket):
-    """
-    Add all execution files associated with execution of workflow_ids to the list
-    of files to be deleted
-    """
-
-    # Write gsutil-compliant search strings for identifying files to delete
-    ex_fmt = '{}/cromwell/execution/{}/{}/**'
-    ex_uris = [ex_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
-    out_fmt = '{}/cromwell/outputs/{}/{}/**'
-    out_uris = [out_fmt.format(bucket, wdl_names[mode], wid) for wid in workflow_ids]
-    all_uris = ex_uris + out_uris
-
-    # For reblocked gVCFs *only*, add staged raw gVCF to dumpster
-    # As of Feb 7, 2024, it was determined that only reblocked gVCFs are necessary
-    if mode == 'gvcf-pp':
-        raw_gvcf_uri = formats['gatk-hc']['dest'].format(staging_bucket, sample_id)
-        all_uris += [raw_gvcf_uri, raw_gvcf_uri + '.tbi']
-
-    # Find list of all files present in execution or output buckets
-    # and mark those files for deletion by writing their URIs to the dumpster
-    collect_gcp_garbage(all_uris, dumpster_path=dumpster_path)
-
-
 def main():
     """
     Main block
@@ -372,8 +347,8 @@ def main():
                 # files to output bucket and mark all temporary files for deletion
                 if workflow_status == 'succeeded':
                     relocate_outputs(wid, bucket, staging_bucket, sid, args.mode)
-                    collect_trash(wids, bucket, args.dumpster, args.mode, 
-                                  args.sample_id, staging_bucket)
+                    collect_workflow_trash(wids, bucket, args.dumpster, args.mode, 
+                                           args.sample_id, staging_bucket)
                     status = 'staged'
                     break
 

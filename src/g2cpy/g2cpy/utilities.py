@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2025-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
+"""
+Generic small / utility functions
+"""
+
+
+import hashlib
+import math
+from collections.abc import Iterable
+
+
+base62_alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+
+def astype_default(x, type_fxn, default=None):
+    """
+    Performs "soft" fault-tolerant type coercion of `x` to type `type_fxn()`
+    Any values that fail to be coerced by `type_fxn()` will be assigned `default`
+    """
+
+    try:
+        return type_fxn(x)
+    except (ValueError, TypeError):
+        return type_fxn(default)
+
+
+def baseX_encode(num, alphabet=base62_alphabet):
+    """
+    Encodes an integer in a custom Base alphabet
+    Taken partially from https://stackoverflow.com/questions/1119722/base-62-conversion
+    """
+    
+    if num == 0:
+        return alphabet[0]
+
+    arr = []
+    arr_append = arr.append
+    _divmod = divmod
+    base = len(alphabet)
+
+    while num:
+        num, rem = _divmod(num, base)
+        arr_append(alphabet[rem])
+    
+    arr.reverse()
+    
+    return ''.join(arr)
+
+
+def hash_string(input, out_length, alphabet=base62_alphabet):
+    """
+    Custom encoding & hashing function for any input string
+    Designed to generate variant ID suffixes, but can theoretically be used for any string
+    """
+
+    base = len(alphabet)
+    M = base ** out_length
+    digest =  hashlib.sha256(input.encode('utf-8')).digest()
+    num = int.from_bytes(digest, 'big')
+    idx = num % M
+    encoded = baseX_encode(idx, alphabet)
+    
+    return encoded.rjust(out_length, alphabet[0])
+
+
+def recursive_flatten(S):
+    """
+    Recursively flatten all elements of an input iterable, S
+    """
+
+    for item in S:
+        if isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
+            yield from recursive_flatten(item)
+        else:
+            yield item
+

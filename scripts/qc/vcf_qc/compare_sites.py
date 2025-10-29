@@ -19,6 +19,7 @@ import pandas as pd
 import pybedtools as pbt
 from Bio import bgzf
 from collections import Counter
+from g2cpy import astype_default, bgzip, make_tabix_index
 from os import remove
 from re import sub
 
@@ -49,8 +50,9 @@ def populate_nodes(hits_g, bt, prefix=''):
     for vt in bt:
         vid = prefix + vt.name
         hits_g.add_node(vid, chrom=vt.chrom, pos=int(vt.start), end=int(vt.end), 
-                        vc=vt.fields[4], vsc=vt.fields[5], size=int(vt.fields[6]),
-                        af=float(vt.fields[8]))
+                        vc=vt.fields[4], vsc=vt.fields[5], 
+                        size=astype_default(vt.fields[6], int, np.nan),
+                        af=astype_default(vt.fields[8], float, np.nan))
 
     return hits_g
 
@@ -78,8 +80,35 @@ def find_exact_hits(hits_g):
     return hits_g
 
 
+def expand_insertions(feat, hits_g, prefix, expand=True):
+    """
+    Helper function to expand insertions so that their interval size is at least
+    as large as their reported SVLEN
+    """
+    
+    if not expand:
+        return feat
+
+    vid = prefix + feat.name
+    vsc = hits_g.nodes[vid].get('vsc')
+
+    if vsc not in vsc_matches['INS']:
+        return feat
+
+    rep_size = hits_g.nodes[vid].get('size', 0)
+    int_size = feat.length
+    if rep_size > int_size:
+        int_mid = np.mean([feat.start, feat.end])
+        half_size = rep_size / 2
+        feat.start = int(np.max([0, np.floor(int_mid - half_size)]))
+        feat.end = int(np.ceil(int_mid + half_size))
+
+    return feat
+
+
 def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10, 
-                      max_size_diff=3.0, max_bkpt_rel=0.5, pad=1):
+                      max_size_diff=3.0, max_bkpt_rel=0.5, pad=1,
+                      expand_ins=True):
     """
     Search for matching variants between two pbt.BedTool objects based on overlap
     """
@@ -90,9 +119,15 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
     big_nids = [nid for nid in hits_g.nodes() 
                 if hits_g.nodes[nid].get('size', 0) >= min_size]
     a_bt = a_bt.filter(lambda x: 'a_' + x[3] in big_nids).\
-                cut(range(6)).slop(b=pad, g=genome)
+                cut(range(6)).\
+                slop(b=pad, g=genome).\
+                each(expand_insertions, hits_g=hits_g, prefix='a_', 
+                     expand=expand_ins)
     b_bt = b_bt.filter(lambda x: 'b_' + x[3] in big_nids).\
-                cut(range(6)).slop(b=pad, g=genome)
+                cut(range(6)).\
+                slop(b=pad, g=genome).\
+                each(expand_insertions, hits_g=hits_g, prefix='b_', 
+                     expand=expand_ins)
 
     # Find overlaps, filter, and add qualifying edges to graph
     for ovr in a_bt.intersect(b_bt, wao=True, f=ro, r=True):
@@ -103,8 +138,8 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
 
         # Get left variant info
         nid_a = 'a_' + ovr[3]
-        start_a = hits_g.nodes[nid_a].get('pos')
-        end_a = hits_g.nodes[nid_a].get('end')
+        start_a = int(ovr[1])
+        end_a = int(ovr[2])
         size_a = hits_g.nodes[nid_a].get('size', 0)
         vsc_a = hits_g.nodes[nid_a].get('vsc')
         af_a = hits_g.nodes[nid_a].get('af')
@@ -133,13 +168,13 @@ def find_overlap_hits(hits_g, a_bt, b_bt, genome, ro=0.1, min_size=10,
             continue
 
         # Compute Euclidean distance between variants and update hits graph
-        e_d = node_distance([start_a, start_b], [end_a, end_b], [af_a, af_b])
+        e_d = node_distance([start_a, start_b], [end_a, end_b], [af_a, af_b], [vsc_a, vsc_b])
         hits_g.add_edge(nid_a, nid_b, dist=e_d)
 
     return hits_g
 
 
-def node_distance(starts, ends, afs):
+def node_distance(starts, ends, afs, vscs):
     """
     Compute the distance between two variants
 
@@ -148,6 +183,7 @@ def node_distance(starts, ends, afs):
     B. normalized left breakpoint distance (distance between starts / total bp spanned by both variants)
     C. normalized right breakpoint distance (distance between ends / total bp spanned by both variants)
     D. allele frequency difference
+    E. exact match between variant subclasses (0 if exact match, 1 if else)
     """
 
     bp_span = np.abs(np.max(ends) - np.min(starts))
@@ -160,7 +196,10 @@ def node_distance(starts, ends, afs):
 
     af_d = np.abs(afs[0] - afs[1])
 
-    return np.sqrt(((1 - ovr_jac) ** 2) + (lbp_d ** 2) + (rbp_d ** 2) + (af_d ** 2))
+    vscs = [x.lower() for x in vscs]
+    vsc_d = int(vscs[0] != vscs[1])
+
+    return np.sqrt(((1 - ovr_jac) ** 2) + (lbp_d ** 2) + (rbp_d ** 2) + (af_d ** 2) + (vsc_d ** 2))
 
 
 def get_distances(hits_g, node_id):
@@ -184,6 +223,9 @@ def prune_hits(hits_g):
     node_ids = hits_g.nodes()
 
     n_edges = {nid : len(hits_g.edges(nid)) for nid in node_ids}
+
+    if len(n_edges) == 0:
+        return hits_g
 
     # Loop and prune edges until all nodes are first-degree
     while max(n_edges.values()) > 1:
@@ -230,7 +272,7 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
 
     # Simplified output line:
     # chrom, start, end, id, vc, vsc, size, af, match_id, match_af, match_dist
-    bed_line_fmt = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2e}\t{}\t{:.2e}\t{:.2}'
+    bed_line_fmt = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2e}\t{}\t{}\t{}'
 
     # Gather BED 
     bt_strs = []
@@ -246,18 +288,15 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
         # Gather matching variant information
         edges = list(hits_g.edges(nid))
         if len(edges) == 0:
-            match_id = '.'
-            match_af = np.nan
-            match_dist = np.nan
-        elif len(edges) == 1:
-            match_nid = list(set(edges[0]).difference(set([nid])))[0]
-            match_id = sub('^' + ref_prefix, '', match_nid)
-            match_af = hits_g.nodes[match_nid].get('af')
-            match_dist = hits_g[nid][match_nid]['dist']
+            match_id, match_af, match_dist = ['NA'] * 3
         else:
-            msg = 'Node {} from has more than one edge after pruning. ' + \
-                  'This indicates a bug that needs to be fixed. Exiting.'
-            exit(msg.format(nid))
+            if len(edges) > 1:
+                match_nid = list(get_distances(hits_g, nid).keys())[0]
+            else:
+                match_nid = list(set(edges[0]).difference(set([nid])))[0]
+            match_id = sub('^' + ref_prefix, '', match_nid)
+            match_af = '{:.2e}'.format(hits_g.nodes[match_nid].get('af'))
+            match_dist = '{:.2}'.format(hits_g[nid][match_nid]['dist'])
 
         # Format output line and add to bt collector
         bed_line_vals = [ninfo[k] for k in 'chrom pos end vc vsc size af'.split()]
@@ -269,7 +308,7 @@ def format_output_bed(hits_g, target_prefix, ref_prefix, genome):
     return pbt.BedTool('\n'.join(bt_strs), from_string=True).sort(g=genome)
 
 
-def compress_overlap_distribs(bt, mode='size', max_size=1000000, 
+def compress_overlap_distribs(bt, mode='size', max_size=1000000, min_af=1e-05,
                               af_d_breaks=[0.01, 0.1, 0.5, 1]):
     """
     Compress variant overlap information contained in a pbt.BedTool 
@@ -324,7 +363,6 @@ def compress_overlap_distribs(bt, mode='size', max_size=1000000,
     elif mode == 'af':
 
         # Assign each variant to an AF bin
-        min_af = np.nanmin(df.af)
         af_le = np.array([10 ** k for k in range(int(np.ceil(np.log10(min_af))), 1, 1)])
         df['af_bin'] = df.af.apply(lambda x: np.argmax(x <= af_le))
 
@@ -364,8 +402,8 @@ def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, genome,
     bed_out = out_prefix + '.sites.bed'
     bt = bt.saveas(bed_out, trackline=bed_header)
     if gzip:
-        bt = bt.tabix(force=True)
-        remove(bed_out)
+        bt = pbt.BedTool(bgzip(bed_out, return_new_fn=True))
+        make_tabix_index(bed_out + '.gz')
 
     # Subset outer join to common sites and write common subset to file, if optioned
     if common_af is not None:
@@ -373,8 +411,8 @@ def write_outputs(hits_g, out_prefix, query_prefix, ref_prefix, genome,
         common_bt = bt.filter(lambda f: float(f[7]) >= common_af).saveas()
         common_bt = common_bt.saveas(common_bed_out, trackline=bed_header)
         if gzip:
-            common_bt = common_bt.tabix(force=True)
-            remove(common_bed_out)
+            common_bt = pbt.BedTool(bgzip(common_bed_out, return_new_fn=True))
+            make_tabix_index(common_bed_out + '.gz')
 
     # Compress outer join by variant class, subclass, and size
     size_d = compress_overlap_distribs(bt, mode='size')
@@ -423,11 +461,22 @@ def main():
                         'left or right breakpoints to tolerate for --mode ' +
                         '"overlap" or "both". Specified as a fraction of larger ' +
                         'variant total size. [default: 0.5]')
-    parser.add_argument('--overlap-pad', type=int, default=1, metavar='int', 
+    parser.add_argument('--overlap-pad', type=int, default=0, metavar='int', 
                         help='Distance to pad each variant for --mode "overlap" ' +
                         'or "both". Does not alter variant coordinates or size ' +
                         'estimates; helps for 0bp/1bp SV intervals like insertions ' +
-                        '[default: 1]')
+                        '[default: 0]')
+    parser.add_argument('--no-expand-insertions', action='store_true', 
+                        help='Do not expand insertions for --mode "overlap". ' +
+                        'By default, any insertion variant with reported interval ' +
+                        'smaller than its reported variant size will have its ' +
+                        'interval uniformly expanded to equal its reported size.')
+    parser.add_argument('--one-to-many', action='store_true', help='Do not prune ' +
+                        'overlaps to require strict one-to-one matches between ' +
+                        '-a and -b. Instead, report the best match for each ' +
+                        'variant, even if that matching variant also matches ' +
+                        'other variants in the same file. [default: one-to-one ' +
+                        'matches only]')
     parser.add_argument('--common-af', type=float, help='AF cutoff for common ' +
                         'variants. If provided, will generate separate sites.bed ' +
                         'output files restricted to common variants. [default: ' +
@@ -462,10 +511,12 @@ def main():
                                  args.min_overlap_var_size, 
                                  args.max_overlap_size_diff,
                                  args.max_overlap_bkpt_rel_dist, 
-                                 args.overlap_pad)
+                                 args.overlap_pad,
+                                 not args.no_expand_insertions)
 
-    # Process candidate matches to generate 1:1 mapping of hits
-    hits = prune_hits(hits)
+    # Process candidate matches to generate 1:1 mapping of hits, unless specified otherwise
+    if not args.one_to_many:
+        hits = prune_hits(hits)
 
     # Write output files for left outer join  (LoJ; all A sites, with matching B info)
     write_outputs(hits, args.output_prefix + '.loj', 'a_', 'b_', args.genome,

@@ -9,26 +9,40 @@
 
 # It is based on the primary sv-pipeline image from GATK-SV, which is available here:
 # us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline
-ARG BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-01-14-v1.0.1-88dbd052
+ARG BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-05-01-v1.0.3-85054e07
 FROM $BASE_IMAGE as base
 
 # Aliases for convenience
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
 
-# Install git
-RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-upgrade --no-install-recommends git
+# Install plink2
+RUN curl -sSL https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_x86_64_20250515.zip -o plink2.zip && \
+    unzip plink2.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/plink2 && \
+    rm plink2.zip && \
+    plink2 --version
 
-# Clone pancan_germline_wgs repo and check out specified hash
-ARG REPO_HASH=main
-RUN git clone \
-    https://github.com/vanallenlab/pancan_germline_wgs.git \
-    opt/pancan_germline_wgs \
-    --branch=$REPO_HASH
+# Install git & lftp
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
+        git \
+        lftp && \
+        apt-get clean
 
 # Install missing R libraries as necessary
 RUN Rscript -e 'install.packages("argparse", repos="https://cran.rstudio.com")'
+
+# Clone pancan_germline_wgs repo, check out specified hash, and install helper python library
+ARG G2C_TAG=main
+RUN git clone \
+    https://github.com/vanallenlab/pancan_germline_wgs.git \
+    opt/pancan_germline_wgs && \
+    cd opt/pancan_germline_wgs && \
+    git pull && \
+    git checkout $G2C_TAG && \
+    cd -
+RUN pip install opt/pancan_germline_wgs/src/g2cpy
 
 # Launch bash as entrypoint
 CMD ["/bin/bash"]

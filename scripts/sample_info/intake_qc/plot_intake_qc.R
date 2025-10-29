@@ -20,27 +20,6 @@ require(vioplot, quietly=TRUE)
 G2CR::load.constants("all")
 
 
-##################
-# Data Functions #
-##################
-# Load & clean QC dataframe
-load.qc.df <- function(tsv.in){
-  qc.df <- read.table(tsv.in, check.names=F, header=T, sep="\t", comment.char="")
-  colnames(qc.df)[1] <- gsub("^#", "", colnames(qc.df)[1])
-  rownames(qc.df) <- qc.df$G2C_id
-  qc.df$G2C_id <- NULL
-  qc.df$cohort_type <- remap(qc.df$cohort, cohort.type.map)
-  qc.df$single_cancer <- qc.df$cancer
-  qc.df$single_cancer[grepl(";", qc.df$single_cancer, fixed=T)] <- "multiple"
-  bool.cols <- grep("_qc_pass", colnames(qc.df))
-  if(length(bool.cols) > 0){
-    qc.df[, bool.cols] <- apply(qc.df[, bool.cols], 2, remap,
-                                map=c("True" = TRUE, "False" = FALSE))
-  }
-  return(qc.df)
-}
-
-
 ######################
 # Plotting Functions #
 ######################
@@ -145,7 +124,7 @@ qc.grid <- function(qc.df, primary.variable, top.axes=TRUE, x.tick.len=-0.025,
                     top.y.margin=2.5, inner.margin=0.3, override.layout=FALSE){
   # Configure oscillating greyscale for cohort colors on the fly
   cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
-  cohort.colors <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+  cohort.colors <- greyscale.palette(length(cohort.k), oscillate=TRUE, mode="dfci")
   names(cohort.colors) <- names(cohort.k)
 
   #Filter data, if needed
@@ -347,13 +326,18 @@ qc.grid <- function(qc.df, primary.variable, top.axes=TRUE, x.tick.len=-0.025,
         ridge.border <- sapply(cancer.palettes[prim.order], function(v){v["dark2"]})
         median.color <- sapply(cancer.palettes[prim.order], function(v){v["light2"]})
       }else{
-        ridge.fill <- ridge.light <- ridge.border <- median.color <- NULL
+        ridge.pal <- greyscale.palette(7, mode="dfci")
+        ridge.border <- ridge.pal[1]
+        ridge.fill <- ridge.pal[3]
+        ridge.light <- ridge.pal[5]
+        median.color <- ridge.pal[7]
       }
       ridgeplot(s.v, x.title=s.title, x.axis.side=if(top.axes){3}else{NA},
                 max.x.ticks=4, x.tick.len=x.tick.len, xlims=xlims, y.axis=FALSE,
                 bw.adj=0.5, yaxs="i", hill.overlap=-0.1, hill.bottom=0.1,
                 border.lwd=1, fill=ridge.fill, fancy.light.fill=ridge.light,
-                border=ridge.border, fancy.median.color=median.color,
+                border=ridge.border, fancy.quartile.color=median.color,
+                fancy.quartile.lend="butt", fancy.quartile.lwd=1,
                 parmar=c(0.1, inner.margin+0.1, top.y.margin, inner.margin+0.1))
     }else{
       prep.plot.area(0:1, 0:1, rep(0, 4))
@@ -389,7 +373,7 @@ args <- parser$parse_args()
 #              "out_prefix" = "~/scratch/dfci-g2c.intake_qc.local_test")
 
 # Load data
-qc.df <- load.qc.df(args$qc_tsv)
+qc.df <- load.sample.qc.df(args$qc_tsv)
 
 
 # Set shared barplot parameters
@@ -398,7 +382,7 @@ fail.bar.pdf.dims <- c(4.5, 4.5)
 cancer.key.cols <- cancer.colors
 names(cancer.key.cols) <- cancer.names[names(cancer.colors)]
 cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
-cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE, mode="dfci")
 names(cohort.cols) <- cohort.names.short[names(cohort.k)]
 cohort.key.cols <- cohort.cols
 
@@ -459,10 +443,10 @@ if(!is.null(args$pass_column) & length(args$pass_column) > 0){
 cancer.k <- sort(table(qc.df$single_cancer), decreasing=TRUE)
 cancer.key.cols <- cancer.key.cols[cancer.names[names(cancer.k)]]
 cohort.k <- sort(table(qc.df$simple_cohort), decreasing=TRUE)
-cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE)
+cohort.cols <- greyscale.palette(length(cohort.k), oscillate=TRUE, mode="dfci")
 names(cohort.cols) <- cohort.names.short[names(cohort.k)]
 cohort.type.k <- sort(table(qc.df$cohort_type), decreasing=TRUE)
-cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE)
+cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE, mode="dfci")
 names(cohort.type.cols) <- cohort.type.names.short[names(cohort.type.k)]
 
 
@@ -585,7 +569,7 @@ largest.cohort <- names(cohort.k)[1]
 cohort.bar.subdfs <- list(qc.df[which(qc.df$simple_cohort == largest.cohort), ],
                           qc.df[which(qc.df$simple_cohort != largest.cohort), ])
 cohort.type.k <- sort(table(qc.df$cohort_type), decreasing=TRUE)
-cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE)
+cohort.type.cols <- greyscale.palette(length(cohort.type.k), oscillate=TRUE, mode="dfci")
 names(cohort.type.cols) <- cohort.type.names.short[names(cohort.type.k)]
 all.cohorts <- names(sort(table(qc.df$cohort), decreasing=TRUE))
 cohort.key.cols <- cohort.type.cols[cohort.type.names.short[cohort.type.map[all.cohorts]]]

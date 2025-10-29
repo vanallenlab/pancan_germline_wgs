@@ -158,7 +158,7 @@ module_submission_routine_all_batches() {
   if [ $module_idx == "14A" ]; then
     batches_list="batch_info/dfci-g2c.gatk-sv.batches.list"
   else
-    batches_list="batch_info/dfci-g2c.gatk-sv.batches.w$WN.list"
+    batches_list="batch_info/dfci-g2c.gatk-sv.batches.$WN.list"
   fi
 
   _count_remaining() {
@@ -415,7 +415,7 @@ EOF
       if [ $n_prev_subs -gt 0 ]; then
         last_sub_id=$( tail -n1 cromshell/job_ids/$BATCH.$sub_name.job_ids.list )
         check_cromwell_return_codes \
-          $WORKSPACE_BUCKET/cromwell/execution/$module_name/$last_sub_id \
+          $WORKSPACE_BUCKET/cromwell-execution/$module_name/$last_sub_id \
         > $sub_dir/$BATCH.$last_sub_id.fail_rcs.list
   
         # gCNV case mode
@@ -1142,7 +1142,7 @@ EOF
         --name $sub_name \
         --status-tsv cromshell/progress/dfci-g2c.v1.$sub_name.progress.tsv \
         --workflow-id-log-prefix "dfci-g2c.v1" \
-        --gate 45 \
+        --outer-gate 45 \
         --max-attempts $max_attempts
       ;;
 

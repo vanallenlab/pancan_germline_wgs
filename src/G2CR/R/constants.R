@@ -57,7 +57,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
   cancer.colors["control"] <- "#D6D6D6"
   cancer.colors["multiple"] <- cancer.colors["other"] <- cancer.colors["pancan"]
   cancer.colors[c("unknown", "not_specified", "NA")] <- "gray95"
-  cancer.colors[c("pancan", "all")] <- "#C43825"
+  cancer.colors[c("pancan", "all", "case")] <- "#C43825"
 
   # Visualize cancer colors to screen, if optioned
   if(plot.colors){
@@ -103,7 +103,7 @@ create.cancer.colors <- function(cancers, n.shades=2, saturation.range=c(0.3, 0.
 #'
 #' Load a subset of constants used throughout G2C
 #'
-#' @param susbet Vector of constant groups to load. See `Details` for options. \[default: load all constants\]
+#' @param subset Vector of constant groups to load. See `Details` for options. \[default: load all constants\]
 #' @param envir Environment passed to [base::assign] \[default: .GlobalEnv\]
 #'
 #' @details Recognized values for `subset` include:
@@ -172,15 +172,15 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                   "missense" = "#FF6103",
                   "lof" = "#9D1309")
   DFCI.colors <- c("darkblue" = "#003354",
-                   "midblue" = "#02679A",
-                   "lightblue" = "#3AC6F3",
+                   "midblue" = "#00629B",
+                   "lightblue" = "#41B6E6",
                    "paleblue" = "#D4EEFF",
-                   "yellow" = "#F89820")
+                   "yellow" = "#FFA300")
   var.class.colors <- c("snv" = "#D9C9AE",
                         "indel" = "#A69C88",
                         "sv" = "#736D61")
-  snv.colors <- c("ti" = "#A1BDE6",
-                  "tv" = "#E6A1B0")
+  snv.colors <- c("ti" = "#BCE3A8",
+                  "tv" = "#8ABD71")
   indel.colors <- c("ins" = "#65A1C7",
                     "del" = "#CC6C62")
   sv.colors <- c("DEL" = "#AD574C",
@@ -251,6 +251,7 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                         "STU" = SAS.colors[["light2"]]),
     "var.class.colors" = var.class.colors,
     "var.subclass.colors" = c(snv.colors, indel.colors, sv.colors),
+    "var.ref.color" = "#99ADBA",
     "snv.colors" = snv.colors,
     "indel.colors" = indel.colors,
     "sv.colors" = sv.colors,
@@ -266,7 +267,9 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                           "parent-child" = "#FF6103",
                           "siblings" = "#FFB14D",
                           "unrelated" = "#AAAAAA"),
-    "annotation.color" = "gray70")
+    "annotation.color" = "gray75",
+    "boolean.colors" = c("TRUE" = "#59D05B",
+                         "FALSE" = "#f76f57"))
 
   # Define scales
   logscale.major <- 10^(-10:10)
@@ -356,10 +359,11 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
     "var.class.names" = c("snv" = "Single nucleotide variant",
                           "indel" = "Small insertion/deletion",
                           "sv" = "Structural variant"),
-    "var.class.abbrev" = c("snv" = "SNV",
-                           "indel" = "Indel",
-                           "sv" = "SV"),
-    "var.subclass.names" = c("snv" = "SNV",
+    "var.class.abbrevs" = c("snv" = "SNV",
+                            "indel" = "Indel",
+                            "sv" = "SV"),
+    "var.subclass.names" = c("ti" = "Transition",
+                             "tv" = "Transversion",
                              "del" = "Deletion",
                              "ins" = "Insertion",
                              "DEL" = "Deletion",
@@ -370,7 +374,8 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                              "CPX" = "Complex SV",
                              "CTX" = "Translocation",
                              "OTH" = "Other SV"),
-    "var.subclass.names.long" = c("snv" = "Single nucleotide variant",
+    "var.subclass.names.long" = c("ti" = "Transition SNV",
+                                  "tv" = "Transversion SNV",
                                   "del" = "Small deletion",
                                   "ins" = "Small insertion",
                                   "DEL" = "Large deletion",
@@ -381,7 +386,8 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                                   "CPX" = "Complex structural variant",
                                   "CTX" = "Chromosomal translocation",
                                   "OTH" = "Other structural variant"),
-    "var.subclass.names.short" = c("snv" = "SNV",
+    "var.subclass.names.short" = c("ti" = "Transition",
+                                   "tv" = "Transversion",
                                    "del" = "Deletion",
                                    "ins" = "Insertion",
                                    "DEL" = "Deletion",
@@ -392,7 +398,8 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                                    "CPX" = "Complex",
                                    "CTX" = "Transloc.",
                                    "OTH" = "Other"),
-    "var.subclass.abbrevs" = c("snv" = "SNV",
+    "var.subclass.abbrevs" = c("ti" = "Ti.",
+                               "tv" = "Tv.",
                                "del" = "Del.",
                                "ins" = "Ins.",
                                "DEL" = "Del.",
@@ -424,6 +431,7 @@ load.constants <- function(subset="all", envir=.GlobalEnv){
                           "lof" = "LoF"),
     "cancer.names" = c("pancan" = "Pan-cancer",
                        "all" = "All cancer",
+                       "case" = "Cancer",
                        "prostate" = "Prostate",
                        "breast" = "Breast",
                        "lung" = "Lung",

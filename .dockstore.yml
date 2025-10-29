@@ -1,0 +1,7 @@
+version: 1.2
+workflows:
+  - subclass: WDL
+    name: CollectVcfQcMetrics
+    primaryDescriptorPath: /wdl/vcf-qc/CollectVcfQcMetrics.wdl
+    authors:
+      - orcid: 0000-0003-1268-9995

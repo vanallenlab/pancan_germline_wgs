@@ -62,7 +62,7 @@ for lang in "$@"; do
       done
 
       # Install svtk & G2C companion package from source
-      pip install code/src/g2cpy
+      pip install -e code/src/g2cpy
       pip install -e code/src/svtk
       ;;
 

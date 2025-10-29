@@ -16,6 +16,29 @@ from re import sub
 from sys import stdout, stderr
 
 
+def abort_workflow(workflow_id, max_retries=20, timeout=30):
+    """
+    Abort a Cromwell workflow
+    Returns a boolean indicating whether the abort was successful
+    """
+
+    crom_query_res = ''
+    attempts = 0
+    cmd = 'cromshell --no_turtle -t ' + str(timeout) + ' -mc abort ' + workflow_id
+    while attempts < max_retries:
+        try:
+            res = subprocess.run(cmd, shell=True, check=True, text=True,
+                                 capture_output=True)
+            return True
+        except:
+            attempts += 1
+    
+    if attempts == max_retries:
+        msg = 'Failed to abort workflow {} after {} retries\n'
+        stderr.write(msg.format(workflow_id, attempts))
+        return False
+
+
 def check_workflow_status(workflow_id, max_retries=20, timeout=30):
     """
     Ping Cromwell server to check status of a single workflow
@@ -86,10 +109,16 @@ def collect_workflow_trash(workflow_ids, bucket, wdl_name, dumpster_path):
     """
 
     # Write gsutil-compliant search strings for identifying files to delete
-    ex_fmt = '{}/cromwell/execution/{}/{}/**'
-    ex_uris = [ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
-    out_fmt = '{}/cromwell/outputs/{}/{}/**'
-    out_uris = [out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    old_ex_fmt = '{}/cromwell/execution/{}/{}/**'
+    old_ex_uris = [old_ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    new_ex_fmt = '{}/cromwell-execution/{}/{}/**'
+    new_ex_uris = [new_ex_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    ex_uris = old_ex_uris + new_ex_uris
+    old_out_fmt = '{}/cromwell/outputs/{}/{}/**'
+    old_out_uris = [old_out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    new_out_fmt = '{}/cromwell-outputs/{}/{}/**'
+    new_out_uris = [new_out_fmt.format(bucket, wdl_name, wid) for wid in workflow_ids]
+    out_uris = old_out_uris + new_out_uris
     all_uris = ex_uris + out_uris
 
     # Find list of all files present in execution or output buckets
@@ -97,7 +126,34 @@ def collect_workflow_trash(workflow_ids, bucket, wdl_name, dumpster_path):
     collect_gcp_garbage(all_uris, dumpster_path)
 
 
-def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
+def delete_uris(uris, rm_args='', verbose=False):
+    """
+    Deletes a list of GCP objects (or any string interpretable by gsutil rm)
+    """
+
+    if verbose:
+        msg = 'Removing {}\n'
+        stdout.write(msg.format(', '.join(uris)))
+    subprocess.run(' '.join(['gsutil -m rm', rm_args] + uris), 
+                   shell=True, text=True)
+
+
+def count_vms(n_background=4):
+    """
+    Count number of active GCP VMs (useful as a proxy for Cromwell server load)
+    This will also subtract n_background from the total count to reflect baseline
+    VMs used by Cromwell or AoU RW all the time and unrelated to user-generated
+    server load. Based on empirical experience, this number appears to be 4
+    when using AOU RW default configurations
+    """
+
+    gcheck = subprocess.run('gcloud compute instances list | wc -l', 
+                            shell=True, capture_output=True, text=True,
+                            encoding='utf-8')
+    return int(gcheck.stdout) - n_background
+
+
+def relocate_uri(src_uri, dest_uri, action='cp', check_exit_codes=True, verbose=False):
     """
     Moves or copies a GCP object from a source URI to a destination URI
     """
@@ -109,5 +165,6 @@ def relocate_uri(src_uri, dest_uri, action='cp', verbose=False):
     if verbose:
         msg = 'Relocating {} to {}\n'
         stdout.write(msg.format(src_uri, dest_uri))
-    subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), shell=True)
+    subprocess.run(' '.join(['gsutil -m', action, src_uri, dest_uri]), 
+                   shell=True, check=check_exit_codes)
 

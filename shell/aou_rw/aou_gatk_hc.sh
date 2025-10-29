@@ -34,8 +34,6 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
 
-# Install necessary packages
-. code/refs/install_packages.sh python
 
 # Format local copy of Cromwell options .json to reference this workspace's storage bucket
 ~/code/scripts/envsubst.py \
@@ -52,6 +50,12 @@ cd ~
 
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
+
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
+
+# Install necessary packages
+. code/refs/install_packages.sh python
 
 # Download workspace-specific contig lists
 gsutil cp -r \
@@ -94,52 +98,11 @@ gsutil -m cp \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/
 
 
-########################################################################
-# Collect summary distributions from gnomAD v4.1 for interval sharding #
-########################################################################
-
-# Note: this only needs to be run once for the entire cohort across all workspaces
-
-# Refresh staging directory
-staging_dir=staging/GnomadSiteMetrics
-if [ -e $staging_dir ]; then rm -rf $staging_dir; fi; mkdir $staging_dir
-
-# Write template .json of inputs for chromsharded manager
-cat << EOF > $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json
-{
-  "PreprocessGnomadSiteMetrics.g2c_analysis_docker": "vanallenlab/g2c_analysis:initial_mar3",
-  "PreprocessGnomadSiteMetrics.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:sv_counting",
-  "PreprocessGnomadSiteMetrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
-  "PreprocessGnomadSiteMetrics.min_af_bin": 0.00003618403,
-  "PreprocessGnomadSiteMetrics.output_prefix": "gnomad.v4.1.\$CONTIG",
-  "PreprocessGnomadSiteMetrics.snv_n_samples": 76215,
-  "PreprocessGnomadSiteMetrics.snv_scatter_intervals": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.\$CONTIG.sharded.intervals",
-  "PreprocessGnomadSiteMetrics.snv_vcf": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz",
-  "PreprocessGnomadSiteMetrics.snv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.\$CONTIG.vcf.bgz.tbi",
-  "PreprocessGnomadSiteMetrics.sv_n_samples": 63046,
-  "PreprocessGnomadSiteMetrics.sv_scatter_intervals": "gs://dfci-g2c-refs/hg38/contig_lists/\$CONTIG.list",
-  "PreprocessGnomadSiteMetrics.sv_vcf": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz",
-  "PreprocessGnomadSiteMetrics.sv_vcf_idx": "gs://gcp-public-data--gnomad/release/4.1/genome_sv/gnomad.v4.1.sv.sites.vcf.gz.tbi"
-}
-EOF
-
-# Submit, monitor, stage, and cleanup short variant QC metadata task
-code/scripts/manage_chromshards.py \
-  --wdl code/wdl/pancan_germline_wgs/PreprocessGnomadSiteMetrics.wdl \
-  --input-json-template $staging_dir/PreprocessGnomadSiteMetrics.inputs.template.json \
-  --dependencies-zip g2c.dependencies.zip \
-  --staging-bucket $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics \
-  --name GnomadSiteMetrics \
-  --status-tsv cromshell/progress/dfci-g2c.v1.initial_qc.GnomadSiteMetrics.progress.tsv \
-  --workflow-id-log-prefix "gnomad.v4.site_metrics" \
-  --outer-gate 30 \
-  --submission-gate 30 \
-  --max-attempts 2
-
-
 #####################
 # Prepare intervals #
 #####################
+
+# Note: this must be run once in each workspace
 
 # Refresh staging directory
 staging_dir=staging/PrepIntervals
@@ -181,7 +144,7 @@ while read contig; do
 
   # Download gnomAD variant sites from this contig
   gsutil -m cp \
-    $MAIN_WORKSPACE_BUCKET/refs/gnomad_v4_site_metrics/$contig/*/gnomad.v4.1.$contig.*.sites.bed.gz* \
+    gs://dfci-g2c-refs/gnomad/gnomad_v4_site_metrics/$contig/gnomad.v4.1.$contig.*.sites.bed.gz* \
     $staging_dir/
   find $staging_dir -name "*bed.gz" | xargs -I {} tabix -f {}
 
@@ -202,7 +165,7 @@ while read contig; do
   # Clean up
   rm $staging_dir/gnomad.v4.1.*.*.sites.bed.gz*
 
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
 # Copy all sharded interval lists to google bucket for Cromwell access
 gsutil cp \
@@ -236,7 +199,7 @@ while read contig; do
           staging/PrepIntervals/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
         | wc -l | awk '{ printf "%i\n", $1 }' )
   echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list \
 | paste -s -d\  | sed 's/,$//g' \
 >> $staging_dir/contig_variable_overrides.json
 echo " }" >> $staging_dir/contig_variable_overrides.json
@@ -246,11 +209,13 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 {
   "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "GnarlyJointGenotypingPart1.GnarlyGenotyper.machine_mem_mb": 16000,
+  "GnarlyJointGenotypingPart1.GnarlyGenotyperFT.machine_mem_mb": 12000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
-  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
-  "GnarlyJointGenotypingPart1.ImportGVCFs.machine_mem_mb": 48000,
+  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 20,
+  "GnarlyJointGenotypingPart1.ImportGVCFsFT.jvm_max_mb": 25000,
+  "GnarlyJointGenotypingPart1.ImportGVCFsFT.machine_mem_mb": 44000,
+  "GnarlyJointGenotypingPart1.ImportGVCFsFT.n_preemptible_tries": 0,
   "GnarlyJointGenotypingPart1.intervals_already_split": true,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
   "GnarlyJointGenotypingPart1.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
@@ -262,21 +227,33 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 }
 EOF
 
+# Due to the two-stage nature of joint genotyping (see below),
+# we need to initialize the tracker .tsv where any contig with a bucket created
+# in the parent staging bucket is considered to be staged.
+# This is necessary because contigs can be effectively ~complete through this first
+# phase of joint genotyping but persistently fail due to problematic loci/shards.
+gsutil ls $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
+| xargs -I {} basename {} \
+| awk -v OFS="\t" '{ print $1, "staged" }' \
+> cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv
+
 # Joint genotype per chromosome using chromsharded manager
 # Note: all cleanup and tracking is handled by the chromshard manager, so
-# no outputs or execution buckets need to be manually staged/cleared
+# no outputs or execution buckets need to be manually staged/cleared here (see below)
 code/scripts/manage_chromshards.py \
   --wdl code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
   --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
   --name JointGenotyping \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 60 \
-  --submission-gate 5 \
-  --max-attempts 2
+  --submission-gate 60 \
+  --gcp-report-period 10 \
+  --vm-gate 1000 \
+  --max-attempts 5
 
 
 ################################################
@@ -288,61 +265,113 @@ code/scripts/manage_chromshards.py \
 # Instead of increasing the resources for all tasks (and therefore increasing cost),
 # we can manually stage the VCFs per chromosome as below:
 
+# Note that this should be run once for each workspace for best parallelization
+
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
 if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
 
-# Set manual staging parameters
-contig=chr21
-wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+# Locate and stage successfully genotyped shards, then clear all prior execution buckets
+while read contig; do
 
-# Stage good shards
-gsutil -m cp \
-  $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+  echo $contig
 
-# Re-shard bad intervals and copy them to temporary bucket
-# Note: there is no easy programmatic way to do this. This must be done manually 
-# by consulting the workflow completion status with `cromshell counts` or similar.
-# Shards to be re-run should be moved to: $WORKSPACE_BUCKET/misc/gatkhc_debug/$contig.choke.interval_list
-# Below is a semi-automatic implementation given that you know which shards failed ImportGVCF.
-# Note that we manually re-shard intervals here due to GATK WARP interval sharding weirdness
-for shard in 256 262 269; do
-  gsutil -m cat \
-    $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$wid/call-ImportGVCFs/shard-$shard/**ImportGVCFs-$shard.log \
-  | fgrep Localizing | fgrep interval_list | sed 's/\ /\n/g' | fgrep "gs://" \
-  | sort | uniq
-done > $staging_dir/$contig.failed_shards.interval_uris.list
-gsutil cat $( head -n1 $staging_dir/$contig.failed_shards.interval_uris.list ) \
-| fgrep "@" \
-> $staging_dir/$contig.choke.interval_list
-gsutil cat $( cat $staging_dir/$contig.failed_shards.interval_uris.list ) \
-| fgrep -v "@" | sort -Vk1,1 -k2,2n -k3,3n \
->> $staging_dir/$contig.choke.interval_list
-code/scripts/split_intervals.py \
-  -i $staging_dir/$contig.choke.interval_list \
-  -t 30000 \
-  -o $staging_dir/$contig.choke.sharded.interval_list
-gsutil cp \
-  $staging_dir/$contig.choke.sharded.interval_list \
-  $WORKSPACE_BUCKET/misc/gatkhc_debug/
+  # Find and stage successful shards
+  wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+  gsutil -m cp \
+    $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
 
-# Clear execution & output for old shards
-gsutil -m ls $( cat cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list \
-                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
-                  '{ print bucket_prefix$1"/**" }' ) \
-> uris_to_delete.list
-cleanup_garbage
+  # Clear all prior execution buckets
+  gsutil ls $( awk -v prefix=$WORKSPACE_BUCKET '{ print prefix"/cromwell-execution/GnarlyJointGenotypingPart1/"$1"/**" }' \
+                 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list \
+               | paste -s - ) \
+  > uris_to_delete.list
+  cleanup_garbage
 
-# Prep inputs for rerunning failed shards with increased scatter dimensions
-cat << EOF > cromshell/inputs/GnarlyJointGenotypingPart1.inputs.$contig.patch.json
+done < <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list )
+
+# Re-shard unsuccessful intervals and copy them to temporary bucket
+while read contig; do
+
+  echo $contig
+
+  # Reaffirm contig-specific staging directory
+  contig_dir=$staging_dir/$contig
+  if ! [ -e $contig_dir ]; then mkdir $contig_dir; fi
+
+  # Get expected number of shards
+  gsutil -m cp \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
+    $contig_dir/
+  n_shards=$( fgrep -v "@" $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list | wc -l )
+
+  # Derive list of failed shards
+  gsutil -m ls \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/*vcf.gz \
+  | xargs -I {} basename {} \
+  | sed -e "s/\.$contig\./\t/g" -e 's/\.0\.vcf/\t/g' \
+  | awk '{ print $2 }' \
+  | sort -nk1,1 \
+  > $contig_dir/$contig.complete_shards.idx.list
+
+  # Infer list of shards to be rerun
+  seq 0 $((n_shards - 1)) \
+  | fgrep -xvf $contig_dir/$contig.complete_shards.idx.list \
+  > $contig_dir/$contig.failed_shards.idx.list
+  awk '{ $1+1 }' $contig_dir/$contig.failed_shards.idx.list
+
+  # Make list of actual intervals to be rerun
+  fgrep "@" $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
+  > $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.preshard.interval_list
+  fgrep -v "@" $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.interval_list \
+  | awk 'NR==FNR {a[$1+1]; next} FNR in a' \
+    $contig_dir/$contig.failed_shards.idx.list - \
+  | sort -Vk1,1 -k2,2n -k3,3n \
+  | bedtools merge -i - -o distinct -c 4,5 \
+  >> $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.preshard.interval_list
+
+  # Shard failed intervals up to a max of 5x or the contig-specific shard limit
+  n_failed_shards=$( cat $contig_dir/$contig.failed_shards.idx.list | wc -l )
+  max_permitted_shards=$n_shards
+  max_permitted_scalar=5
+  n_new_shards=$( echo -e "$(( $n_failed_shards * $max_permitted_scalar ))\n$max_permitted_shards" | sort -n | head -n1 )
+  code/scripts/split_intervals.py \
+    -i $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.preshard.interval_list \
+    --n-shards $n_new_shards \
+    --verbose \
+    --min-size 1000 \
+    -o $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.resharded.interval_list
+  gsutil cp \
+    $contig_dir/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.resharded.interval_list \
+    $WORKSPACE_BUCKET/misc/gatkhc_debug/
+
+done < <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list )
+
+# Write .json of contig-specific scatter counts for second pass of joint genotyping on failed shards
+echo "{ " > $staging_dir/contig_variable_overrides.json
+while read contig; do
+  kc=$( fgrep -v "@" \
+          $staging_dir/$contig/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.resharded.interval_list \
+        | wc -l | awk '{ printf "%i\n", $1 }' )
+  echo "\"$contig\" : {\"CONTIG_SCATTER_COUNT\" : $kc },"
+done < <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list ) \
+| paste -s -d\  | sed 's/,$//g' \
+>> $staging_dir/contig_variable_overrides.json
+echo " }" >> $staging_dir/contig_variable_overrides.json
+
+# Write template input .json for second pass of joint genotyping on failed shards
+cat << EOF > $staging_dir/GnarlyJointGenotypingPart1Patch.inputs.template.json
 {
-  "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.$contig.patch",
+  "GnarlyJointGenotypingPart1.callset_name": "dfci-g2c.v1.\$CONTIG.patch",
   "GnarlyJointGenotypingPart1.dbsnp_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
   "GnarlyJointGenotypingPart1.GnarlyGenotyperFT.machine_mem_mb": 16000,
   "GnarlyJointGenotypingPart1.gnarly_scatter_count": 1,
   "GnarlyJointGenotypingPart1.import_gvcfs_batch_size": 100,
-  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 40,
+  "GnarlyJointGenotypingPart1.import_gvcfs_disk_gb": 20,
   "GnarlyJointGenotypingPart1.ImportGVCFsFT.machine_mem_mb": 48000,
   "GnarlyJointGenotypingPart1.intervals_already_split": true,
   "GnarlyJointGenotypingPart1.make_hard_filtered_sites": false,
@@ -350,32 +379,32 @@ cat << EOF > cromshell/inputs/GnarlyJointGenotypingPart1.inputs.$contig.patch.js
   "GnarlyJointGenotypingPart1.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "GnarlyJointGenotypingPart1.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
   "GnarlyJointGenotypingPart1.sample_name_map": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/refs/dfci-g2c.v1.gatkhc.sample_map.tsv",
-  "GnarlyJointGenotypingPart1.top_level_scatter_count": 1,
-  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$WORKSPACE_BUCKET/misc/gatkhc_debug/$contig.choke.sharded.interval_list"
+  "GnarlyJointGenotypingPart1.top_level_scatter_count": \$CONTIG_SCATTER_COUNT,
+  "GnarlyJointGenotypingPart1.unpadded_intervals_file": "$WORKSPACE_BUCKET/misc/gatkhc_debug/gatkhc.wgs_calling_regions.hg38.$contig.sharded.patch.resharded.interval_list"
 }
 EOF
 
-# Submit patch workflow to clean up failed shards
-cromshell --no_turtle -t 120 -mc submit \
-  --options-json code/refs/json/aou.cromwell_options.default.json \
-  code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
-  cromshell/inputs/GnarlyJointGenotypingPart1.inputs.$contig.patch.json \
-| jq .id | tr -d '"' \
->> cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list
+# Submit & monitor joint genotyping patch
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-hc/GnarlyJointGenotypingPart1.wdl \
+  --input-json-template $staging_dir/GnarlyJointGenotypingPart1Patch.inputs.template.json \
+  --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/patch/ \
+  --name JointGenotypingPatch \
+  --contig-list <( fgrep -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                              contig_lists/dfci-g2c.v1.contigs.$WN.list ) \
+  --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotypingPatch.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 60 \
+  --submission-gate 30 \
+  --vm-gate 1000 \
+  --max-attempts 3
 
-# Once patches are complete, manually stage output 
-patch_wid=$( tail -n1 cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list )
-gsutil -m cp \
-  $WORKSPACE_BUCKET/cromwell/execution/GnarlyJointGenotypingPart1/$patch_wid/**/call-GnarlyGenotyperFT/**dfci-g2c.v1.$contig.*.vcf.gz* \
-  $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+# Relocate the outputs from successful patch jobs to the main staging bucket
+# TODO: implement this
 
-# Clear Cromwell execution & output buckets for patch jobs
-gsutil -m ls $( cat cromshell/job_ids/GnarlyJointGenotypingPart1.inputs.$contig.patch.job_ids.list \
-                | awk -v bucket_prefix="$WORKSPACE_BUCKET/cromwell/*/GnarlyJointGenotypingPart1/" \
-                  '{ print bucket_prefix$1"/**" }' ) \
-> uris_to_delete.list
-cleanup_garbage
-
+# TODO: probably will need to handle shards that continue to fail
+# TBD on how much to automate this
 
 ###############
 # VCF cleanup #
@@ -415,7 +444,7 @@ EOF
     -i $staging_dir/contig_variable_overrides.json \
     -u $staging_dir/$contig.overrides.json \
     -o $staging_dir/contig_variable_overrides.json
-done < contig_lists/dfci-g2c.v1.contigs.w$WN.list
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
 # Write template .json for input
 cat << EOF > $staging_dir/PosthocCleanupPart1.inputs.template.json
@@ -439,7 +468,7 @@ code/scripts/manage_chromshards.py \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --dependencies-zip g2c.dependencies.zip \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/ \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart1.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 45 \
@@ -570,6 +599,8 @@ add_contig_vcfs_to_chromshard_overrides_json \
 # Write template input .json for outlier exclusion task
 cat << EOF > $staging_dir/PosthocCleanupPart2.inputs.template.json
 {
+  "PosthocCleanupPart2.CleanupPart2.mem_gb": 7.5,
+  "PosthocCleanupPart2.CleanupPart2.n_cpu": 4,
   "PosthocCleanupPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocCleanupPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
   "PosthocCleanupPart2.vcfs": \$CONTIG_VCFS,
@@ -584,7 +615,7 @@ code/scripts/manage_chromshards.py \
   --input-json-template $staging_dir/PosthocCleanupPart2.inputs.template.json \
   --contig-variable-overrides $staging_dir/PosthocCleanupPart2.contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart2/ \
-  --contig-list contig_lists/dfci-g2c.v1.contigs.w$WN.list \
+  --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.PosthocCleanupPart2.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
@@ -595,7 +626,7 @@ code/scripts/manage_chromshards.py \
 # Exclude outliers also from GATK-SV VCFs #
 ###########################################
 
-# Note that this section only needs to be run from one workspace for the entire cohort
+# Note: this module only needs to be run once in one workspace for the whole cohort
 
 # Reaffirm staging directory
 staging_dir=staging/PosthocCleanup
@@ -606,8 +637,8 @@ cat << EOF > $staging_dir/ExcludeSnvOutliersFromSvCallset.inputs.template.json
 {
   "PosthocHardFilterPart2.bcftools_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
   "PosthocHardFilterPart2.exclude_samples_list": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/qc-filtering/dfci-g2c.v1.gatkhc.posthoc_outliers.outliers.samples.list",
-  "PosthocHardFilterPart2.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
-  "PosthocHardFilterPart2.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
+  "PosthocHardFilterPart2.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/\$CONTIG/RC3/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.identical.reclustered.vcf.gz",
+  "PosthocHardFilterPart2.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/\$CONTIG/RC3/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.identical.reclustered.vcf.gz.tbi"
 }
 EOF
 
@@ -621,5 +652,5 @@ code/scripts/manage_chromshards.py \
   --status-tsv cromshell/progress/dfci-g2c.v1.ExcludeSnvOutliersFromSvCallset.progress.tsv \
   --workflow-id-log-prefix "dfci-g2c.v1" \
   --outer-gate 30 \
-  --max-attempts 2
+  --max-attempts 2 
 

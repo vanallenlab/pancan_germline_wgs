@@ -1,0 +1,73 @@
+#!/usr/bin/env Rscript
+
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2025-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
+# Plot sample-level genotype benchmarking between pairs of technical replicates/twins
+
+
+#########
+# Setup #
+#########
+# Load necessary libraries and constants
+options(scipen=1000, stringsAsFactors=F)
+require(argparse, quietly=TRUE)
+require(G2CR, quietly=TRUE)
+load.constants("all")
+
+
+###########
+# RScript #
+###########
+# Parse command line arguments and opions
+parser <- ArgumentParser(description="Plot sample-level benchmarking from twins")
+parser$add_argument("--bench-tsv", metavar=".tsv", action="append",
+                    help=paste("Twin concordance benchmarking results. Can be",
+                               "specified multiple times for multiple",
+                               "evaluation interval sets."))
+parser$add_argument("--set-name", metavar="string", action="append",
+                    help=paste("Optional names for each set of benchmarking",
+                               "results supplied"))
+parser$add_argument("--common-af", metavar="float", default=0.01, type="numeric",
+                    help="Allele frequency threshold for common variants")
+parser$add_argument("--out-prefix", metavar="path", type="character",
+                    help="String or path to use as prefix for output plots",
+                    default="./vcf_qc")
+args <- parser$parse_args()
+
+# # DEV:
+# args <- list("bench_tsv" = c("~/scratch/sample_gt_bench_plot_dev/giab_easy.dfci-g2c.v1.initial_qc.chr22.twins_techreps.gt_comparison.distrib.merged.tsv.gz",
+#                             "~/scratch/sample_gt_bench_plot_dev/giab_hard.dfci-g2c.v1.initial_qc.chr22.twins_techreps.gt_comparison.distrib.merged.tsv.gz"),
+#              "set_name" = c("Easy", "Hard"),
+#              "common_af" = 0.001,
+#              "out_prefix" = "~/scratch/g2c.qc.test")
+
+# Load concordance data
+bench.dat <- load.gt.benchmark.tsvs(args$bench_tsv, args$set_name)
+
+# Get nonredundant list of samples
+samples <- unique(unlist(lapply(bench.dat, function(d){d$sample})))
+n.samples <- length(samples)
+
+# Define palette for sets
+set.colors <- rev(RLCtools::categorical.rainbow(2))
+
+# Transform reference title to safe string for filenames
+out.prefix.base <- paste(args$out_prefix, "twin_concordance", sep=".")
+
+# Plot concordance
+ss.df <- plot.all.gt.bench.strata(bench.dat,
+                                  out.prefix.base,
+                                  set.colors,
+                                  ref.title="twin/replicate",
+                                  metric.name="Match rate",
+                                  title.preps=c("for", "in"))
+
+# Write summary stats to output file for logging
+ss.df$n[which(is.na(ss.df$n))] <- n.samples
+ss.df <- ss.df[with(ss.df, order(analysis, measure)), ]
+colnames(ss.df)[1] <- paste("#", colnames(ss.df)[1], sep="")
+write.table(ss.df, paste(out.prefix.base, "summary_metrics.tsv", sep="."),
+            col.names=T, row.names=F, sep="\t", quote=F)

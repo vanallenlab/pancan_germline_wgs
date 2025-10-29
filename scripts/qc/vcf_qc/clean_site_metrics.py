@@ -17,7 +17,7 @@ import gzip
 import numpy as np
 import subprocess
 from Bio import bgzf
-from g2cpy import classify_variant
+from g2cpy import classify_variant, name_variant
 from os import remove
 from re import sub
 from sys import stdin
@@ -29,7 +29,7 @@ from sys import stdin
 var_classes = 'snv indel sv'.split()
 var_subclasses = {'snv' : 'ti tv'.split(),
                   'indel' : 'ins del'.split(),
-                  'sv' : 'DEL DUP CNV INS INV CPX CTX'.split()}
+                  'sv' : 'DEL DUP CNV INS INV CPX CTX BND'.split()}
 
 
 def make_size_bins(bins_per_log10, max_size):
@@ -168,7 +168,7 @@ def main():
             varlen = np.abs(len(alt) - len(ref))
 
         # Clean up AC/AF for CNVs
-        if cnf != "." and cnc != ".":
+        if cnf != '.' and cnc != '.':
             ac = int(cnc)
             af = float(cnf)
 
@@ -177,10 +177,7 @@ def main():
         vc_seen[vc] = True
 
         # Assign simple VID
-        if vc == 'sv':
-            vid = '_'.join([str(x) for x in [chrom, pos, vsc, varlen]])
-        else:
-            vid = '_'.join([str(x) for x in [chrom, pos, ref, alt]])
+        vid = name_variant(chrom, pos, ref, alt, vc, vsc, varlen)
 
         # Set size to arbitrarily large value for gross interchromosomal 
         # translocations with undefined sizes
@@ -202,8 +199,8 @@ def main():
             x_counter[vc][vsc][x_size_ge[np.argmin(varlen >= x_size_ge)-1]][np.argmax(af < x_af_lt)] += 1
 
         # Infer genotype frequencies for diploid loci
-        freq_het = '.'
-        freq_hom = '.'
+        freq_het = 'NA'
+        freq_hom = 'NA'
         if an != '.' and ac_het != '.' and ac_hom != '.' and ac_hemi != '.':
             an = int(an)
             ac_het = int(ac_het)
@@ -216,9 +213,13 @@ def main():
                 freq_hom = '{:.2e}'.format((ac_hom / 2) / n_bi)
 
         # Convert long floats to scientific notation
-        if af != '.':
+        if af == '.':
+            af = 'NA'
+        else:
             af = '{:.2e}'.format(af)
-        if hwe != '.':
+        if hwe == '.':
+            hwe = 'NA'
+        else:
             hwe = '{:.2e}'.format(float(hwe))
 
         # Write reformatted variant data to out .bed

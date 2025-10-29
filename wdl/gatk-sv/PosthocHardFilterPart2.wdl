@@ -68,7 +68,7 @@ task HardFilterPart2 {
       --samples-file "^~{exclude_samples_list}" \
     | bcftools view \
       -Oz -o "~{outfile}" \
-      --include '(GT="alt" & FORMAT/GQ>1)'
+      --include '(GT="alt" & FORMAT/GQ>1) | INFO/SVTYPE="CNV" | FILTER="MULTIALLELIC"' \
 
     tabix -p vcf "~{outfile}"
   >>>

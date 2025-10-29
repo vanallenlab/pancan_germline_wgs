@@ -28,8 +28,7 @@ workflow IndexBam {
       input:
         bai = MakeIndex.bai,
         bam = bam,
-        suffix = suffix,
-        docker = docker
+        suffix = suffix
     }
   }
   
@@ -78,17 +77,16 @@ task CopyIndex {
     File bai
     String bam
     String suffix = "bai"
-    String docker
   }
 
   command <<<
     set -eu -o pipefail
 
-    gsutil cp ~{bai} ~{bam}.~{suffix}
+    gsutil -m cp ~{bai} ~{bam}.~{suffix}
   >>>
 
   runtime {
-    docker: docker
+    docker: "google/cloud-sdk:525.0.0-20250603"
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk 10 HDD"

@@ -31,9 +31,6 @@ gsutil -m cp -r $MAIN_WORKSPACE_BUCKET/code ./
 find code/ -name "*.py" | xargs -I {} chmod a+x {}
 find code/ -name "*.R" | xargs -I {} chmod a+x {}
 
-# Install necessary packages
-. code/refs/install_packages.sh python
-
 # Source .bashrc and bash utility functions
 . code/refs/dotfiles/aou.rw.bashrc
 . code/refs/general_bash_utils.sh
@@ -60,6 +57,12 @@ cd code/wdl/pancan_germline_wgs && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+
+# Ensure Cromwell/Cromshell are configured
+code/scripts/setup_cromshell.py
+
+# Install necessary packages
+. code/refs/install_packages.sh python
 
 # Copy sample & batch information
 gsutil -m cp -r \
@@ -324,7 +327,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/09/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/MergeBatchSites/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/MergeBatchSites/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -355,7 +358,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/11/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/RegenotypeCNVs/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/RegenotypeCNVs/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -393,7 +396,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/13/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/ResolveComplexVariants/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/ResolveComplexVariants/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -460,7 +463,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/14/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/GenotypeComplexVariants/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/GenotypeComplexVariants/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -484,7 +487,7 @@ monitor_workflow \
 # CleanVcf is finished by checking if the concatenation task is present in the
 # execution bucket, in which case we can kill the job and relocalize all of the
 # chromosome-sharded outputs
-cvcf_exec_base=$WORKSPACE_BUCKET/cromwell/execution/CleanVcf/$( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
+cvcf_exec_base=$WORKSPACE_BUCKET/cromwell-execution/CleanVcf/$( tail -n1 cromshell/job_ids/dfci-g2c.v1.15-CleanVcf.job_ids.list )
 if [ $( gsutil ls $cvcf_exec_base/call-ConcatCleanedVcfs | wc -l ) -gt 0 ]; then
   for k in $( seq 0 23 ); do
     contig_wid=$( basename $( gsutil ls $cvcf_exec_base/call-CleanVcfChromosome/shard-$k/CleanVcfChromosome/ ) )
@@ -496,7 +499,7 @@ if [ $( gsutil ls $cvcf_exec_base/call-ConcatCleanedVcfs | wc -l ) -gt 0 ]; then
 fi
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/CleanVcf/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/CleanVcf/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -722,7 +725,7 @@ cromshell -t 120 --no_turtle -mc list-outputs \
   $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/17/
 
 # Once staged, clean up outputs
-gsutil -m ls $WORKSPACE_BUCKET/cromwell/*/JoinRawCalls/** >> uris_to_delete.list
+gsutil -m ls $WORKSPACE_BUCKET/cromwell*/JoinRawCalls/** >> uris_to_delete.list
 cleanup_garbage
 
 
@@ -753,3 +756,46 @@ submit_cohort_module 18
 
 submit_cohort_module 19
 
+
+#####################################
+# Collapse quasi-redundant variants #
+#####################################
+
+# Note: this module only needs to be run once in one workspace for the whole cohort
+
+# Write template input .json for hard filters, part 1
+staging_dir=staging/posthoc_recluster
+if [ -e $staging_dir ]; then rm -rf $staging_dir; fi
+mkdir $staging_dir
+cat << EOF > $staging_dir/CollapseRedundantSvs.inputs.template.json
+{
+  "CollapseRedundantSvs.g2c_analysis_docker": "vanallenlab/g2c_analysis:0fe6e7d",
+  "CollapseRedundantSvs.vcf": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz",
+  "CollapseRedundantSvs.vcf_idx": "$MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/\$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.\$CONTIG.concordance.gq_recalibrated.vcf.gz.tbi"
+}
+EOF
+
+# Submit, monitor, and stage/cleanup redundant variant reclustering
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/gatk-sv/CollapseRedundantSvs.wdl \
+  --input-json-template $staging_dir/CollapseRedundantSvs.inputs.template.json \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs \
+  --name CollapseRedundantSvs \
+  --status-tsv cromshell/progress/dfci-g2c.v1.CollapseRedundantSvs.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 30 \
+  --max-attempts 3
+
+# Confirm that the reclustering procedure didn't result in major VCF changes
+for k in $( seq 1 22 ) X Y; do
+  for wrapper in 1; do
+    CONTIG="chr$k"
+    echo $CONTIG
+    gsutil -m cat \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/19/$CONTIG/RecalibrateGq/ConcatVcfs/dfci-g2c.v1.$CONTIG.concordance.gq_recalibrated.vcf.gz \
+    | bcftools query -f '%ID\n' | wc -l
+    gsutil -m cat \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-sv/module-outputs/CollapseRedundantSvs/$CONTIG/RC3/dfci-g2c.v1.$CONTIG.concordance.gq_recalibrated.identical.reclustered.vcf.gz \
+    | bcftools query -f '%ID\n' | wc -l
+  done | paste - - - | awk -v OFS="\t" '{ print $1, $2, $3, $3-$2, 100*(($3-$2)/$2)"%" }'
+done

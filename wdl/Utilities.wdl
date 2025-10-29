@@ -9,50 +9,6 @@
 version 1.0
 
 
-task ConcatTextFiles {
-  input {
-    Array[File] shards
-    String concat_command = "cat"
-    String? sort_command
-    String? compression_command
-    Boolean input_has_header = false
-    String output_filename
-
-    String docker
-  }
-
-  Int disk_gb = ceil(2 * size(shards, "GB")) + 25
-  String sort = if defined(sort_command) then " | " + sort_command else ""
-  String compress = if defined(compression_command) then " | " + compression_command else ""
-  String posthoc_cmds = if input_has_header then sort + " | fgrep -xvf header.txt | cat header.txt - " + compress else sort + compress
-
-  command <<<
-    set -eu -o pipefail
-
-    if [ "~{input_has_header}" == "true" ]; then
-      ~{concat_command} ~{shards[0]} \
-      | head -n1 > header.txt || true
-    else
-      touch header.txt
-    fi
-
-    ~{concat_command} ~{sep=" " shards} ~{posthoc_cmds} > ~{output_filename}
-  >>>
-
-  output {
-    File merged_file = "~{output_filename}"
-  }
-
-  runtime {
-    docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-  }
-}
-
-
 task ConcatVcfs {
   input {
     Array[File] vcfs
@@ -100,6 +56,33 @@ task ConcatVcfs {
 }
 
 
+task CopyGcpObjects {
+  input {
+    Array[File] files_to_copy
+    String destination
+    String gsutil_cp_options = ""
+  }
+
+  Int disk_gb = ceil(1.2 * size(files_to_copy, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    gsutil -m cp ~{gsutil_cp_options} ~{sep=" " files_to_copy} "~{destination}"
+  >>>
+
+  output {}
+
+  runtime {
+    docker: "google/cloud-sdk"
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 task CountRecordsInVcf {
   input {
     File vcf
@@ -129,6 +112,59 @@ task CountRecordsInVcf {
     cpu: 1
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
+  }
+}
+
+
+# Generic task to efficiently download a file from an FTP server
+task FtpDownload {
+  input {
+    String ftp_url
+    String output_name
+
+    String lftp_docker
+    
+    Int max_download_tries = 3
+    Int disk_gb = 150
+    Int n_cpu = 4
+    Float mem_gb = 8
+  }
+
+  command {
+    set -euo pipefail
+
+    echo "Downloading ${ftp_url} to ${output_name}"
+    
+    # Retry loop with up to 5 attempts
+    count=0
+    success=0
+
+    while [ $count -lt ~{max_download_tries} ]; do
+      echo "Attempt $((count+1))..."
+      lftp -c "set net:max-retries 2; set net:timeout 30; pget -n 8 -c ${ftp_url} -o ${output_name}" && success=1 && break
+      count=$((count+1))
+      echo "Attempt $count failed. Retrying..."
+      sleep 30
+    done
+
+    if [ $success -ne 1 ]; then
+      echo "Failed to download after ~{max_download_tries} attempts."
+      exit 1
+    fi
+
+    echo "Download completed successfully."
+  }
+
+  output {
+    File downloaded_file = output_name
+  }
+
+  runtime {
+    docker: lftp_docker
+    disks: "local-disk " + disk_gb + " HDD"
+    cpu: n_cpu
+    memory: mem_gb + " GB"
+    preemptible: 0
   }
 }
 
@@ -177,6 +213,9 @@ task GetContigsFromVcfHeader {
   command <<<
     set -eu -o pipefail
 
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    ln -s ~{vcf_idx} .
+
     tabix -H ~{vcf} \
     | fgrep "##contig" \
     | sed 's/ID=/\t/g' \
@@ -188,7 +227,6 @@ task GetContigsFromVcfHeader {
 
   output {
     Array[String] contigs = read_lines("contigs.list")
-    File vcf_idx_out = select_first([vcf_idx, vcf + ".tbi"])
   }
 
   runtime {
@@ -201,101 +239,39 @@ task GetContigsFromVcfHeader {
 }
 
 
-task GetSamplesFromVcfHeader {
+task MakeTabixIndex {
   input {
-    File vcf
-    File vcf_idx
-    String bcftools_docker
-  }
-
-  String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
-  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
-
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    ln -s ~{vcf_idx} .
-
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-
-    bcftools query -l ~{vcf} > ~{out_filename}
-  >>>
-
-  output {
-    String sample_list = out_filename
-    Int n_samples = length(read_lines(out_filename))
-  }
-
-  runtime {
-    docker: bcftools_docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
-    preemptible: 3
-  }
-}
-
-
-task IndexVcf {
-  input {
-    File vcf
+    File input_file
+    String file_type = "vcf"
     String docker
+    Int n_cpu = 2
+    Float mem_gb = 3.5
   }
 
-  Int disk_gb = ceil(1.25 * size(vcf, "GB")) + 10
+  String outfile = basename(input_file, "gz") + "gz.tbi"
+  Int disk_gb = ceil(1.25 * size(input_file, "GB")) + 20
 
   command <<<
     set -eu -o pipefail
 
-    tabix -p vcf -f ~{vcf}
+    # Due to weirdness with call cacheing and where tabix writes 
+    # indexes by default, it seems safest to relocate the input
+    # file to the pwd before indexing it
+    
+    mv ~{input_file} ./
+    tabix -p ~{file_type} -f ~{basename(input_file)}
   >>>
 
   output {
-    File vcf_idx = "~{vcf}.tbi"
+    File tbi = "~{outfile}"
   }
 
   runtime {
     docker: docker
-    memory: "1.75 GB"
-    cpu: 1
-    disks: "local-disk " + disk_gb + " HDD"
+    memory: "3.5 GB"
+    cpu: 2
+    disks: "local-disk ~{disk_gb} HDD"
     preemptible: 3
-  }
-}
-
-
-# Parse a GATK-style interval_list and output as Array[[index, interval_string]] for scattering
-# It appears WDL read_tsv does not allow coercion to Pair objects, so we output as Array[Array[String]]
-task ParseIntervals {
-  input {
-    File intervals_list
-    String docker
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    fgrep -v "#" ~{intervals_list} | fgrep -v "@" | sort -V \
-    | awk -v OFS="\t" '{ print NR, $0 }' > intervals.clean.tsv
-  >>>
-
-  output {
-    Array[Array[String]] interval_info = read_tsv("intervals.clean.tsv")
-  }
-
-  runtime {
-    docker: docker
-    memory: "2 GB"
-    cpu: 1
-    disks: "local-disk 25 HDD"
-    preemptible: 3
-    max_retries: 1
   }
 }
 
@@ -349,6 +325,7 @@ task ShardVcf {
 }
 
 
+# Atomizes a GATK-style interval list into single-interval files
 task SplitIntervalList {
   input {
     File interval_list
@@ -387,6 +364,98 @@ task SplitIntervalList {
 }
 
 
+# Checks a VCF header for fields indicating that it might contain mCNVs
+# Functionally equivalent to McnvHeaderCheck, but uses htslib remote streaming
+# Unable to disable localization_optional in parameter_meta so we must 
+# have two versions of roughly the same function
+task StreamedMcnvHeaderCheck {
+  input {
+    File vcf
+    File vcf_idx
+    String docker
+  }
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    ln -s ~{vcf_idx} .
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    bcftools view --header-only ~{vcf} > header.vcf
+
+    # Check for header rows potentially indicative of MCNVs
+    touch mcnv.header.vcf
+    fgrep "ALT=<ID=CNV" header.vcf > mcnv.header.vcf || true
+    fgrep "ALT=<ID=MCNV" header.vcf >> mcnv.header.vcf || true
+    fgrep "FILTER=<ID=MULTIALLELIC" header.vcf >> mcnv.header.vcf || true
+    if [ $( cat mcnv.header.vcf | wc -l ) -gt 0 ]; then
+      echo "true" > has_mcnvs.txt
+    else
+      echo "false" > has_mcnvs.txt
+    fi
+  >>>
+
+  output {
+    Boolean has_mcnvs = read_boolean("has_mcnvs.txt")
+  }
+
+  runtime {
+    docker: docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk 15 HDD"
+    preemptible: 3
+    maxRetries: 2
+  }
+}
+
+
+task StreamSamplesFromVcfHeader {
+  input {
+    File vcf
+    File vcf_idx
+    String bcftools_docker
+  }
+
+  String out_filename = basename(vcf, ".vcf.gz") + ".samples.list"
+  Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
+
+  parameter_meta {
+    vcf: {
+      localization_optional: true
+    }
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    ln -s ~{vcf_idx} .
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    bcftools query -l ~{vcf} > ~{out_filename}
+  >>>
+
+  output {
+    String sample_list = out_filename
+    Int n_samples = length(read_lines(out_filename))
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 task SumSvCountsPerSample {
   input {
     Array[File] count_tsvs   # Expects svtk count-svtypes output format
@@ -418,6 +487,5 @@ task SumSvCountsPerSample {
     cpu: n_cpu
     disks: "local-disk " + disk_gb + " HDD"
     preemptible: 3
-    max_retries: 1
   }
 }
