@@ -9,7 +9,7 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/main/wdl/Utilities.wdl" as Utilities
+import "Utilities.wdl" as Utilities
 
 
 workflow ApplyScriptParallelPerChrom {
@@ -60,7 +60,7 @@ workflow ApplyScriptParallelPerChrom {
     call ApplyScript {
       input:
         vcf = vcf,
-        vcf_idx = select_first([vcf_idx, GetContigsFromVcfHeader.vcf_idx_out]),
+        vcf_idx = vcf_idx,
         contig = contig,
         script = script,
         exec_prefix = exec_prefix,
