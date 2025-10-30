@@ -68,6 +68,7 @@ plot.count.distrib <- function(vals, thresholds, n.fail, n.samples, pdf.out, tit
   density.w.outliers(vals, style="hist", color=DFCI.colors[["darkblue"]],
                      title=title, title.line=0.9, x.title="Variants",
                      x.title.line=-0.1, x.label.units="count",
+                     min.x.label.length=2,
                      y.title="Samples", y.title.line=1.5,
                      parmar=c(1.85, 3.4, 1.9, 0.75))
   abline(v=thresholds, lwd=2, col=DFCI.colors[["yellow"]])

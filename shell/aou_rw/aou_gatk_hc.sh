@@ -257,6 +257,50 @@ code/scripts/manage_chromshards.py \
 
 
 ################################################
+# Semi-manual cleanup of genotyping trainwreck #
+################################################
+
+# Due to the piecemeal nature of how we ran joint genotyping in practice, we first
+# need to collect all complete shards from the process above in a semi-manual
+# manner before determining which intervals still need to be resharded/rerun
+
+# This must be run once for each workspace
+
+# Reaffirm staging directory
+staging_dir=staging/JGSecondPass
+if ! [ -e $staging_dir ]; then mkdir $staging_dir; fi
+
+# First, copy all VCFs that completed during the first pass of joint genotyping
+while read contig; do
+  # Do nothing if contig was one of the development contigs processed earlier
+  if [ $( gsutil ls $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/$contig 2>/dev/null | wc -l ) -gt 0 ]; then
+    continue
+  fi
+
+  # Otherwise, first determine the full list of all VCFs generated for this 
+  # contig in any prior joint genotyping run
+  gsutil -m ls \
+    $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/**/dfci-g2c.v1.$contig.*.vcf.gz \
+  > $staging_dir/$contig.jg_vcfs.uris.list
+
+  # Count the number of VCFs generated for each base workflow ID, sort s/t 
+  # workflows with fewer VCFs are processed first (assuming less completion),
+  # and copy all VCFs from each workflow into the staging directory
+  while read wid; do
+    awk -v FS="/" -v OFS="\n" -v wid="$wid" \
+      '{ if ($6==wid) print $0, $0".tbi" }' \
+      $staging_dir/$contig.jg_vcfs.uris.list \
+    | gsutil -m cp -I \
+      $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/
+  done < <( awk -v FS="/" '{ print $6 }' \
+            $staging_dir/$contig.jg_vcfs.uris.list \
+            | sort | uniq -c | sort -nk1,1 | awk '{ print $2 }' )
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
+
+
+
+
+################################################
 # Clean up failed shards from joint genotyping #
 ################################################
 

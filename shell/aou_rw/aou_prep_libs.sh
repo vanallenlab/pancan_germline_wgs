@@ -18,7 +18,7 @@ WRKDIR=`mktemp -d`
 cd $WRKDIR
 
 # Clone G2C repo & checkout branch of interest
-export g2c_branch=posthoc_qc
+export g2c_branch=posthoc_filtering
 git clone git@github.com:vanallenlab/pancan_germline_wgs.git --branch=$g2c_branch
 
 # Clone RLCtools repo & checkout branch of interest
