@@ -227,7 +227,7 @@ cat << EOF > $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json
 }
 EOF
 
-# Due to the two-stage nature of joint genotyping (see below),
+# Due to the multi-stage nature of joint genotyping (see below),
 # we need to initialize the tracker .tsv where any contig with a bucket created
 # in the parent staging bucket is considered to be staged.
 # This is necessary because contigs can be effectively ~complete through this first
