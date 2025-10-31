@@ -9,6 +9,49 @@
 version 1.0
 
 
+# Compute a BEDGraph of feature density from one or more BED files
+task CalcBedDensity {
+  input {
+    Array[File] beds
+    String bed_concat_cmd = "zcat"
+
+    File genome_file # BEDTools-style genome file
+
+    String output_prefix
+    
+    String bedtools_docker
+  }
+
+  Int disk_gb = ceil(2 * size(beds, "GB")) + 10
+  File outfile = output_prefix + ".density.bed.gz"
+
+  command <<<
+    set -eu -o pipefail
+
+    cat ~{write_lines(beds)} \
+    | ~{bed_concat_cmd} - \
+    | awk -v OFS="\t" '{ print $1, $2, $3 }' \
+    | sort -Vk1,1 -k2,2n -k3,3n \
+    | bedtools genomecov -bg -g ~{genome_file} -i - \
+    | bgzip -c \
+    > "~{outfile}"
+  >>>
+
+  output {
+    File density_bed = "~{outfile}"
+  }
+
+  runtime {
+    docker: bedtools_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 1
+    maxRetries: 1
+  }
+}
+
+
 task ConcatVcfs {
   input {
     Array[File] vcfs

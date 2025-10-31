@@ -308,6 +308,10 @@ while read contig; do
             | sort | uniq -c | sort -nk1,1 | awk '{ print $2 }' )
 done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
+# Find intervals with at least one variant from first pass of Gnarly part 1
+
+
+
 # Find the list of unfinished shards per contig
 while read contig; do
   # Do nothing if contig was one of the development contigs processed earlier

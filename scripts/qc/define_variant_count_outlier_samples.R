@@ -72,7 +72,8 @@ plot.count.distrib <- function(vals, thresholds, n.fail, n.samples, pdf.out, tit
                      y.title="Samples", y.title.line=1.5,
                      parmar=c(1.85, 3.4, 1.9, 0.75))
   abline(v=thresholds, lwd=2, col=DFCI.colors[["yellow"]])
-  mtext(paste(prettyNum(n.fail, big.mark=","), " samples (", out.pct.lab,
+  mtext(paste(prettyNum(n.fail, big.mark=","), " sample",
+              if(n.fail!=1){"s"}else{""}, " (", out.pct.lab,
               ") failed", sep=""),
         3, cex=5/6, font=3, col=DFCI.colors[["yellow"]], line=0.1)
   dev.off()
