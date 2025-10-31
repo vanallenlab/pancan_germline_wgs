@@ -297,7 +297,7 @@ workflow CollectVcfQcMetrics {
   }
 
   # Collect site-level metrics for dense subset if needed
-  if ( has_twins || do_sample_bench ) {
+  if ( has_twins || do_sample_bench || ( do_ld && defined(genome_file) ) ) {
     scatter ( i in range(length(dense_sites_vcf_info)) ) {
       call QcTasks.CollectSiteMetrics as DenseSiteMetrics {
         input:

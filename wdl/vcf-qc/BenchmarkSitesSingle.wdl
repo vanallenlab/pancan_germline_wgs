@@ -506,7 +506,7 @@ task MakeVidMap {
     Boolean invert = false
 
     Float mem_gb = 3.5
-    String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
+    String linux_docker = "ubuntu:plucky-20251001"
   }
 
   Int disk_gb = ceil(2 * size(benchmark_bed, "GB")) + 10

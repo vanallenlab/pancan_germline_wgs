@@ -197,6 +197,7 @@ task GetSampleIdsFromGtTarball {
   input {
     File gt_tarball
     String outfile_name = "ids_in_tarball.list"
+    String linux_docker = "ubuntu:plucky-20251001"
   }
 
   Int disk_gb = ceil(4 * size(gt_tarball, "GB")) + 10
@@ -220,7 +221,7 @@ task GetSampleIdsFromGtTarball {
   }
 
   runtime {
-    docker: "marketplace.gcr.io/google/ubuntu1804"
+    docker: linux_docker
     memory: "1.75 GB"
     cpu: 1
     disks: "local-disk ~{disk_gb} HDD"

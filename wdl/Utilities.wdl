@@ -405,7 +405,7 @@ task ShardVcf {
 task SplitIntervalList {
   input {
     File interval_list
-    String linux_docker = "marketplace.gcr.io/google/ubuntu1804"
+    String linux_docker = "ubuntu:plucky-20251001"
     Int n_preemptible = 3
   }
 

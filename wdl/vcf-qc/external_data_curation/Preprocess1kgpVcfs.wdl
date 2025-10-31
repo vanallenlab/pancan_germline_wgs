@@ -79,7 +79,7 @@ workflow Preprocess1kgpVcfs {
     call QcTasks.ParseIntervals as MakeSrwgsSnvIntervals {
       input:
         intervals_list = snv_scatter_interval,
-        docker = "marketplace.gcr.io/google/ubuntu1804"
+        docker = "ubuntu:plucky-20251001"
     }
     
     scatter ( snv_interval_info in MakeSrwgsSnvIntervals.interval_info ) {

@@ -46,6 +46,17 @@ def main():
     invcf = pysam.VariantFile(args.input_vcf)
     all_samples = set([s for s in invcf.header.samples])
 
+    # Modify output header to only include --samples, if optioned
+    # TODO: implement this
+
+    # Open connection to output VCF(s)
+    # TODO: implement this
+
+    # Iterate over input VCF and route each SV to the correct output VCF
+    # TODO: implement this
+
+    # Close connections to output VCF(s)
+    # TODO: implement this
 
 if __name__ == '__main__':
     main()
