@@ -42,11 +42,20 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
-# Create dependencies .zip for workflow submissions
+# Create dependencies .zip files for workflow submissions
 cd code/wdl/pancan_germline_wgs && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+mkdir ~/scratch/gatkhc.dependencies && \
+cp code/wdl/pancan_germline_wgs/Utilities.wdl ~/scratch/gatkhc.dependencies/ && \
+cp code/wdl/gatk-hc/*.wdl ~/scratch/gatkhc.dependencies/ && \
+cd ~/scratch/gatkhc.dependencies && \
+zip gatkhc.dependencies.zip *.wdl && \
+mv gatkhc.dependencies.zip ~/ && \
+cd ~ && \
+rm -rf ~/scratch/gatkhc.dependencies
+
 
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
@@ -245,6 +254,7 @@ code/scripts/manage_chromshards.py \
   --input-json-template $staging_dir/GnarlyJointGenotypingPart1.inputs.template.json \
   --contig-variable-overrides $staging_dir/contig_variable_overrides.json \
   --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/ \
+  --dependencies-zip gatkhc.dependencies.zip \
   --name JointGenotyping \
   --contig-list contig_lists/dfci-g2c.v1.contigs.$WN.list \
   --status-tsv cromshell/progress/dfci-g2c.v1.JointGenotyping.progress.tsv \
@@ -257,7 +267,7 @@ code/scripts/manage_chromshards.py \
 
 
 ################################################
-# Semi-manual cleanup of genotyping trainwreck #
+# Semi-manual cleanup of genotyping first pass #
 ################################################
 
 # Due to the piecemeal nature of how we ran joint genotyping in practice, we first
@@ -297,7 +307,36 @@ while read contig; do
             | sort | uniq -c | sort -nk1,1 | awk '{ print $2 }' )
 done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
+# Find the list of unfinished shards per contig
+while read contig; do
+  # Do nothing if contig was one of the development contigs processed earlier
+  if [ $( gsutil ls $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/$contig 2>/dev/null | wc -l ) -gt 0 ]; then
+    continue
+  fi
 
+  # Define list of calling intervals as sharded by most recent Gnarly workflow
+  wid=$( tail -n1 cromshell/job_ids/dfci-g2c.v1.JointGenotyping.$contig.job_ids.list )
+  gsutil -m ls \
+    $WORKSPACE_BUCKET/cromwell-execution/GnarlyJointGenotypingPart1/$wid/call-G2CSplitIntervals/**-scattered.interval_list 2>/dev/null \
+  | sort -V \
+  > $staging_dir/scattered_intervals.$contig.list
+  n_shards_total=$( cat $staging_dir/scattered_intervals.$contig.list | wc -l )
+
+  # Define list of successful shards based on presence of tabix index (implies complete & correct VCF)
+  gsutil -m ls \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/*vcf.gz.tbi 2>/dev/null \
+  > $staging_dir/finished_vcfs.$contig.list
+  n_shards_done=$( cat $staging_dir/finished_vcfs.$contig.list | wc -l )
+  n_shards_missing=$(( $n_shards_total - $n_shards_done ))
+  echo -e "$contig\t$n_shards_total\t$n_shards_done\t$n_shards_missing"
+
+  # # Download & combine interval files for unfinished shards
+  # awk -v FS="/" '{ print $NF }' $staging_dir/finished_vcfs.$contig.list \
+  # | sed "s/^dfci-g2c.v1.$contig.//g" \
+  # | awk -v FS="." '{ print $1+1 }' | sort -V \
+  # | 
+  # TODO: finish this
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
 
 ################################################

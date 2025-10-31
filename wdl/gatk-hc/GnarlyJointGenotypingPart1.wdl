@@ -20,8 +20,8 @@
 version 1.0
 
 
-import "https://raw.githubusercontent.com/broadinstitute/warp/develop/tasks/broad/JointGenotypingTasks.wdl" as Tasks
-import "https://raw.githubusercontent.com/vanallenlab/pancan_germline_wgs/refs/heads/main/wdl/Utilities.wdl" as G2CUtils
+import "JointGenotypingTasks.wdl" as Tasks
+import "Utilities.wdl" as G2CUtils
 
 
 workflow GnarlyJointGenotypingPart1 {

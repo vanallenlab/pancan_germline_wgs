@@ -20,11 +20,15 @@ workflow RefineSvGenotypesWithSnvs {
   input {
     File sv_vcf
     File sv_vcf_idx
-    Array[File] snv_vcfs           # VCFs of SNVs (can also include indels, which will be dropped)
+    Array[File] snv_vcfs # VCFs of SNVs (can also include indels, which will be dropped)
     Array[File] snv_vcf_idxs
 
+    # SV/SNV filtering parameters
     Float min_sv_af = 0.05
     Int min_sv_ac = 20
+    Int breakpoint_buffer_bp = 5000
+    Int breakpoint_window_bp = 100000
+    File? snv_exclusion_bed
 
     Int svs_per_shard = 100
 
@@ -80,26 +84,47 @@ workflow RefineSvGenotypesWithSnvs {
   # Process each qualifying SV VCF in parallel
   scatter ( vcf_info in zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs) ) {
 
-    # TODO: pick up here
+    # Filter SNVs
+    call QuerySnvs {
+      input:
+        sv_vcf = vcf_info.left,
+        sv_vcf_idx = vcf_info.right,
+        snv_vcfs = snv_vcfs,
+        snv_vcf_idxs = snv_vcf_idxs,
+        breakpoint_buffer_bp = breakpoint_buffer_bp,
+        breakpoint_window_bp = breakpoint_window_bp,
+        snv_exclusion_bed = snv_exclusion_bed,
+        
+    }
+    # TODO: implement this
+    # - Query SNVs to the left of POS and right of END (buffer in windows of 5kb-100kb away)
+    #   - Filter on min call rate
+    #   - Mask low-complexity regions & segdups
+    #   - Filter on AF ~ [1/5, 5] * SV_AF
+    #   - Biallelic filter PASS
+    # Should be clever about this -- can maybe make bedgraph or bed with min AF / min AC for any relevant SV for that window?
+
+    # Compute LD for each SV, extract AD matrixes, fit regression model, and predict GTs for all samples
+    # TODO: implement this
+    # - Make VCF sandwich of (left flanking SNVs) + SV + (right flanking SNVs)
+    # - Compute all LD with plink (min R2 > 0.2?)
+    # - Rank-order SNVs by LD R2 per flank and take up to 5 best tag SNVs from each flank
+    # - Extract allele dosage for each SNP (2 * AB)
+    # - Load tag SNP AD and SV GTs into R
+    # - Fit linear regression of SV AC ~ tag SNP ADs using 10-fold CV
+    #   - Need to think about how to handle/prespecify train/test split (by cohort etc)
+    # - Predict SV AC from tag SNPs using best-fit regression model
+    # - Compute SNV-based GQ by ratio of linear distances between integer AC states (or maybe multivariate gaussian)
+
+    # Update SV GTs
+    # TODO: implement this
+    # - If SNV-predicted GQ > GATK-SV GQ, return (sample, SV ID, GT, GQ) to be updated in SV VCF
   }
 
-  # Remaining tasks
-  # - Query SNVs to the left of POS and right of END (buffer in windows of 5kb-100kb away)
-  #   - Filter on min call rate
-  #   - Mask low-complexity regions & segdups
-  #   - Filter on AF ~ [1/5, 5] * SV_AF
-  # - Make VCF sandwich of (left flanking SNVs) + SV + (right flanking SNVs)
-  # - Compute all LD with plink (min R2 > 0.2?)
-  # - Rank-order SNVs by LD R2 per flank and take up to 5 best tag SNVs from each flank
-  # - Extract allele dosage for each SNP (2 * AB)
-  # - Load tag SNP AD and SV GTs into R
-  # - Fit linear regression of SV AC ~ tag SNP ADs using 10-fold CV
-  #   - Need to think about how to handle/prespecify train/test split (by cohort etc)
-  # - Predict SV AC from tag SNPs using best-fit regression model
-  # - Compute SNV-based GQ by ratio of linear distances between integer AC states
-  # - If SNV-predicted GQ > GATK-SV GQ, return (sample, SV ID, GT, GQ) to be updated in SV VCF
-  # - Collapse all GT updates into a single file and make updates iterating over VCF
+  # Concatenate all updated SV VCFs with the passthrough VCF
+  # TODO: implement this
 
+  output {}
 }
 
 
