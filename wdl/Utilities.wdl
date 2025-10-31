@@ -239,6 +239,39 @@ task GetContigsFromVcfHeader {
 }
 
 
+task IntersectTextFiles {
+  input {
+    Array[File] files
+    String outfile = "intersection.txt"
+    String docker
+  }
+
+  Int disk_gb = 2 * ceil(size(files, "GB")) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    cat ~{files[0]} > "~{outfile}"
+    while read fid; do
+      fgrep -xf $fid "~{outfile}" > "~{outfile}2"
+      mv "~{outfile}2" "~{outfile}"
+    done < ~{write_lines(files)}
+  >>>
+
+  output {
+    File intersection_file = "~{outfile}"
+  }
+
+  runtime {
+    docker: docker
+    memory: "1.75 GB"
+    cpu: 1
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 3
+  }
+}
+
+
 task MakeTabixIndex {
   input {
     File input_file

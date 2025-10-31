@@ -1,0 +1,146 @@
+# The Germline Genomics of Cancer (G2C)
+# Copyright (c) 2025-Present, Ryan L. Collins and the Dana-Farber Cancer Institute
+# Contact: Ryan Collins <Ryan_Collins@dfci.harvard.edu>
+# Distributed under the terms of the GNU GPL v2.0
+
+# Refine SV genotypes based on flanking SNV genotypes
+
+# Note: this workflow assumes variant callset properties follow GATK-SV and
+# GATK-HC conventions for short-read WGS. It has not been tested on other 
+# callers (e.g., DeepVariant) or other technologies (e.g., long-read WGS)
+
+
+version 1.0
+
+
+import "Utilities.wdl" as Utils
+
+
+workflow RefineSvGenotypesWithSnvs {
+  input {
+    File sv_vcf
+    File sv_vcf_idx
+    Array[File] snv_vcfs           # VCFs of SNVs (can also include indels, which will be dropped)
+    Array[File] snv_vcf_idxs
+
+    Float min_sv_af = 0.05
+    Int min_sv_ac = 20
+
+    Int svs_per_shard = 100
+
+    String output_prefix
+
+    String g2c_pipeline_docker
+    String linux_docker
+  }
+
+  # Gather list of matching samples between snv_vcfs and sv_vcf
+  call Utils.StreamSamplesFromVcfHeader as GetSvSamples {
+    input:
+      vcf = sv_vcf,
+      vcf_idx = sv_vcf_idx,
+      bcftools_docker = g2c_pipeline_docker
+  }
+  call Utils.StreamSamplesFromVcfHeader as GetSnvSamples {
+    input:
+      vcf = snv_vcfs[0],
+      vcf_idx = snv_vcf_idxs[0],
+      bcftools_docker = g2c_pipeline_docker
+  }
+  call Utils.IntersectTextFiles as FindSharedSamples {
+    input:
+      files = [GetSvSamples.sample_list, GetSnvSamples.sample_list],
+      outfile = output_prefix + ".shared_samples.list",
+      docker = linux_docker
+  }
+
+  # Separate qualifying and non-qualifying SVs
+  call SplitSvs {
+    input:
+      vcf = sv_vcf,
+      vcf_idx = sv_vcf_idx,
+      min_af = min_sv_af,
+      min_ac = min_sv_ac,
+      max_af = 1 - min_sv_af,
+      max_ac = (2 * GetSvSamples.n_samples) - min_sv_ac,
+      output_prefix = basename(sv_vcf, ".vcf.gz"),
+      g2c_pipeline_docker = g2c_pipeline_docker
+  }
+
+  # Shard qualifying SV VCF for parallel processing
+  call Utils.ShardVcf as ShardTargetSvs {
+    input:
+      vcf = SplitSvs.target_sv_vcf,
+      vcf_idx = SplitSvs.target_sv_vcf_idx,
+      records_per_shard = svs_per_shard,
+      bcftools_docker = g2c_pipeline_docker,
+      n_preemptible = 1
+  }
+
+  # Process each qualifying SV VCF in parallel
+  scatter ( vcf_info in zip(ShardVcf.vcf_shards, ShardVcf.vcf_shard_idxs) ) {
+
+    # TODO: pick up here
+  }
+
+  # Remaining tasks
+  # - Query SNVs to the left of POS and right of END (buffer in windows of 5kb-100kb away)
+  #   - Filter on min call rate
+  #   - Mask low-complexity regions & segdups
+  #   - Filter on AF ~ [1/5, 5] * SV_AF
+  # - Make VCF sandwich of (left flanking SNVs) + SV + (right flanking SNVs)
+  # - Compute all LD with plink (min R2 > 0.2?)
+  # - Rank-order SNVs by LD R2 per flank and take up to 5 best tag SNVs from each flank
+  # - Extract allele dosage for each SNP (2 * AB)
+  # - Load tag SNP AD and SV GTs into R
+  # - Fit linear regression of SV AC ~ tag SNP ADs using 10-fold CV
+  #   - Need to think about how to handle/prespecify train/test split (by cohort etc)
+  # - Predict SV AC from tag SNPs using best-fit regression model
+  # - Compute SNV-based GQ by ratio of linear distances between integer AC states
+  # - If SNV-predicted GQ > GATK-SV GQ, return (sample, SV ID, GT, GQ) to be updated in SV VCF
+  # - Collapse all GT updates into a single file and make updates iterating over VCF
+
+}
+
+
+# Bifurcates an SV VCF based on frequency and number of alleles
+task SplitSvs {
+  input {
+    File vcf
+    File vcf_idx
+    Float min_af
+    Int min_ac
+    Float max_af
+    Float max_ac
+
+    String output_prefix
+
+    String g2c_pipeline_docker
+  }
+
+  Int disk_gb = (3 * ceil(size([vcf], "GB"))) + 10
+
+  command <<<
+    set -eu -o pipefail
+
+    # TODO: probably easier to implement this as a pysam script 
+    # so we only have to make one pass through the VCF
+  >>>
+
+  output {
+    File target_sv_vcf = "~{output_prefix}.target.vcf.gz"
+    File target_sv_vcf_idx = "~{output_prefix}.target.vcf.gz.tbi"
+    File passthrough_sv_vcf = "~{output_prefix}.passthrough.vcf.gz"
+    File passthrough_sv_vcf_idx = "~{output_prefix}.passthrough.vcf.gz.tbi"
+  }
+
+  runtime {
+    docker: bcftools_docker
+    memory: "3.75 GB"
+    cpu: 2
+    disks: "local-disk " + disk_gb + " HDD"
+    preemptible: 1
+    maxRetries: 1
+  }
+}
+
