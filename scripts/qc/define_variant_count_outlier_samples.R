@@ -102,13 +102,13 @@ parser$add_argument("--out-prefix", metavar="path", type="character", required=T
 args <- parser$parse_args()
 
 # # DEV:
-# args <- list("counts_tsv" = "~/scratch/dfci-g2c.05_sv_counts.manta.tsv",
-#              "sample_labels_tsv" = NULL,
-#              "n_iqr" = 6,
+# args <- list("counts_tsv" = "~/scratch/sv_count_dbg/dfci-ufc.v1.postCleanupPart1.counts.subsetted.collapsed.tsv",
+#              "sample_labels_tsv" = "~/scratch/sv_count_dbg/dfci-g2c.intake_pop_labels.aou_split.tsv",
+#              "n_iqr" = 3,
 #              "no_lower_filter" = FALSE,
 #              "plot" = TRUE,
-#              "plot_title_prefix" = "Manta",
-#              "out_prefix" = "~/scratch/dfci-g2c.05B")
+#              "plot_title_prefix" = "UFC-SV",
+#              "out_prefix" = "~/scratch/dfci-ufc.v1.sv")
 
 # Read count data
 counts <- load.counts(args$counts_tsv)

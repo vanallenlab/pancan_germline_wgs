@@ -187,9 +187,9 @@ task ImportGVCFsFT {
     String seed
 
     Int disk_size_gb
-    Int machine_mem_mb = 30000
-    Int? jvm_start_mb
-    Int? jvm_max_mb
+    Int machine_mem_mb = 32000
+    Int jvm_start_mb = 6000
+    Int jvm_max_mb = 25000
     Int batch_size
     Int n_preemptible_tries = 1
     Int n_retries = 1

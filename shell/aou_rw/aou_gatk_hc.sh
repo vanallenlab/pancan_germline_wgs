@@ -42,11 +42,13 @@ find code/ -name "*.R" | xargs -I {} chmod a+x {}
 mv code/refs/json/aou.cromwell_options.default.json2 \
    code/refs/json/aou.cromwell_options.default.json
 
-# Create dependencies .zip files for workflow submissions
+# Create dependencies .zip for G2C workflow submissions
 cd code/wdl/pancan_germline_wgs && \
 zip g2c.dependencies.zip *.wdl && \
 mv g2c.dependencies.zip ~/ && \
 cd ~
+
+# Create dependencies .zip for GATK-HC workflow submissions
 mkdir ~/scratch/gatkhc.dependencies && \
 cp code/wdl/pancan_germline_wgs/Utilities.wdl ~/scratch/gatkhc.dependencies/ && \
 cp code/wdl/gatk-hc/*.wdl ~/scratch/gatkhc.dependencies/ && \
@@ -55,7 +57,6 @@ zip gatkhc.dependencies.zip *.wdl && \
 mv gatkhc.dependencies.zip ~/ && \
 cd ~ && \
 rm -rf ~/scratch/gatkhc.dependencies
-
 
 # Infer workspace number and save as environment variable
 export WN=$( get_workspace_number )
