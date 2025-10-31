@@ -62,7 +62,7 @@ task GetTerritory {
   command <<<
     set -eu -o pipefail
 
-    bcftools query -f '%CHROM\t%POS\n' ~{vcf} | \
+    bcftools query -f '%CHROM\t%POS\n' ~{vcf} \
     | awk -v OFS="\t" \
       '!($1 in first) { first[$1] = $2 }
       { last[$1] = $2 }

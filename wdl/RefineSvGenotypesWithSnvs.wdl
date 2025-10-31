@@ -64,10 +64,11 @@ workflow RefineSvGenotypesWithSnvs {
       vcf = sv_vcf,
       vcf_idx = sv_vcf_idx,
       min_af = min_sv_af,
-      min_ac = min_sv_ac,
       max_af = 1 - min_sv_af,
+      min_ac = min_sv_ac,
       max_ac = (2 * GetSvSamples.n_samples) - min_sv_ac,
       output_prefix = basename(sv_vcf, ".vcf.gz"),
+      samples_list = FindSharedSamples.intersection_file,
       g2c_pipeline_docker = g2c_pipeline_docker
   }
 
@@ -93,8 +94,8 @@ workflow RefineSvGenotypesWithSnvs {
         snv_vcf_idxs = snv_vcf_idxs,
         breakpoint_buffer_bp = breakpoint_buffer_bp,
         breakpoint_window_bp = breakpoint_window_bp,
-        snv_exclusion_bed = snv_exclusion_bed,
-        
+        snv_exclusion_bed = snv_exclusion_bed
+
     }
     # TODO: implement this
     # - Query SNVs to the left of POS and right of END (buffer in windows of 5kb-100kb away)
@@ -133,30 +134,51 @@ task SplitSvs {
   input {
     File vcf
     File vcf_idx
+
     Float min_af
-    Int min_ac
     Float max_af
+    Int min_ac
     Float max_ac
+
+    File? samples_list
 
     String output_prefix
 
     String g2c_pipeline_docker
   }
 
+  String elig_outfile = output_prefix + ".regeno_eligible_svs.vcf.gz"
+  String pt_outfile = output_prefix + ".passthrough_svs.vcf.gz"
+  String samples_cmd = if defined(samples_list) then "--samples ~{basename(samples_list)}" else ""
   Int disk_gb = (3 * ceil(size([vcf], "GB"))) + 10
 
   command <<<
     set -eu -o pipefail
 
-    # TODO: probably easier to implement this as a pysam script 
-    # so we only have to make one pass through the VCF
+    # Relocate samples list to pwd, if provided
+    if ~{defined(samples_list)}; then
+      cp ~{default="" samples_list} ./
+    fi
+
+    /opt/pancan_germline_wgs/scripts/variant_filtering/bifurcate_svs_for_regenotyping.py \
+      -i ~{vcf} \
+      -e "~{elig_outfile}" \
+      -p "~{pt_outfile}" \
+      --min-af ~{min_af} \
+      --max-af ~{max_af} \
+      --min-ac ~{min_ac} \
+      --max-ac ~{max_ac} \
+      ~{samples_cmd}
+
+    tabix -p vcf "~{elig_outfile}"
+    tabix -p vcf "~{pt_outfile}"
   >>>
 
   output {
-    File target_sv_vcf = "~{output_prefix}.target.vcf.gz"
-    File target_sv_vcf_idx = "~{output_prefix}.target.vcf.gz.tbi"
-    File passthrough_sv_vcf = "~{output_prefix}.passthrough.vcf.gz"
-    File passthrough_sv_vcf_idx = "~{output_prefix}.passthrough.vcf.gz.tbi"
+    File target_sv_vcf = "~{elig_outfile}"
+    File target_sv_vcf_idx = "~{elig_outfile}.tbi"
+    File passthrough_sv_vcf = "~{pt_outfile}"
+    File passthrough_sv_vcf_idx = "~{pt_outfile}.tbi"
   }
 
   runtime {
@@ -168,4 +190,5 @@ task SplitSvs {
     maxRetries: 1
   }
 }
+
 

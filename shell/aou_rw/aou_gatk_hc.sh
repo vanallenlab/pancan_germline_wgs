@@ -308,8 +308,72 @@ while read contig; do
             | sort | uniq -c | sort -nk1,1 | awk '{ print $2 }' )
 done < contig_lists/dfci-g2c.v1.contigs.$WN.list
 
-# Find intervals with at least one variant from first pass of Gnarly part 1
+# Our next step is to find intervals covered by VCFs that successfully completed
+# Gnarly joint genotyping part 1. This requires a subworkflow, below:
 
+# Build chromosome-specific override json of VCFs and VCF indexes
+echo "{}" > $staging_dir/get_territories.contig_variable_overrides.json
+while read contig; do
+  # Do nothing if contig was one of the development contigs processed earlier
+  if [ $( gsutil ls $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/PosthocCleanupPart1/$contig 2>/dev/null | wc -l ) -gt 0 ]; then
+    continue
+  fi
+
+  # VCFs
+  gsutil -m ls \
+    $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/JointGenotyping/$contig/**vcf.gz 2>/dev/null \
+  | sort -V > $staging_dir/$contig.vcfs.list
+
+  # VCF indexes
+  awk '{ print $1".tbi" }' $staging_dir/$contig.vcfs.list \
+  > $staging_dir/$contig.vcf_idxs.list
+
+  # Write .json snippet for variable overrides for this contig
+  cat << EOF > $staging_dir/$contig.overrides.json
+{
+  "$contig" : {
+      "CONTIG_VCFS": $( collapse_txt $staging_dir/$contig.vcfs.list ),
+      "CONTIG_VCF_IDXS": $( collapse_txt $staging_dir/$contig.vcf_idxs.list )
+    }
+}
+EOF
+  
+  # Update main .json
+  code/scripts/update_json.py \
+    -i $staging_dir/get_territories.contig_variable_overrides.json \
+    -u $staging_dir/$contig.overrides.json \
+    -o $staging_dir/get_territories.contig_variable_overrides.json
+done < contig_lists/dfci-g2c.v1.contigs.$WN.list
+
+# Write template .json for input
+cat << EOF > $staging_dir/GetGenomeTerritoryPerVcf.inputs.template.json
+{
+  "GetGenomeTerritoryPerVcf.g2c_pipeline_docker": "vanallenlab/g2c_pipeline:ff63b1f",
+  "GetGenomeTerritoryPerVcf.genome_file": "gs://dfci-g2c-refs/hg38/hg38.genome",
+  "GetGenomeTerritoryPerVcf.output_prefix": "dfci-g2c.v1.\$CONTIG",
+  "GetGenomeTerritoryPerVcf.vcfs": \$CONTIG_VCFS,
+  "GetGenomeTerritoryPerVcf.vcf_idxs": \$CONTIG_VCF_IDXS
+}
+EOF
+
+# Gather chromosomal territory covered by variant calls in finished Gnarly VCF shards
+code/scripts/manage_chromshards.py \
+  --wdl code/wdl/pancan_germline_wgs/GetGenomeTerritoryPerVcf.wdl \
+  --input-json-template $staging_dir/GetGenomeTerritoryPerVcf.inputs.template.json \
+  --contig-variable-overrides $staging_dir/get_territories.contig_variable_overrides.json \
+  --dependencies-zip g2c.dependencies.zip \
+  --staging-bucket $MAIN_WORKSPACE_BUCKET/dfci-g2c-callsets/gatk-hc/GetTerritoriesGnarlyFirstPass/ \
+  --contig-list <( fgrep \
+                     -xvf contig_lists/dfci-g2c.v1.contigs.dev.list \
+                     contig_lists/dfci-g2c.v1.contigs.$WN.list ) \
+  --name GetTerritoriesGnarlyFirstPass \
+  --status-tsv cromshell/progress/dfci-g2c.v1.GetTerritoriesGnarlyFirstPass.progress.tsv \
+  --workflow-id-log-prefix "dfci-g2c.v1" \
+  --outer-gate 60 \
+  --submission-gate 60 \
+  --max-attempts 2
+
+# TODO: FINISH NEXT STEPS HERE
 
 
 # Find the list of unfinished shards per contig
