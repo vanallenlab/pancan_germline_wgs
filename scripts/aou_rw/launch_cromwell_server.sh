@@ -75,8 +75,51 @@ wb cromwell generate-config \
 cat << EOF > /home/jupyter/.cromwell/cromwell.override.conf
 include "cromwell.conf"
 
-backend.providers.GCPBATCH.config {
-  concurrent-job-limit = 3000
+google {
+  cloud-sdk-image-url = "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
+}
+
+backend {
+  default = "GCPBATCH"
+  providers {
+
+    # Disables the Local backend
+    Local.config.root = "/dev/null"
+
+    GCPBATCH {
+     
+        actor-factory = "cromwell.backend.google.batch.GcpBatchBackendLifecycleActorFactory"
+
+      config {
+        project = "${GOOGLE_PROJECT}"
+        concurrent-job-limit = 3000
+        root = "${WORKSPACE_BUCKET}/workflows/cromwell-executions"
+
+                        
+          virtual-private-cloud {
+          network-name = "projects/${GOOGLE_PROJECT}/global/networks/network"
+          subnetwork-name = "projects/${GOOGLE_PROJECT}/regions/*/subnetworks/subnetwork"
+                   
+        }
+
+        batch {
+          auth = "application-default"
+          compute-service-account = "${PET_SA_EMAIL}"
+          location = "us-central1"
+        }
+
+        default-runtime-attributes {
+          noAddress: true
+        }
+        
+        filesystems {
+          gcs {
+              auth = "application-default"
+          }
+        }
+      }
+    }
+  }
 }
 
 call-caching {
